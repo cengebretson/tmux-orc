@@ -28,7 +28,7 @@ This repo will be split into two deliverables:
 
 ### MCP Server (`mcp/`)
 
-Bun/TypeScript HTTP/SSE server. Not stdio — runs persistently and serves multiple agents simultaneously. All state is in-memory (`state.ts`).
+Bun/TypeScript HTTP/SSE server. Not stdio — runs persistently and serves multiple agents simultaneously. All state is in-memory (`state.ts`). Shared types live in `types.ts`.
 
 Tools exposed to agents:
 
@@ -81,18 +81,21 @@ All workers in the same job share this worktree. After the final stage the orche
 
 `.worktrees/` must be in `.gitignore`.
 
-## Scripts
+## CLI
+
+`cli.ts` at the project root is the primary entry point (called by all tmux keybinds):
 
 ```
-scripts/
-  start_session.sh   # starts MCP server, creates orchestrator pane; --job=<name> to preload
-  validate.sh        # pre-flight checks: roles, skills, plugins, job frontmatter
-  watch_jobs.sh      # watches .claude/jobs/ and auto-starts new jobs (toggle: @claude-agents-watch-jobs)
-  start_mcp.sh       # launches bun server, guards double-start via PID file
-  menu.sh            # tmux display-menu for status inspection
-  cleanup.sh         # kills MCP server, removes worktrees + branches
-  notify.sh          # macOS notifications (Glass = done, Basso = blocked)
+bun run cli.ts validate   # pre-flight checks: roles, skills, plugins, job frontmatter
+bun run cli.ts start      # starts MCP server, creates orchestrator pane; --job=<name> to preload
+bun run cli.ts start-mcp  # launches bun server, guards double-start via PID file
+bun run cli.ts watch      # watches .claude/jobs/ and auto-starts new jobs
+bun run cli.ts menu       # tmux display-menu for status inspection
+bun run cli.ts cleanup    # kills MCP server, removes worktrees + branches
+bun run cli.ts notify     # macOS notifications (Glass = done, Basso = blocked)
 ```
+
+The bash scripts in `scripts/` are kept as backup and are not invoked directly.
 
 ## Worker Lifecycle
 
@@ -105,7 +108,7 @@ When `get_task` returns `NO_TASKS`, workers wait 30 seconds and retry. They stay
 ## Running Tests
 
 ```bash
-cd mcp && bun test
+bun test
 ```
 
 ## tmux Configuration

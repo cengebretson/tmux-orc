@@ -53,11 +53,6 @@ All workers in the same job share this worktree and branch. The review worker se
 the build worker's commits immediately. The git worker opens a single PR from
 `agent/auth-login` → `main` — no cross-branch merging.
 
-For standalone tasks, one worktree per worker:
-```bash
-git worktree add .worktrees/bob -b agent/bob
-```
-
 When the final stage is done, the orchestrator appends an `## Outcome` section (recap, branch, PR link) to the job file, moves it to `.claude/jobs/done/`, and removes the worktree. The branch stays for the open PR.
 
 ```bash
@@ -226,19 +221,16 @@ Bun — no separate npm package or publish step.
 ```
 tmux-claude-agents/
   tmux-claude-agents.tmux    # plugin entry point, registers keybinds
+  cli.ts                     # primary CLI: validate, start, start-mcp, watch, menu, cleanup, notify
   mcp/
     server.ts                # HTTP entry point
     mcp.ts                   # MCP tool registrations
     routes.ts                # inspection GET handlers
+    types.ts                 # shared TypeScript interfaces
     state.ts                 # in-memory task/worker/job state
     state.test.ts            # bun test
     package.json
-  scripts/
-    start_session.sh         # starts MCP server, creates orchestrator pane
-    start_mcp.sh             # launches bun server, guards double-start via PID
-    menu.sh                  # tmux display-menu for status inspection
-    cleanup.sh               # kills MCP server, removes worktrees + branches
-    notify.sh                # macOS notifications
+  scripts/                   # bash backups (not invoked directly)
   templates/
     orchestrator.md          # bootstrap prompt for the orchestrator
     worker.md                # bootstrap prompt for each worker
@@ -253,8 +245,9 @@ set -g @plugin 'yourname/tmux-claude-agents'
 
 Configure in `tmux.conf`:
 ```tmux
-set -g @claude-agents-mcp-port 7777   # default
-set -g @claude-agents-notify  true    # macOS notifications
+set -g @claude-agents-mcp-port   7777   # default
+set -g @claude-agents-notify     true   # macOS notifications (Glass = done, Basso = blocked)
+set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
 ```
 
 Keybinds:
