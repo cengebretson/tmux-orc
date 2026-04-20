@@ -2,9 +2,8 @@ export interface Task {
   id: string;
   role: string;
   description: string;
-  domain?: string | string[];  // optional; used by standalone tasks
-  job?: string;                // specific execution instance — coordination key
-  stage?: string;
+  job: string;
+  stage: string;
 }
 
 interface WorkerState {
@@ -50,10 +49,7 @@ function stageStatus(s: StageState): StageStatus {
 export function loadTasks(tasks: Task[]): number {
   for (const task of tasks) {
     taskQueue.push(task);
-    if (task.job && task.stage) {
-      const s = getOrCreateStage(task.job, task.stage);
-      s.taskCount++;
-    }
+    getOrCreateStage(task.job, task.stage).taskCount++;
   }
   return tasks.length;
 }
@@ -78,9 +74,8 @@ export function submitResult(workerId: string, result: string): void {
   workerState.set(workerId, { ...existing, status: "submitted" });
 
   const task = existing?.currentTask;
-  if (task?.job && task?.stage) {
-    const s = getOrCreateStage(task.job, task.stage);
-    s.results.set(workerId, result);
+  if (task) {
+    getOrCreateStage(task.job, task.stage).results.set(workerId, result);
   }
 }
 

@@ -460,20 +460,9 @@ Built-in roles: `backend`, `frontend`, `review`, `document`, `security`, `git`
 
 Workers only receive tasks matching their role.
 
-#### Task modes
+#### Tasks
 
-There are two ways to use tasks, chosen per session:
-
-**Standalone** — tasks are independent, can run in any order. No `job` or `stage` fields. Orchestrator monitors with `all_done()` and reads results via `get_result(workerId)`.
-
-```json
-[
-  { "id": "1", "role": "frontend", "description": "Build login form" },
-  { "id": "2", "role": "backend",  "description": "Build login API"  }
-]
-```
-
-**Pipeline** — tasks belong to named stages that run in sequence. Results from one stage feed the next. Tasks carry `job` (the specific feature run) and `stage`. Result attribution is automatic. Workers know their domain from their bootstrap prompt — no need to repeat it on every task.
+Every task requires a `job` and `stage`. For multi-stage jobs the orchestrator generates tasks from the job file — one per pipeline stage, results feeding forward:
 
 ```json
 [
@@ -486,12 +475,16 @@ There are two ways to use tasks, chosen per session:
 
 Orchestrator polls `stage_done(job, stage)`, then reads `get_stage_results(job, stage)` to build the next stage's tasks. Stages with multiple inputs (e.g. `ship` after both `review` and `security`) run their inputs in parallel and wait for both.
 
-Two jobs can run the same pipeline simultaneously — each gets its own worktree and independent stage state:
+For quick ad-hoc work, use a single-stage inline job — no job file needed:
 
 ```json
-{ "job": "auth-login", "stage": "build", ... }
-{ "job": "dashboard",  "stage": "build", ... }
+[
+  { "id": "1", "role": "frontend", "description": "Fix login bug",  "job": "fix-login", "stage": "build" },
+  { "id": "2", "role": "backend",  "description": "Fix auth token", "job": "fix-auth",  "stage": "build" }
+]
 ```
+
+Two jobs can run the same pipeline simultaneously — each gets its own worktree and independent stage state.
 
 ### Skills and plugins
 

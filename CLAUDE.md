@@ -40,7 +40,7 @@ Tools exposed to agents:
 | `load_tasks(tasks[])` | Orchestrator | Seed the task queue |
 | `get_result(worker_id)` | Orchestrator | Read a worker's result |
 | `get_status()` | Orchestrator | Queue depth + worker states |
-| `all_done()` | Orchestrator | True when all workers submitted |
+| `all_done()` | Orchestrator | True when queue empty and all workers submitted |
 | `stage_done(job, stage)` | Orchestrator | True when all stage tasks submitted |
 | `get_stage_results(job, stage)` | Orchestrator | All results from a stage |
 | `get_jobs_status(job?)` | Orchestrator | Stage breakdown for one or all jobs |

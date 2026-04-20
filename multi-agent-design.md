@@ -169,20 +169,10 @@ receive prompt → register_worker() → get_task() → do work → submit_resul
 When `get_task` returns `NO_TASKS`, wait 30 seconds and try again. Workers stay alive
 for the full session and pick up new jobs as they are loaded.
 
-## Task Modes
+## Tasks
 
-### Standalone (parallel, independent)
-
-Tasks have no `job` or `stage` fields. Workers pull tasks by role, work in parallel,
-and the orchestrator monitors via `all_done()` and `get_result(workerId)`.
-
-Use when tasks are independent with no ordering dependency.
-
-### Pipeline (sequential stages, results feed forward)
-
-A **pipeline** is a reusable definition of stages and roles. A **job** is a specific
-execution of a pipeline for a feature. Tasks carry `job` and `stage` fields; result
-attribution to the correct stage is automatic.
+Every task belongs to a `job` and `stage`. A **pipeline** is a reusable definition of
+stages and roles. A **job** is a specific execution of a pipeline for a feature.
 
 The orchestrator sequences stages:
 ```
@@ -195,9 +185,14 @@ for each stage in order:
 Stages with parallel inputs (e.g. `ship` after both `review` and `security`) — poll
 both until done before proceeding.
 
+For quick ad-hoc work, skip the job file and load a single-stage inline job directly:
+```json
+{ "id": "1", "role": "frontend", "description": "Fix login bug", "job": "fix-login", "stage": "build" }
+```
+
 Multiple jobs can run the same pipeline simultaneously — each has its own worktree,
-branch, and independent stage state. To start a new job mid-session, create its
-worktree and call `load_tasks` — workers pick it up automatically.
+branch, and independent stage state. To start a new job mid-session, tell the
+orchestrator and it creates the worktree and calls `load_tasks` — workers pick it up automatically.
 
 ## Communication Rules (Hub-and-Spoke)
 

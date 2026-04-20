@@ -19,9 +19,8 @@ export const taskSchema = z.object({
   id: z.string(),
   role: z.string(),
   description: z.string(),
-  domain: z.union([z.string(), z.array(z.string())]).optional(),
-  job: z.string().optional(),
-  stage: z.string().optional(),
+  job: z.string(),
+  stage: z.string(),
 });
 
 export const mcp = new McpServer({

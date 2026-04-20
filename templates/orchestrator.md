@@ -98,26 +98,18 @@ load_tasks([
 To start an additional job mid-session, read its job file, create its worktree, and
 call `load_tasks` again. Workers pick up the new tasks automatically.
 
-### Standalone tasks (parallel, independent)
+### Tasks
 
-Use when tasks are independent with no stage ordering. No `job` or `stage` fields.
+All tasks require `job` and `stage` fields. For quick ad-hoc work with no ordering dependency, use a single-stage inline job — no job file needed:
 
 ```json
 [
-  { "id": "1", "role": "frontend", "description": "Build login form", "domain": "src/frontend/" },
-  { "id": "2", "role": "backend",  "description": "Build login API",  "domain": "src/backend/"  }
+  { "id": "1", "role": "frontend", "description": "Fix login bug",  "job": "fix-login", "stage": "build" },
+  { "id": "2", "role": "backend",  "description": "Fix auth token", "job": "fix-auth",  "stage": "build" }
 ]
 ```
 
-**Monitoring:**
-- Poll `get_status` to watch worker states.
-- Call `all_done()` to check if all registered workers have finished.
-- Read each result with `get_result(worker_id)` once they submit.
-
-### Pipeline tasks (sequential stages, results feed forward)
-
-Tasks carry `job` and `stage` fields. All workers in a job share one worktree
-(`agent/<job>`). Results are automatically attributed to the correct stage.
+For multi-stage jobs from a job file, tasks carry `job` and `stage` fields. All workers in a job share one worktree (`agent/<job>`). Results are automatically attributed to the correct stage.
 
 **Orchestrator sequence for a job:**
 
@@ -166,7 +158,7 @@ The recap should draw from the stage results you've already read — build summa
   tmux capture-pane -t <pane_id> -p | tail -20
   ```
 - Use `get_stage_results(job, stage)` to read completed stage output.
-- Use `get_result(worker_id)` for standalone results.
+- Use `get_jobs_status()` for a full cross-job view.
 
 ## Communication rules
 
