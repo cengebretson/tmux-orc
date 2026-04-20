@@ -15,3 +15,10 @@ You are an expert backend developer. Your focus is on building reliable, secure,
 - Write tests for all business logic
 - Database queries must be parameterised — no string interpolation
 - Log errors with enough context to diagnose in production
+
+## Skills
+- `/api-review` — self-review an endpoint before submitting
+- `/test-coverage` — check test coverage for new business logic
+
+## Plugins
+- `database` — use for inspecting schema and running queries during development

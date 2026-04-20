@@ -14,7 +14,13 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    ```
    pane_id=$(tmux split-window -P -F "#{pane_id}" -v -t <prev_pane_id> -e "MCP_URL={{mcp_url}}")
    ```
-3. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
+3. Find the role file for each worker using this lookup order:
+   - `.claude/roles/<role>.md` — project-level (takes precedence)
+   - `~/.tmux/plugins/tmux-claude-agents/roles/<role>.md` — plugin built-in (fallback)
+
+   Write the role file as `CLAUDE.md` into the worker's worktree so it is automatically loaded.
+
+4. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
    - `{{id}}` — worker id
    - `{{role}}` — worker role
    - `{{mcp_url}}` — the MCP server URL
@@ -27,7 +33,7 @@ Keep a note of each worker's pane ID — you'll use them to health-check stuck w
 
 ## Step 2 — Load tasks
 
-Call `load_tasks` with the full task list. Each task needs: id, role (backend/frontend/code-review), description, and optional domain.
+Call `load_tasks` with the full task list. Each task needs: id, role (backend/frontend/review), description, and optional domain.
 
 ## Step 3 — Monitor and aggregate
 

@@ -36,11 +36,25 @@ fi
 
 # --- validate roles ---
 
+find_role_file() {
+  local role=$1
+  local project_role=".claude/roles/$role.md"
+  local plugin_role="$PLUGIN_DIR/roles/$role.md"
+  if [[ -f "$project_role" ]]; then
+    echo "$project_role"
+  elif [[ -f "$plugin_role" ]]; then
+    echo "$plugin_role"
+  else
+    echo ""
+  fi
+}
+
 worker_count=$(jq '.workers | length' "$AGENTS_CONFIG")
 for i in $(seq 0 $((worker_count - 1))); do
   role=$(jq -r ".workers[$i].role" "$AGENTS_CONFIG")
-  if [[ ! -f "$PLUGIN_DIR/roles/$role.md" ]]; then
-    echo "Error: no role file found for '$role' (expected $PLUGIN_DIR/roles/$role.md)" >&2
+  if [[ -z "$(find_role_file "$role")" ]]; then
+    echo "Error: no role file found for '$role'" >&2
+    echo "  Looked in: .claude/roles/$role.md, $PLUGIN_DIR/roles/$role.md" >&2
     exit 1
   fi
 done

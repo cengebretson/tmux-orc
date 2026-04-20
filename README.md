@@ -163,25 +163,40 @@ Tasks are structured objects:
 }
 ```
 
-Built-in roles: `backend`, `frontend`, `code-review`, `documentation-writer`
+Built-in roles: `backend`, `frontend`, `review`, `document`, `security`
 
 Workers only receive tasks matching their role.
 
+### Skills and plugins
+
+Workers have access to all skills (`.claude/commands/`) and MCP plugins configured for the project — there is no per-worker filtering. Instead, each role file documents which skills and plugins that role should use via `## Skills` and `## Plugins` sections. Workers read this from their CLAUDE.md and know what tools are relevant to them.
+
+This keeps the system simple — no enforcement machinery — while still giving workers clear guidance on what to reach for.
+
 ### Adding a custom role
 
-Create a markdown file in the plugin's `roles/` directory named after the role:
+Role files are looked up in this order:
 
-```bash
-# ~/.tmux/plugins/tmux-claude-agents/roles/data-engineer.md
+1. `.claude/roles/<role>.md` — project-level, takes precedence
+2. `~/.tmux/plugins/tmux-claude-agents/roles/<role>.md` — plugin built-ins, fallback
+
+To add a project-specific role, create it alongside your `agents.json`:
+
+```
+your-project/
+  .claude/
+    agents.json
+    roles/
+      data-engineer.md   ← project-specific role
 ```
 
-The file defines the worker's persona, expertise, and standards. Then use the role name in `agents.json` and tasks:
+The file defines the worker's persona, expertise, and standards. Then reference it in `agents.json`:
 
 ```json
 { "id": "dave-the-data", "role": "data-engineer", "domain": "pipelines/" }
 ```
 
-If a role is used in `agents.json` but has no matching file in `roles/`, the session will fail to start with a clear error.
+If a role is used in `agents.json` but has no matching file in either location, the session will fail to start with a clear error.
 
 ### Inspection Endpoints
 

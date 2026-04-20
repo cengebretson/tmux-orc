@@ -210,6 +210,17 @@ any prior MCP configuration — the plugin handles all the wiring.
 - Agents persist across long-running interactive sessions
 - MCP server gives structured coordination vs file polling
 
+## Skills and Plugins
+
+Workers have access to all skills (`.claude/commands/`) and MCP plugins configured for
+the project — there is no per-worker filtering. Each role file documents which skills
+and plugins that role should use via `## Skills` and `## Plugins` sections. Workers
+load this from their CLAUDE.md and know what tools are relevant without any enforcement
+machinery.
+
+This is intentionally simple. Per-worker skill/plugin scoping can be added later if
+needed — the role file approach gives clear guidance with zero infrastructure overhead.
+
 ## Communication Rules (Hub-and-Spoke)
 
 All inter-agent communication routes through the orchestrator — workers never talk directly

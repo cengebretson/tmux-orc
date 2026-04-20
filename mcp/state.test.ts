@@ -13,7 +13,7 @@ import {
 
 const frontend: Task = { id: "1", role: "frontend", description: "Build login form", domain: "src/frontend/" };
 const backend: Task = { id: "2", role: "backend", description: "Build login endpoint", domain: "src/backend/" };
-const review: Task = { id: "3", role: "code-review", description: "Review auth PR" };
+const review: Task = { id: "3", role: "review", description: "Review auth PR" };
 
 beforeEach(() => reset());
 
