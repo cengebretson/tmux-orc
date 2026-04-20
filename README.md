@@ -297,14 +297,14 @@ get_task(worker_id="bob", role="frontend")
 
 ```json
 load_tasks([
-  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "job": "auth-login", "stage": "build"    },
-  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "job": "auth-login", "stage": "review"   },
-  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",            "job": "auth-login", "stage": "security" },
-  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/auth-login into main",       "job": "auth-login", "stage": "ship"     }
+  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "job": "auth-login", "stage": "build"                                       },
+  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "job": "auth-login", "stage": "review",   "depends_on": ["build"]            },
+  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",            "job": "auth-login", "stage": "security", "depends_on": ["build"]            },
+  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/auth-login into main",       "job": "auth-login", "stage": "ship",     "depends_on": ["review", "security"] }
 ])
 ```
 
-All tasks are loaded at once. Workers self-schedule by role — bob picks up `p1` immediately since he already called `get_task`. Rex and Sam are waiting; their tasks are in the queue and will be claimed when they call `get_task`.
+All tasks are loaded at once. Bob picks up `p1` immediately. Rex and Sam call `get_task` but get `NO_TASKS` — the server withholds `review` and `security` until `build` is complete. They retry every 30 seconds automatically.
 
 ### Step 6 — Build stage
 
@@ -450,11 +450,15 @@ Tasks are structured objects:
 ```json
 {
   "id": "auth-1",
-  "role": "backend",
-  "description": "Implement JWT login endpoint",
-  "domain": "src/backend/"
+  "role": "frontend",
+  "description": "Build login form",
+  "job": "auth-login",
+  "stage": "review",
+  "depends_on": ["build"]
 }
 ```
+
+`depends_on` is optional — omit it for tasks with no dependencies. The server withholds a task until all listed stages are complete for that job.
 
 Built-in roles: `backend`, `frontend`, `review`, `document`, `security`, `git`
 
@@ -466,14 +470,16 @@ Every task requires a `job` and `stage`. For multi-stage jobs the orchestrator g
 
 ```json
 [
-  { "id": "p1", "role": "frontend", "description": "Build login form", "job": "auth-login", "stage": "build"    },
-  { "id": "p2", "role": "review",   "description": "Review auth PR",   "job": "auth-login", "stage": "review"   },
-  { "id": "p3", "role": "security", "description": "Security audit",   "job": "auth-login", "stage": "security" },
-  { "id": "p4", "role": "git",      "description": "Open PR",          "job": "auth-login", "stage": "ship"     }
+  { "id": "p1", "role": "frontend", "description": "Build login form", "job": "auth-login", "stage": "build"                                      },
+  { "id": "p2", "role": "review",   "description": "Review auth PR",   "job": "auth-login", "stage": "review",   "depends_on": ["build"]            },
+  { "id": "p3", "role": "security", "description": "Security audit",   "job": "auth-login", "stage": "security", "depends_on": ["build"]            },
+  { "id": "p4", "role": "git",      "description": "Open PR",          "job": "auth-login", "stage": "ship",     "depends_on": ["review", "security"] }
 ]
 ```
 
-Orchestrator polls `stage_done(job, stage)`, then reads `get_stage_results(job, stage)` to build the next stage's tasks. Stages with multiple inputs (e.g. `ship` after both `review` and `security`) run their inputs in parallel and wait for both.
+All tasks are loaded upfront. `depends_on` lists stage names that must complete before a task becomes claimable — the server withholds the task until all dependencies are met. Workers just get `NO_TASKS` while waiting and retry automatically.
+
+Orchestrator polls `stage_done(job, stage)` then reads `get_stage_results(job, stage)` to feed results into later stage descriptions.
 
 For quick ad-hoc work, use a single-stage inline job — no job file needed:
 

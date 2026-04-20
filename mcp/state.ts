@@ -4,6 +4,7 @@ export interface Task {
   description: string;
   job: string;
   stage: string;
+  depends_on?: string[];
 }
 
 interface WorkerState {
@@ -60,7 +61,10 @@ export function registerWorker(workerId: string, paneId: string): void {
 }
 
 export function getTask(workerId: string, role: string): Task | null {
-  const idx = taskQueue.findIndex((t) => t.role === role);
+  const idx = taskQueue.findIndex(
+    (t) => t.role === role &&
+      (t.depends_on ?? []).every((stage) => stageDone(t.job, stage))
+  );
   if (idx === -1) return null;
   const [task] = taskQueue.splice(idx, 1);
   const existing = workerState.get(workerId);

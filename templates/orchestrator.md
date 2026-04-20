@@ -89,9 +89,9 @@ Example — job file `.claude/jobs/auth-login.md` with pipeline `frontend` (stag
 ```json
 load_tasks([
   { "id": "auth-login-build",    "role": "frontend", "job": "auth-login", "stage": "build",    "description": "Build login form per spec: JWT in httpOnly cookie, extend useAuth hook, mobile responsive" },
-  { "id": "auth-login-review",   "role": "review",   "job": "auth-login", "stage": "review",   "description": "Review auth-login changes against acceptance criteria in job spec"                          },
-  { "id": "auth-login-security", "role": "security", "job": "auth-login", "stage": "security", "description": "Audit login flow: JWT handling, cookie flags, CSRF, injection"                              },
-  { "id": "auth-login-ship",     "role": "git",      "job": "auth-login", "stage": "ship",     "description": "Open PR: agent/auth-login → main, summarising review and security findings"                }
+  { "id": "auth-login-review",   "role": "review",   "job": "auth-login", "stage": "review",   "description": "Review auth-login changes against acceptance criteria in job spec",   "depends_on": ["build"]             },
+  { "id": "auth-login-security", "role": "security", "job": "auth-login", "stage": "security", "description": "Audit login flow: JWT handling, cookie flags, CSRF, injection",        "depends_on": ["build"]             },
+  { "id": "auth-login-ship",     "role": "git",      "job": "auth-login", "stage": "ship",     "description": "Open PR: agent/auth-login → main, summarising review and security findings", "depends_on": ["review", "security"] }
 ])
 ```
 
@@ -109,7 +109,9 @@ All tasks require `job` and `stage` fields. For quick ad-hoc work with no orderi
 ]
 ```
 
-For multi-stage jobs from a job file, tasks carry `job` and `stage` fields. All workers in a job share one worktree (`agent/<job>`). Results are automatically attributed to the correct stage.
+For multi-stage jobs, use `depends_on` to declare which stages must complete before a task becomes claimable. The server enforces this — all tasks can be loaded upfront and workers are held back automatically until their dependencies are met.
+
+All workers in a job share one worktree (`agent/<job>`). Results are automatically attributed to the correct stage.
 
 **Orchestrator sequence for a job:**
 

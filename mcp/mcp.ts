@@ -21,6 +21,7 @@ export const taskSchema = z.object({
   description: z.string(),
   job: z.string(),
   stage: z.string(),
+  depends_on: z.array(z.string()).optional(),
 });
 
 export const mcp = new McpServer({

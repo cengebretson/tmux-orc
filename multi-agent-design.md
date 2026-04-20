@@ -174,16 +174,17 @@ for the full session and pick up new jobs as they are loaded.
 Every task belongs to a `job` and `stage`. A **pipeline** is a reusable definition of
 stages and roles. A **job** is a specific execution of a pipeline for a feature.
 
-The orchestrator sequences stages:
-```
-for each stage in order:
-  poll stage_done(job, stage) until true
-  read get_stage_results(job, stage)
-  pass results as context into the next stage's task descriptions
+Tasks declare their dependencies via `depends_on: string[]` — stage names within the
+same job that must complete before the task becomes claimable. The server enforces this:
+workers get `NO_TASKS` until deps are met and retry automatically. All tasks can be
+loaded upfront — no stage-by-stage loading required.
+
+```json
+{ "stage": "ship", "depends_on": ["review", "security"], ... }
 ```
 
-Stages with parallel inputs (e.g. `ship` after both `review` and `security`) — poll
-both until done before proceeding.
+The orchestrator polls `stage_done(job, stage)` then reads `get_stage_results(job, stage)`
+to feed completed stage output as context into later stage descriptions.
 
 For quick ad-hoc work, skip the job file and load a single-stage inline job directly:
 ```json

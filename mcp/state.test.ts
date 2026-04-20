@@ -182,6 +182,48 @@ describe("getStatus", () => {
   });
 });
 
+describe("depends_on", () => {
+  it("withholds a task until its dependency stage is complete", () => {
+    const build:  Task = { id: "p1", role: "frontend", description: "Build",  job: "auth-login", stage: "build" };
+    const review: Task = { id: "p2", role: "review",   description: "Review", job: "auth-login", stage: "review", depends_on: ["build"] };
+    loadTasks([build, review]);
+
+    expect(getTask("rex", "review")).toBeNull();
+
+    getTask("bob", "frontend");
+    submitResult("bob", "done");
+
+    expect(getTask("rex", "review")).toEqual(review);
+  });
+
+  it("withholds a task until all dependency stages are complete", () => {
+    const build:    Task = { id: "p1", role: "frontend", description: "Build",    job: "auth-login", stage: "build" };
+    const review:   Task = { id: "p2", role: "review",   description: "Review",   job: "auth-login", stage: "review",   depends_on: ["build"] };
+    const security: Task = { id: "p3", role: "security", description: "Security", job: "auth-login", stage: "security", depends_on: ["build"] };
+    const ship:     Task = { id: "p4", role: "git",      description: "Ship",     job: "auth-login", stage: "ship",     depends_on: ["review", "security"] };
+    loadTasks([build, review, security, ship]);
+
+    getTask("bob", "frontend");
+    submitResult("bob", "build done");
+
+    getTask("rex", "review");
+    expect(getTask("git", "git")).toBeNull();
+
+    submitResult("rex", "review done");
+    expect(getTask("git", "git")).toBeNull();
+
+    getTask("sam", "security");
+    submitResult("sam", "security done");
+
+    expect(getTask("git", "git")).toEqual(ship);
+  });
+
+  it("does not affect tasks with no depends_on", () => {
+    loadTasks([pFrontend]);
+    expect(getTask("bob", "frontend")).toEqual(pFrontend);
+  });
+});
+
 describe("job: stageDone", () => {
   it("returns false before any tasks are loaded for the stage", () => {
     expect(stageDone("auth-login", "build")).toBe(false);
