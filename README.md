@@ -163,7 +163,7 @@ Tasks are structured objects:
 }
 ```
 
-Built-in roles: `backend`, `frontend`, `review`, `document`, `security`
+Built-in roles: `backend`, `frontend`, `review`, `document`, `security`, `git`
 
 Workers only receive tasks matching their role.
 
@@ -187,6 +187,7 @@ Built-in skills (shipped in `skills/`):
 | `/security-review` | Security-focused pass covering injection, auth, secrets, and config |
 | `/doc-review` | Review documentation for accuracy, clarity, and completeness |
 | `/dependency-audit` | Audit dependencies for known vulnerabilities and abandoned packages |
+| `/pr-description` | Generate a structured PR description from the current branch diff |
 
 ### Adding a custom role
 
