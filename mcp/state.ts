@@ -1,8 +1,6 @@
-export type TaskRole = string;
-
 export interface Task {
   id: string;
-  role: TaskRole;
+  role: string;
   description: string;
   domain?: string | string[];  // optional; used by standalone tasks
   job?: string;                // specific execution instance — coordination key
@@ -20,7 +18,7 @@ interface StageState {
   results: Map<string, string>; // workerId -> result
 }
 
-export type StageStatus = "pending" | "active" | "complete";
+export type StageStatus = "active" | "complete";
 
 export interface StageInfo {
   status: StageStatus;
@@ -46,9 +44,7 @@ function getOrCreateStage(job: string, stage: string): StageState {
 }
 
 function stageStatus(s: StageState): StageStatus {
-  if (s.taskCount === 0) return "pending";
-  if (s.results.size >= s.taskCount) return "complete";
-  return "active";
+  return s.results.size >= s.taskCount ? "complete" : "active";
 }
 
 export function loadTasks(tasks: Task[]): number {
@@ -67,7 +63,7 @@ export function registerWorker(workerId: string, paneId: string): void {
   workerState.set(workerId, { ...existing, paneId });
 }
 
-export function getTask(workerId: string, role: TaskRole): Task | null {
+export function getTask(workerId: string, role: string): Task | null {
   const idx = taskQueue.findIndex((t) => t.role === role);
   if (idx === -1) return null;
   const [task] = taskQueue.splice(idx, 1);
@@ -94,7 +90,7 @@ export function getResult(workerId: string): string | null {
 
 export function stageDone(job: string, stage: string): boolean {
   const s = jobState.get(job)?.get(stage);
-  if (!s || s.taskCount === 0) return false;
+  if (!s) return false;
   return s.results.size >= s.taskCount;
 }
 

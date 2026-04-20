@@ -22,8 +22,6 @@ export const taskSchema = z.object({
   stage: z.string().optional(),
 });
 
-const roleSchema = z.string();
-
 export const mcp = new McpServer({
   name: "claude-agents-mcp",
   version: "0.1.0",
@@ -52,7 +50,7 @@ mcp.tool(
 mcp.tool(
   "get_task",
   "Pull the next role-matched task from the queue (worker calls this when ready)",
-  { worker_id: z.string(), role: roleSchema },
+  { worker_id: z.string(), role: z.string() },
   async ({ worker_id, role }) => {
     const task = getTask(worker_id, role);
     return { content: [{ type: "text", text: task ? JSON.stringify(task) : "NO_TASKS" }] };
