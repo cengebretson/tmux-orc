@@ -7,6 +7,10 @@ import {
   getResult,
   allDone,
   getStatus,
+  stageDone,
+  getStageResults,
+  getPipelineStatus,
+  getAllPipelinesStatus,
   reset,
   type Task,
 } from "./state.js";
@@ -14,6 +18,11 @@ import {
 const frontend: Task = { id: "1", role: "frontend", description: "Build login form", domain: "src/frontend/" };
 const backend: Task = { id: "2", role: "backend", description: "Build login endpoint", domain: "src/backend/" };
 const review: Task = { id: "3", role: "review", description: "Review auth PR" };
+
+const pFrontend: Task = { ...frontend, id: "p1", pipeline: "auth", stage: "build" };
+const pReview: Task = { ...review,   id: "p2", pipeline: "auth", stage: "review" };
+const pSecurity: Task = { id: "p3", role: "security", description: "Security check", pipeline: "auth", stage: "security" };
+const pGit: Task = { id: "p4", role: "git", description: "Create PR", pipeline: "auth", stage: "ship" };
 
 beforeEach(() => reset());
 
@@ -43,6 +52,13 @@ describe("loadTasks", () => {
     loadTasks([backend]);
     expect(getTask("bob", "frontend")).toEqual(frontend);
     expect(getTask("alice", "backend")).toEqual(backend);
+  });
+
+  it("registers pipeline stage task counts", () => {
+    loadTasks([pFrontend, pReview]);
+    const status = getPipelineStatus("auth")!;
+    expect(status.stages["build"].taskCount).toBe(1);
+    expect(status.stages["review"].taskCount).toBe(1);
   });
 });
 
@@ -101,6 +117,13 @@ describe("submitResult / getResult", () => {
     submitResult("bob", "done");
     expect(getStatus().workers["bob"].status).toBe("submitted");
   });
+
+  it("attributes result to pipeline stage via current task", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    submitResult("bob", "login form done");
+    expect(getStageResults("auth", "build")).toEqual({ bob: "login form done" });
+  });
 });
 
 describe("allDone", () => {
@@ -152,5 +175,76 @@ describe("getStatus", () => {
     expect(getStatus().workers["bob"].status).toBe("working");
     submitResult("bob", "done");
     expect(getStatus().workers["bob"].status).toBe("submitted");
+  });
+});
+
+describe("pipeline: stageDone", () => {
+  it("returns false before any tasks are loaded for the stage", () => {
+    expect(stageDone("auth", "build")).toBe(false);
+  });
+
+  it("returns false when tasks are loaded but none submitted", () => {
+    loadTasks([pFrontend]);
+    expect(stageDone("auth", "build")).toBe(false);
+  });
+
+  it("returns true when all tasks in the stage are submitted", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    submitResult("bob", "done");
+    expect(stageDone("auth", "build")).toBe(true);
+  });
+
+  it("returns false when only some tasks in the stage are submitted", () => {
+    const t2: Task = { id: "p1b", role: "frontend", description: "Build signup form", pipeline: "auth", stage: "build" };
+    loadTasks([pFrontend, t2]);
+    getTask("bob", "frontend");
+    submitResult("bob", "done");
+    expect(stageDone("auth", "build")).toBe(false);
+  });
+});
+
+describe("pipeline: getStageResults", () => {
+  it("returns empty object for unknown stage", () => {
+    expect(getStageResults("auth", "build")).toEqual({});
+  });
+
+  it("returns results keyed by worker id", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    submitResult("bob", "login form complete");
+    expect(getStageResults("auth", "build")).toEqual({ bob: "login form complete" });
+  });
+});
+
+describe("pipeline: getPipelineStatus", () => {
+  it("returns null for unknown pipeline", () => {
+    expect(getPipelineStatus("unknown")).toBeNull();
+  });
+
+  it("shows pending for a stage with no tasks loaded", () => {
+    expect(getPipelineStatus("auth")).toBeNull();
+  });
+
+  it("shows active once tasks are loaded for a stage", () => {
+    loadTasks([pFrontend]);
+    expect(getPipelineStatus("auth")!.stages["build"].status).toBe("active");
+  });
+
+  it("shows complete stage once all tasks submitted", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    submitResult("bob", "done");
+    expect(getPipelineStatus("auth")!.stages["build"].status).toBe("complete");
+  });
+});
+
+describe("pipeline: getAllPipelinesStatus", () => {
+  it("returns all registered pipelines", () => {
+    const t2: Task = { id: "x1", role: "backend", description: "API work", pipeline: "dashboard", stage: "build" };
+    loadTasks([pFrontend, t2]);
+    const all = getAllPipelinesStatus();
+    expect(Object.keys(all)).toContain("auth");
+    expect(Object.keys(all)).toContain("dashboard");
   });
 });

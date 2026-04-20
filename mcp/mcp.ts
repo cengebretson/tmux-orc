@@ -8,13 +8,17 @@ import {
   getResult,
   allDone,
   getStatus,
+  stageDone,
+  getStageResults,
 } from "./state.js";
 
 export const taskSchema = z.object({
   id: z.string(),
   role: z.string(),
   description: z.string(),
-  domain: z.string().optional(),
+  domain: z.union([z.string(), z.array(z.string())]).optional(),
+  pipeline: z.string().optional(),
+  stage: z.string().optional(),
 });
 
 const roleSchema = z.string();
@@ -89,5 +93,23 @@ mcp.tool(
   {},
   async () => {
     return { content: [{ type: "text", text: JSON.stringify(getStatus(), null, 2) }] };
+  }
+);
+
+mcp.tool(
+  "stage_done",
+  "Returns true when all tasks in a pipeline stage have been submitted",
+  { pipeline: z.string(), stage: z.string() },
+  async ({ pipeline, stage }) => {
+    return { content: [{ type: "text", text: String(stageDone(pipeline, stage)) }] };
+  }
+);
+
+mcp.tool(
+  "get_stage_results",
+  "Returns all worker results from a completed pipeline stage",
+  { pipeline: z.string(), stage: z.string() },
+  async ({ pipeline, stage }) => {
+    return { content: [{ type: "text", text: JSON.stringify(getStageResults(pipeline, stage), null, 2) }] };
   }
 );

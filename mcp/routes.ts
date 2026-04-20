@@ -1,5 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { getStatus, getQueue, getAllResults, getResult } from "./state.js";
+import {
+  getStatus,
+  getQueue,
+  getAllResults,
+  getResult,
+  getAllPipelinesStatus,
+  getPipelineStatus,
+  getStageResults,
+} from "./state.js";
 
 function json(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -38,6 +46,31 @@ export function handleInspection(
     } else {
       json(res, 200, { worker_id: workerId, result });
     }
+    return true;
+  }
+
+  if (pathname === "/pipelines") {
+    json(res, 200, getAllPipelinesStatus());
+    return true;
+  }
+
+  const pipelineMatch = pathname.match(/^\/pipeline\/([^/]+)$/);
+  if (pipelineMatch) {
+    const name = decodeURIComponent(pipelineMatch[1]);
+    const status = getPipelineStatus(name);
+    if (status === null) {
+      json(res, 404, { error: `no pipeline '${name}'` });
+    } else {
+      json(res, 200, status);
+    }
+    return true;
+  }
+
+  const stageResultsMatch = pathname.match(/^\/pipeline\/([^/]+)\/([^/]+)\/results$/);
+  if (stageResultsMatch) {
+    const pipeline = decodeURIComponent(stageResultsMatch[1]);
+    const stage = decodeURIComponent(stageResultsMatch[2]);
+    json(res, 200, getStageResults(pipeline, stage));
     return true;
   }
 

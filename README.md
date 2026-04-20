@@ -82,8 +82,22 @@ Create `.claude/agents.json` in your project repo:
 ```json
 {
   "workers": [
-    { "id": "bob-the-webdev", "role": "frontend", "domain": ["src/frontend/", "src/shared/"] },
-    { "id": "alice-the-api",  "role": "backend",  "domain": "src/backend/" }
+    { "id": "bob",  "role": "frontend" },
+    { "id": "rex",  "role": "review"   },
+    { "id": "sam",  "role": "security" },
+    { "id": "git",  "role": "git"      }
+  ],
+  "pipelines": [
+    {
+      "name": "auth-feature",
+      "domain": ["src/frontend/auth/", "src/backend/auth/"],
+      "stages": [
+        { "stage": "build",    "role": "frontend" },
+        { "stage": "review",   "role": "review",   "input": "build" },
+        { "stage": "security", "role": "security", "input": "build" },
+        { "stage": "ship",     "role": "git",      "input": ["review", "security"] }
+      ]
+    }
   ]
 }
 ```
@@ -149,6 +163,8 @@ The MCP server runs as a local HTTP/SSE server (Bun/TypeScript) bundled inside t
 | `get_result(worker_id)` | Orchestrator | Reads a worker's result |
 | `get_status()` | Orchestrator | Queue depth + all worker states |
 | `all_done(worker_count)` | Orchestrator | True when all workers have submitted |
+| `stage_done(pipeline, stage)` | Orchestrator | True when all tasks in a stage are submitted |
+| `get_stage_results(pipeline, stage)` | Orchestrator | All results from a completed stage |
 
 ### Tasks
 
@@ -219,10 +235,13 @@ If a role is used in `agents.json` but has no matching file in either location, 
 The MCP server also exposes plain HTTP endpoints for quick inspection:
 
 ```bash
-curl http://localhost:7777/status          # queue depth + worker states
-curl http://localhost:7777/queue           # pending tasks
-curl http://localhost:7777/results         # all submitted results
-curl http://localhost:7777/result/2        # result for worker 2
+curl http://localhost:7777/status                          # queue depth + worker states
+curl http://localhost:7777/queue                           # pending tasks
+curl http://localhost:7777/results                         # all submitted results
+curl http://localhost:7777/result/bob                      # result for a specific worker
+curl http://localhost:7777/pipelines                       # all pipeline statuses
+curl http://localhost:7777/pipeline/auth-feature           # stage breakdown for one pipeline
+curl http://localhost:7777/pipeline/auth-feature/build/results  # results from a stage
 ```
 
 ## Architecture

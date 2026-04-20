@@ -227,6 +227,45 @@ relevant without any enforcement machinery.
 This is intentionally simple. Per-worker skill/plugin scoping can be added later if
 needed — the role file approach gives clear guidance with zero infrastructure overhead.
 
+## Pipelines
+
+Pipelines define sequential stage-based workflows where each stage's results feed the
+next. Domain belongs to the pipeline, not the worker — the same role can participate
+in multiple pipelines across different domains.
+
+```json
+{
+  "workers": [
+    { "id": "bob", "role": "frontend" },
+    { "id": "rex", "role": "review"   },
+    { "id": "sam", "role": "security" },
+    { "id": "git", "role": "git"      }
+  ],
+  "pipelines": [
+    {
+      "name": "auth-feature",
+      "domain": ["src/frontend/auth/", "src/backend/auth/"],
+      "stages": [
+        { "stage": "build",    "role": "frontend" },
+        { "stage": "review",   "role": "review",   "input": "build" },
+        { "stage": "security", "role": "security", "input": "build" },
+        { "stage": "ship",     "role": "git",      "input": ["review", "security"] }
+      ]
+    }
+  ]
+}
+```
+
+The orchestrator manages sequencing using two MCP tools:
+- `stage_done(pipeline, stage)` — poll until a stage is complete
+- `get_stage_results(pipeline, stage)` — read results to build the next stage's tasks
+
+Stages with multiple `input` entries (e.g. `ship` depends on both `review` and
+`security`) run their dependencies in parallel and wait for both before proceeding.
+
+Stage status is tracked automatically — when a worker submits a result the server
+attributes it to the correct pipeline/stage via the worker's current task.
+
 ## Communication Rules (Hub-and-Spoke)
 
 All inter-agent communication routes through the orchestrator — workers never talk directly
