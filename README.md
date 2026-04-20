@@ -40,6 +40,7 @@ Workers are **pull-based** — they call `get_task` themselves when ready, makin
 - [Claude Code](https://claude.ai/code) CLI (`claude`)
 - [Bun](https://bun.sh) (`brew install bun`)
 - [jq](https://jqlang.github.io/jq/) (`brew install jq`)
+- [fswatch](https://github.com/emcrisostomo/fswatch) (`brew install fswatch`) — optional, for the job watcher; falls back to polling without it
 
 ## Installation
 
@@ -72,9 +73,13 @@ Add to `tmux.conf`:
 
 ```tmux
 set -g @claude-agents-mcp-port   7777   # default
-set -g @claude-agents-notify     true   # macOS notifications
+set -g @claude-agents-notify     true   # macOS notifications (Glass = done, Basso = blocked)
 set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
 ```
+
+When `@claude-agents-notify` is enabled, workers call `notify.sh` at the end of each task. Two distinct sounds let you know what needs attention without looking at the screen:
+- **Glass** — worker finished all tasks
+- **Basso** — worker is blocked and needs intervention
 
 ## Project Setup
 
@@ -470,7 +475,7 @@ The MCP server runs as a local HTTP/SSE server (Bun/TypeScript) bundled inside t
 | `get_task(worker_id, role)` | Worker | Pulls next role-matched task |
 | `submit_result(worker_id, result)` | Worker | Posts completed output |
 | `get_result(worker_id)` | Orchestrator | Reads a worker's result |
-| `get_status()` | Orchestrator | Queue depth + all worker states |
+| `get_status()` | Orchestrator | Queue depth + all worker states (idle / working / submitted) |
 | `all_done()` | Orchestrator | True when queue is empty and all registered workers have submitted |
 | `stage_done(job, stage)` | Orchestrator | True when all tasks in a job stage are submitted |
 | `get_stage_results(job, stage)` | Orchestrator | All results from a completed job stage |

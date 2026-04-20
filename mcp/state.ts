@@ -8,7 +8,7 @@ export interface Task {
 }
 
 interface WorkerState {
-  status: "working" | "submitted";
+  status: "idle" | "working" | "submitted";
   paneId?: string;
   currentTask?: Task;
 }
@@ -63,7 +63,7 @@ export function loadTasks(tasks: Task[]): { count: number; error?: string } {
 
 export function registerWorker(workerId: string, paneId: string): void {
   const existing = workerState.get(workerId);
-  workerState.set(workerId, { ...existing, paneId });
+  workerState.set(workerId, { status: "idle", ...existing, paneId });
 }
 
 export function getTask(workerId: string, role: string): Task | null {
@@ -130,7 +130,7 @@ export function getAllJobsStatus(): Record<string, JobStatus> {
 export function allDone(): boolean {
   if (workerState.size === 0) return false;
   return taskQueue.length === 0 &&
-    Array.from(workerState.values()).every(w => w.status === "submitted");
+    Array.from(workerState.values()).every(w => w.status === "submitted" || w.status === "idle");
 }
 
 export interface Status {
@@ -156,6 +156,8 @@ export function getAllResults(): Record<string, string> {
 export function resetJob(job: string): boolean {
   if (!jobState.has(job)) return false;
   jobState.delete(job);
+  const before = taskQueue.length;
+  taskQueue.splice(0, taskQueue.length, ...taskQueue.filter((t) => t.job !== job));
   return true;
 }
 

@@ -28,12 +28,14 @@ const pGit: Task      = { id: "p4", role: "git",      description: "Create PR", 
 beforeEach(() => reset());
 
 describe("registerWorker", () => {
-  it("stores the pane ID for a worker", () => {
+  it("stores the pane ID and sets status to idle", () => {
     registerWorker("bob", "%12");
-    expect(getStatus().workers["bob"].paneId).toBe("%12");
+    const w = getStatus().workers["bob"];
+    expect(w.paneId).toBe("%12");
+    expect(w.status).toBe("idle");
   });
 
-  it("preserves existing worker state when registering", () => {
+  it("preserves existing worker state when re-registering", () => {
     loadTasks([frontend]);
     getTask("bob", "frontend");
     registerWorker("bob", "%12");
@@ -326,6 +328,16 @@ describe("job: resetJob", () => {
 
     expect(stageDone("auth-login", "build")).toBe(false);
     expect(getJobStatus("auth-login")).toBeNull();
+  });
+
+  it("removes queued tasks for the job", () => {
+    loadTasks([pFrontend, pReview, pSecurity]);
+    getTask("bob", "frontend");
+    submitResult("bob", "done");
+    // pReview and pSecurity are now in queue (depends_on satisfied)
+    resetJob("auth-login");
+    expect(getTask("rex", "review")).toBeNull();
+    expect(getTask("sam", "security")).toBeNull();
   });
 
   it("allows new tasks under the same job name after reset", () => {
