@@ -279,7 +279,17 @@ The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and 
 stage_done("auth", "ship") → true
 ```
 
-macOS notification fires: **"Worker git finished"** (Glass sound). Press `prefix+Ctrl+M` to remove worktrees and kill the MCP server.
+macOS notification fires: **"Worker git finished"** (Glass sound).
+
+The orchestrator removes the pipeline worktree — the git worker has already committed everything to the branch:
+
+```bash
+git worktree remove .worktrees/auth
+# branch agent/auth stays alive for the open PR
+# delete it manually after the PR is merged: git branch -d agent/auth
+```
+
+Press `prefix+Ctrl+M` to kill the MCP server. If any worktrees are still around (e.g. session was aborted), cleanup will force-remove them and warn about any open branches.
 
 ### Inspect anytime
 

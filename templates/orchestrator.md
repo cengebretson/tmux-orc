@@ -137,7 +137,13 @@ for each stage in order:
 
 Stages whose tasks have multiple `input` dependencies (e.g. `ship` depends on both `review` and `security`) run their inputs in parallel — poll both until done, then proceed.
 
-**When done:** `stage_done` returns `true` for the final stage → all work is complete.
+**When done:** `stage_done` returns `true` for the final stage → remove the worktree, leave the branch:
+
+```bash
+git worktree remove .worktrees/<pipeline>
+# branch agent/<pipeline> stays alive for the open PR — delete it after merge:
+# git branch -d agent/<pipeline>
+```
 
 ---
 
