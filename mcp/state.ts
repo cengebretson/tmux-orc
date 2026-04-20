@@ -47,12 +47,18 @@ function stageStatus(s: StageState): StageStatus {
   return s.results.size >= s.taskCount ? "complete" : "active";
 }
 
-export function loadTasks(tasks: Task[]): number {
+export function loadTasks(tasks: Task[]): { count: number; error?: string } {
+  const newJobs = new Set(tasks.map((t) => t.job));
+  for (const job of newJobs) {
+    if (jobState.has(job)) {
+      return { count: 0, error: `job '${job}' already exists — use reset_job to rerun it` };
+    }
+  }
   for (const task of tasks) {
     taskQueue.push(task);
     getOrCreateStage(task.job, task.stage).taskCount++;
   }
-  return tasks.length;
+  return { count: tasks.length };
 }
 
 export function registerWorker(workerId: string, paneId: string): void {

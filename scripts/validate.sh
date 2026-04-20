@@ -119,6 +119,16 @@ else
   done
 fi
 
+# --- check for active job conflicts (if MCP server is running) ---
+
+MCP_URL="${MCP_URL:-http://localhost:${CLAUDE_AGENTS_MCP_PORT:-7777}}"
+if [[ -n "$JOB_NAME" ]] && curl -sf "$MCP_URL/jobs" -o /tmp/_ca_jobs.json 2>/dev/null; then
+  if jq -e --arg job "$JOB_NAME" 'has($job)' /tmp/_ca_jobs.json >/dev/null 2>&1; then
+    err "job '$JOB_NAME' is already active in the running MCP server — use reset_job to rerun it"
+  fi
+  rm -f /tmp/_ca_jobs.json
+fi
+
 # --- job file ---
 
 if [[ -n "$JOB_NAME" ]]; then

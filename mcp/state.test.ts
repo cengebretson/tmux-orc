@@ -45,14 +45,15 @@ describe("registerWorker", () => {
 
 describe("loadTasks", () => {
   it("adds tasks to the queue and returns count", () => {
-    expect(loadTasks([frontend, backend, review])).toBe(3);
+    expect(loadTasks([frontend, backend, review]).count).toBe(3);
   });
 
-  it("appends to existing tasks", () => {
+  it("appends tasks for different jobs", () => {
+    const t2: Task = { id: "x1", role: "backend", description: "API work", job: "dashboard", stage: "build" };
     loadTasks([frontend]);
-    loadTasks([backend]);
+    loadTasks([t2]);
     expect(getTask("bob", "frontend")).toEqual(frontend);
-    expect(getTask("alice", "backend")).toEqual(backend);
+    expect(getTask("alice", "backend")).toEqual(t2);
   });
 
   it("registers job stage task counts", () => {
@@ -60,6 +61,21 @@ describe("loadTasks", () => {
     const status = getJobStatus("auth-login")!;
     expect(status.stages["build"].taskCount).toBe(1);
     expect(status.stages["review"].taskCount).toBe(1);
+  });
+
+  it("rejects tasks for a job that already exists", () => {
+    loadTasks([pFrontend]);
+    const result = loadTasks([pReview]);
+    expect(result.error).toMatch(/auth-login/);
+    expect(result.count).toBe(0);
+  });
+
+  it("does not partially load tasks when a job conflict is detected", () => {
+    loadTasks([pFrontend]);
+    const t2: Task = { id: "x1", role: "backend", description: "API", job: "dashboard", stage: "build" };
+    const result = loadTasks([t2, pReview]);
+    expect(result.error).toMatch(/auth-login/);
+    expect(getTask("alice", "backend")).toBeNull();
   });
 });
 

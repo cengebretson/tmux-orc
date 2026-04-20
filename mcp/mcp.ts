@@ -44,8 +44,11 @@ mcp.tool(
   "Load the task queue (orchestrator calls this on startup)",
   { tasks: z.array(taskSchema) },
   async ({ tasks }) => {
-    const count = loadTasks(tasks);
-    return { content: [{ type: "text", text: `Loaded ${count} tasks` }] };
+    const result = loadTasks(tasks);
+    if (result.error) {
+      return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    }
+    return { content: [{ type: "text", text: `Loaded ${result.count} tasks` }] };
   }
 );
 
