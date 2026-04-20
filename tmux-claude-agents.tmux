@@ -9,7 +9,7 @@ WATCH_JOBS=$(tmux show-option -gqv "@claude-agents-watch-jobs")
 WATCH_JOBS="${WATCH_JOBS:-false}"
 export CLAUDE_AGENTS_WATCH_JOBS="$WATCH_JOBS"
 
-tmux bind-key M run-shell "\"$PLUGIN_DIR/scripts/start_session.sh\""
-tmux bind-key M-m run-shell "\"$PLUGIN_DIR/scripts/start_session.sh\" --here"
-tmux bind-key S run-shell "\"$PLUGIN_DIR/scripts/menu.sh\""
-tmux bind-key C-m run-shell "\"$PLUGIN_DIR/scripts/cleanup.sh\""
+tmux bind-key M run-shell "bun run \"$PLUGIN_DIR/cli.ts\" start"
+tmux bind-key M-m run-shell "bun run \"$PLUGIN_DIR/cli.ts\" start --here"
+tmux bind-key S run-shell "bun run \"$PLUGIN_DIR/cli.ts\" menu"
+tmux bind-key C-m run-shell "bun run \"$PLUGIN_DIR/cli.ts\" cleanup"

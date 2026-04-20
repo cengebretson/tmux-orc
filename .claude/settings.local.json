@@ -4,7 +4,9 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(bun test *)"
+      "Bash(bun test *)",
+      "Bash(chmod +x /Users/chris/Desktop/projects/tmux/tmux-orc/cli.ts)",
+      "Bash(bun run *)"
     ]
   }
 }
