@@ -69,6 +69,28 @@ export function parseFrontmatter(content: string): Record<string, string> {
   return result;
 }
 
+// --- types ---
+
+interface WorkerConfig {
+  id: string;
+  role: string;
+}
+
+interface StageConfig {
+  name: string;
+  role: string;
+}
+
+interface PipelineConfig {
+  name: string;
+  stages: StageConfig[];
+}
+
+interface AgentsConfig {
+  workers: WorkerConfig[];
+  pipelines: PipelineConfig[];
+}
+
 // --- validate ---
 
 export async function validate(args: string[]): Promise<boolean> {
@@ -89,7 +111,7 @@ export async function validate(args: string[]): Promise<boolean> {
     return false;
   }
 
-  let config: { workers?: any[]; pipelines?: any[] };
+  let config: AgentsConfig;
   try {
     config = JSON.parse(readFileSync(configPath, "utf8"));
   } catch {
@@ -99,12 +121,11 @@ export async function validate(args: string[]): Promise<boolean> {
 
   // workers
   console.log("\nWorkers:");
-  const workers = config.workers ?? [];
+  const workers: WorkerConfig[] = config.workers ?? [];
   if (workers.length === 0) {
     printErr("no workers defined in agents.json"); errors++;
   }
-  for (const worker of workers) {
-    const { id: workerId, role } = worker;
+  for (const { id: workerId, role } of workers) {
     const roleFile = findRoleFile(role);
     if (!roleFile) {
       printErr(`worker '${workerId}': role file not found for '${role}'`); errors++;
@@ -136,19 +157,19 @@ export async function validate(args: string[]): Promise<boolean> {
 
   // pipelines
   console.log("\nPipelines:");
-  const pipelines = config.pipelines ?? [];
+  const pipelines: PipelineConfig[] = config.pipelines ?? [];
   if (pipelines.length === 0) {
     printWarn("no pipelines defined in agents.json"); warnings++;
   }
   for (const pipeline of pipelines) {
     let pipelineOk = true;
-    for (const stage of pipeline.stages ?? []) {
+    for (const stage of pipeline.stages) {
       if (!findRoleFile(stage.role)) {
         printErr(`pipeline '${pipeline.name}', stage '${stage.name}': role '${stage.role}' has no role file`);
         errors++; pipelineOk = false;
       }
     }
-    if (pipelineOk) printOk(`pipeline '${pipeline.name}': ${(pipeline.stages ?? []).length} stages`);
+    if (pipelineOk) printOk(`pipeline '${pipeline.name}': ${pipeline.stages.length} stages`);
   }
 
   // active job conflict check (if MCP is running)
@@ -181,7 +202,7 @@ export async function validate(args: string[]): Promise<boolean> {
         const fm = parseFrontmatter(readFileSync(jobFile, "utf8"));
         if (!fm.pipeline) {
           printErr(`job '${jobName}': missing 'pipeline:' in frontmatter`); errors++;
-        } else if (!pipelines.some((p: any) => p.name === fm.pipeline)) {
+        } else if (!pipelines.some(p => p.name === fm.pipeline)) {
           printErr(`job '${jobName}': pipeline '${fm.pipeline}' not defined in agents.json`); errors++;
         } else {
           printOk(`job '${jobName}': pipeline '${fm.pipeline}'`);
