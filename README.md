@@ -107,17 +107,20 @@ Create `.claude/agents.json` in your project repo:
 
 Each job lives in `.claude/jobs/<name>.md`. The frontmatter specifies which pipeline to use and the domain to work in. The body is the full spec — the orchestrator reads it to generate task descriptions for each stage.
 
+When a job completes, the orchestrator appends an `## Outcome` section and moves the file to `.claude/jobs/done/`. Pending jobs are what's in `.claude/jobs/`; completed jobs are in `done/`.
+
 ```
 .claude/
   agents.json
   jobs/
-    auth-login.md
-    auth-signup.md
+    auth-signup.md      ← pending
+    done/
+      auth-login.md     ← completed (has ## Outcome section)
   roles/        ← optional project-specific role overrides
   skills/       ← optional project-specific skill overrides
 ```
 
-Example `.claude/jobs/auth-login.md`:
+Example `.claude/jobs/auth-login.md` (before completion):
 
 ```markdown
 ---
@@ -142,13 +145,28 @@ Extend `src/shared/hooks/useAuth.ts`, don't replace it.
 - Linear: AUTH-42
 ```
 
+After completion, the same file in `done/` has an outcome appended:
+
+```markdown
+## Outcome
+
+**Completed:** 2026-04-20
+**Branch:** agent/auth-login
+**PR:** https://github.com/org/repo/pull/124
+
+### Recap
+Login form built with JWT stored in httpOnly cookie. useAuth hook extended.
+Review: LGTM with 2 minor comments addressed. Security: CSRF token added to
+form after sam flagged it. PR opened from agent/auth-login → main.
+```
+
 To start a job:
 
 ```bash
 ~/.tmux/plugins/tmux-claude-agents/scripts/start_session.sh --job=auth-login
 ```
 
-Or bind it to a key and pass the job name. The plugin validates that the job file exists and its `pipeline` is defined in `agents.json` before starting.
+The plugin validates that the job file exists, its `pipeline` is defined in `agents.json`, and the job hasn't already been completed (i.e. not in `done/`). To rerun a completed job, move it back from `done/`.
 
 Add to `.gitignore`:
 
@@ -348,12 +366,28 @@ stage_done("auth-login", "ship") → true
 
 macOS notification fires: **"Worker git finished"** (Glass sound).
 
-The orchestrator removes the job worktree — the git worker has already committed everything to the branch:
+The orchestrator appends an `## Outcome` section to the job file, archives it, then removes the worktree:
 
 ```bash
+# append outcome to job file
+cat >> .claude/jobs/auth-login.md << 'EOF'
+
+## Outcome
+
+**Completed:** 2026-04-20
+**Branch:** agent/auth-login
+**PR:** https://github.com/org/repo/pull/124
+
+### Recap
+Login form built with JWT stored in httpOnly cookie. useAuth hook extended.
+Review: LGTM, 2 minor comments addressed. Security: CSRF token added after
+sam flagged it. PR opened from agent/auth-login → main.
+EOF
+
+# archive and clean up
+mv .claude/jobs/auth-login.md .claude/jobs/done/
 git worktree remove .worktrees/auth-login
-# branch agent/auth-login stays alive for the open PR
-# delete it manually after the PR is merged: git branch -d agent/auth-login
+# after PR is merged: git branch -d agent/auth-login
 ```
 
 Press `prefix+Ctrl+M` to kill the MCP server. If any worktrees are still around (e.g. session was aborted), cleanup will force-remove them and warn about any open branches.

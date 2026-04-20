@@ -66,6 +66,10 @@ done
 
 if [[ -n "$JOB_NAME" ]]; then
   JOB_FILE=".claude/jobs/$JOB_NAME.md"
+  if [[ -f ".claude/jobs/done/$JOB_NAME.md" ]]; then
+    echo "Error: job '$JOB_NAME' already completed — move it from .claude/jobs/done/ to rerun." >&2
+    exit 1
+  fi
   if [[ ! -f "$JOB_FILE" ]]; then
     echo "Error: job file not found: $JOB_FILE" >&2
     if [[ -d ".claude/jobs" ]]; then
@@ -74,6 +78,7 @@ if [[ -n "$JOB_NAME" ]]; then
     fi
     exit 1
   fi
+  mkdir -p .claude/jobs/done
 
   # extract pipeline from frontmatter
   pipeline=$(awk '/^---/{f=!f;next} f && /^pipeline:/{gsub(/^pipeline:[[:space:]]*/,""); print; exit}' "$JOB_FILE")

@@ -57,10 +57,12 @@ For standalone tasks, one worktree per worker:
 git worktree add .worktrees/bob -b agent/bob
 ```
 
-Cleanup after a job's PR is merged:
+When the final stage is done, the orchestrator appends an `## Outcome` section (recap, branch, PR link) to the job file, moves it to `.claude/jobs/done/`, and removes the worktree. The branch stays for the open PR.
+
 ```bash
+mv .claude/jobs/auth-login.md .claude/jobs/done/
 git worktree remove .worktrees/auth-login
-git branch -d agent/auth-login
+# after PR is merged: git branch -d agent/auth-login
 ```
 
 ### Project Config

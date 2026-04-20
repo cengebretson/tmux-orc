@@ -137,13 +137,32 @@ for each stage in pipeline order:
 Stages with parallel inputs (e.g. `ship` after both `review` and `security`) — poll
 both until done, then proceed.
 
-**When the final stage is done** — remove the worktree, leave the branch for the open PR:
+**When the final stage is done** — append an outcome section to the job file, move it to `done/`, then remove the worktree:
 
 ```bash
+# 1. append outcome to the job file
+cat >> {{job_file}} << 'EOF'
+
+## Outcome
+
+**Completed:** $(date +%Y-%m-%d)
+**Branch:** agent/<job>
+**PR:** <pr_url from ship stage result>
+
+### Recap
+<brief summary of what was built, any review/security findings, decisions made>
+EOF
+
+# 2. archive the job
+mkdir -p .claude/jobs/done
+mv {{job_file}} .claude/jobs/done/
+
+# 3. clean up the worktree (branch stays for the open PR)
 git worktree remove .worktrees/<job>
-# branch agent/<job> stays alive until the PR is merged:
-# git branch -d agent/<job>
+# after PR is merged: git branch -d agent/<job>
 ```
+
+The recap should draw from the stage results you've already read — build summary, review notes, security findings.
 
 ---
 
