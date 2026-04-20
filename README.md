@@ -183,6 +183,32 @@ Built-in roles: `backend`, `frontend`, `review`, `document`, `security`, `git`
 
 Workers only receive tasks matching their role.
 
+#### Task modes
+
+There are two ways to use tasks, chosen per session:
+
+**Standalone** — tasks are independent, can run in any order. No `pipeline` or `stage` fields. Orchestrator monitors with `all_done(workerCount)` and reads results via `get_result(workerId)`.
+
+```json
+[
+  { "id": "1", "role": "frontend", "description": "Build login form" },
+  { "id": "2", "role": "backend",  "description": "Build login API"  }
+]
+```
+
+**Pipeline** — tasks belong to named stages that run in sequence. Results from one stage feed the next. Tasks carry `pipeline` and `stage` fields; result attribution is automatic.
+
+```json
+[
+  { "id": "p1", "role": "frontend", "description": "Build login form", "pipeline": "auth", "stage": "build"    },
+  { "id": "p2", "role": "review",   "description": "Review auth PR",   "pipeline": "auth", "stage": "review"   },
+  { "id": "p3", "role": "security", "description": "Security audit",   "pipeline": "auth", "stage": "security" },
+  { "id": "p4", "role": "git",      "description": "Open PR",          "pipeline": "auth", "stage": "ship"     }
+]
+```
+
+Orchestrator polls `stage_done(pipeline, stage)`, then reads `get_stage_results(pipeline, stage)` to build the next stage's tasks. Stages with multiple inputs (e.g. `ship` after both `review` and `security`) run their inputs in parallel and wait for both.
+
 ### Skills and plugins
 
 Workers have access to all skills (`.claude/commands/`) and MCP plugins configured for the project — there is no per-worker filtering. Each role file documents which skills and plugins that role should use via `## Skills` and `## Plugins` sections. Workers read this from their CLAUDE.md and know what tools are relevant to them.

@@ -227,6 +227,35 @@ relevant without any enforcement machinery.
 This is intentionally simple. Per-worker skill/plugin scoping can be added later if
 needed — the role file approach gives clear guidance with zero infrastructure overhead.
 
+## Task Modes
+
+There are two ways to run tasks, chosen per session:
+
+### Standalone (parallel, independent)
+
+Tasks have no `pipeline` or `stage` fields. Workers pull tasks by role and run in
+parallel with no ordering dependency. The orchestrator monitors via:
+- `all_done(workerCount)` — returns true when queue is empty and all workers submitted
+- `get_result(workerId)` — reads a single worker's output
+
+Use this when tasks are independent: e.g. multiple isolated components being built
+simultaneously.
+
+### Pipeline (sequential stages, results feed forward)
+
+Tasks carry `pipeline` and `stage` fields. Results are automatically attributed to the
+correct stage when a worker calls `submit_result`. The orchestrator sequences stages via:
+- `stage_done(pipeline, stage)` — poll until all tasks in a stage are submitted
+- `get_stage_results(pipeline, stage)` — read all results from a completed stage, then
+  build and load the next stage's tasks
+
+Use this when work must happen in order: e.g. build → review → security → ship.
+
+All tasks can be loaded up front with `load_tasks` — workers self-schedule by role,
+pulling only tasks that match their role from the queue.
+
+---
+
 ## Pipelines
 
 Pipelines define sequential stage-based workflows where each stage's results feed the

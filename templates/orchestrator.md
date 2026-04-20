@@ -44,19 +44,83 @@ Keep a note of each worker's pane ID — you'll use them to health-check stuck w
 
 ## Step 2 — Load tasks
 
-Call `load_tasks` with the full task list. Each task needs: id, role (backend/frontend/review), description, and optional domain.
+Call `load_tasks` with the full task list. Each task has:
 
-## Step 3 — Monitor and aggregate
+```json
+{
+  "id": "string",
+  "role": "backend | frontend | review | ...",
+  "description": "what the worker should do",
+  "domain": "src/backend/"
+}
+```
+
+There are two task modes. Choose one per session based on whether work is independent or sequential.
+
+---
+
+### Mode A: Standalone tasks (parallel, independent)
+
+Use when tasks are independent and can be worked in any order. No `pipeline` or `stage` fields on tasks.
+
+```json
+[
+  { "id": "1", "role": "frontend", "description": "Build login form", "domain": "src/frontend/" },
+  { "id": "2", "role": "backend",  "description": "Build login API",  "domain": "src/backend/"  }
+]
+```
+
+**Monitoring:**
+- Poll `get_status` to watch worker states.
+- Call `all_done(worker_count=N)` to check if all workers are finished.
+- Read each result with `get_result(worker_id)` once they submit.
+
+**When done:** `all_done` returns `true` → gather results → aggregate and summarise.
+
+---
+
+### Mode B: Pipeline tasks (sequential stages, results feed forward)
+
+Use when work must happen in order — e.g. build → review → ship. Tasks carry `pipeline` and `stage` fields so results are automatically attributed to the right stage.
+
+```json
+[
+  { "id": "p1", "role": "frontend", "description": "Build login form", "pipeline": "auth", "stage": "build",    "domain": "src/frontend/" },
+  { "id": "p2", "role": "review",   "description": "Review auth PR",   "pipeline": "auth", "stage": "review"   },
+  { "id": "p3", "role": "security", "description": "Security audit",   "pipeline": "auth", "stage": "security" },
+  { "id": "p4", "role": "git",      "description": "Open PR",          "pipeline": "auth", "stage": "ship"     }
+]
+```
+
+Load all tasks up front with `load_tasks` — workers will self-schedule by role, pulling only tasks that match their role from the queue. There is no need to load tasks stage by stage.
+
+**Orchestrator sequence for a pipeline:**
+
+```
+for each stage in order:
+  1. poll stage_done(pipeline, stage) until true
+  2. read get_stage_results(pipeline, stage)   ← results keyed by worker id
+  3. use those results to build the next stage's tasks (if needed)
+  4. call load_tasks([...next stage tasks...])  ← only if building tasks dynamically
+```
+
+Stages whose tasks have multiple `input` dependencies (e.g. `ship` depends on both `review` and `security`) run their inputs in parallel — poll both until done, then proceed.
+
+**When done:** `stage_done` returns `true` for the final stage → all work is complete.
+
+---
+
+## Step 3 — Monitor
 
 - Poll `get_status` to see worker states and which task each is on.
 - If a worker has been in "working" state too long, inspect it:
   ```
   tmux capture-pane -t <pane_id> -p | tail -20
   ```
-- Read completed work with `get_result(worker_id)` as workers submit.
-- Call `all_done(worker_count=N)` to confirm everything is finished, then aggregate and summarise results.
+- For pipeline sessions, use `get_stage_results(pipeline, stage)` to read completed stage output.
+- For standalone sessions, use `get_result(worker_id)` to read individual results.
 
 ## Communication rules
 
 - All worker communication routes through you. Workers report via `submit_result` only — never to each other.
-- If worker B needs worker A's output, read A's result via `get_result` and pass the relevant parts as a new task to B.
+- If worker B needs worker A's output, read A's result and pass the relevant parts as a new task to B.
