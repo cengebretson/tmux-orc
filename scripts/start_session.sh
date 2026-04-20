@@ -74,4 +74,18 @@ tmux paste-buffer -b "orch-prompt" -t "$ORCH_PANE"
 tmux send-keys -t "$ORCH_PANE" "" Enter
 tmux delete-buffer -b "orch-prompt" 2>/dev/null || true
 
+# --- start job watcher (if enabled) ---
+
+WATCH_JOBS="${CLAUDE_AGENTS_WATCH_JOBS:-false}"
+if [[ "$WATCH_JOBS" == "true" ]]; then
+  if [[ -d ".claude/jobs" ]]; then
+    tmux split-window -d -h -t "$ORCH_PANE" \
+      -e "AGENTS_CONFIG=$AGENTS_CONFIG" \
+      "$PLUGIN_DIR/scripts/watch_jobs.sh $ORCH_PANE .claude/jobs"
+    echo "Job watcher started (watching .claude/jobs/)"
+  else
+    echo "Job watcher enabled but .claude/jobs/ not found — skipping"
+  fi
+fi
+
 echo "Orchestrator started in pane $ORCH_PANE. MCP: $MCP_URL${JOB_NAME:+, Job: $JOB_NAME}"

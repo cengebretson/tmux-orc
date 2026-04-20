@@ -71,8 +71,9 @@ cd ~/.tmux/plugins/tmux-claude-agents/mcp && bun install
 Add to `tmux.conf`:
 
 ```tmux
-set -g @claude-agents-mcp-port 7777   # default
-set -g @claude-agents-notify  true    # macOS notifications
+set -g @claude-agents-mcp-port   7777   # default
+set -g @claude-agents-notify     true   # macOS notifications
+set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
 ```
 
 ## Project Setup
@@ -159,6 +160,16 @@ Login form built with JWT stored in httpOnly cookie. useAuth hook extended.
 Review: LGTM with 2 minor comments addressed. Security: CSRF token added to
 form after sam flagged it. PR opened from agent/auth-login → main.
 ```
+
+### Auto-starting jobs (job watcher)
+
+With `@claude-agents-watch-jobs true` in your `tmux.conf`, a watcher runs alongside the orchestrator. Drop any `.md` file into `.claude/jobs/` and it will be picked up automatically — validated, then sent to the orchestrator as a `start job <name>` prompt.
+
+```bash
+cp my-feature.md .claude/jobs/   # orchestrator starts it automatically
+```
+
+Uses `fswatch` if installed (`brew install fswatch`), falls back to 5-second polling. Invalid job files (failed validation) are skipped with a notification rather than starting a broken session.
 
 Once the orchestrator is running, start a job by just telling it:
 

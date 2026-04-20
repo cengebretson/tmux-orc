@@ -87,6 +87,7 @@ All workers in the same job share this worktree. After the final stage the orche
 scripts/
   start_session.sh   # starts MCP server, creates orchestrator pane; --job=<name> to preload
   validate.sh        # pre-flight checks: roles, skills, plugins, job frontmatter
+  watch_jobs.sh      # watches .claude/jobs/ and auto-starts new jobs (toggle: @claude-agents-watch-jobs)
   start_mcp.sh       # launches bun server, guards double-start via PID file
   menu.sh            # tmux display-menu for status inspection
   cleanup.sh         # kills MCP server, removes worktrees + branches
@@ -111,8 +112,9 @@ cd mcp && bun test
 
 ```tmux
 set -g @plugin 'yourname/tmux-claude-agents'
-set -g @claude-agents-mcp-port 7777   # default
-set -g @claude-agents-notify  true    # macOS notifications
+set -g @claude-agents-mcp-port   7777   # default
+set -g @claude-agents-notify     true   # macOS notifications
+set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
 
 set -g bell-action any
 set -g visual-bell on
