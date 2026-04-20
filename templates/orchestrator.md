@@ -88,10 +88,10 @@ The job name is the filename without extension (e.g. `auth-login` from `auth-log
 Example — job file `.claude/jobs/auth-login.md` with pipeline `frontend` (stages: build → review → security → ship):
 ```json
 load_tasks([
-  { "id": "auth-login-build",    "role": "frontend", "job": "auth-login", "stage": "build",    "description": "Build login form per spec: JWT in httpOnly cookie, extend useAuth hook, mobile responsive" },
-  { "id": "auth-login-review",   "role": "review",   "job": "auth-login", "stage": "review",   "description": "Review auth-login changes against acceptance criteria in job spec",   "depends_on": ["build"]             },
-  { "id": "auth-login-security", "role": "security", "job": "auth-login", "stage": "security", "description": "Audit login flow: JWT handling, cookie flags, CSRF, injection",        "depends_on": ["build"]             },
-  { "id": "auth-login-ship",     "role": "git",      "job": "auth-login", "stage": "ship",     "description": "Open PR: agent/auth-login → main, summarising review and security findings", "depends_on": ["review", "security"] }
+  { "id": "auth-login-build",    "role": "frontend", "job": "auth-login", "stage": "build",    "description": "Build login form per spec: JWT in httpOnly cookie, extend useAuth hook, mobile responsive"                 },
+  { "id": "auth-login-review",   "role": "review",   "job": "auth-login", "stage": "review",   "description": "Review auth-login changes against acceptance criteria in job spec",              "depends_on": ["build"]             },
+  { "id": "auth-login-security", "role": "security", "job": "auth-login", "stage": "security", "description": "Audit login flow: JWT handling, cookie flags, CSRF, injection",                   "depends_on": ["build"]             },
+  { "id": "auth-login-ship",     "role": "git",      "job": "auth-login", "stage": "ship",     "description": "Open PR from agent/auth-login → main — use /pr-description for the summary",     "depends_on": ["review", "security"] }
 ])
 ```
 

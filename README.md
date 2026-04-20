@@ -16,7 +16,7 @@
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠛⠛⠛⠛⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ```
 
-A tmux plugin for running multiple Claude Code agents in parallel. An orchestrator agent coordinates workers via a local MCP server acting as a message bus, with git worktrees providing per-worker repo isolation.
+A tmux plugin for running multiple Claude Code agents in parallel. An orchestrator agent coordinates workers via a local MCP server acting as a message bus, with git worktrees providing per-job repo isolation.
 
 ```
 ┌──────────────────┬──────────────────┐
@@ -237,10 +237,10 @@ To pre-load a job at cold-start, pass `--job`:
 
 ### What the orchestrator does
 
-1. Registers the MCP server, creates worktrees, spins up workers, and loads tasks via `load_tasks`
-2. Workers register, then start pulling tasks via `get_task`
+1. Registers the MCP server, creates worktrees, spins up workers, and loads all tasks via `load_tasks`
+2. Workers register, then start pulling tasks via `get_task` — the server withholds tasks until their `depends_on` stages complete
 3. Monitor progress with `get_status` or `prefix+S`
-4. When `all_done()` returns true, aggregate results with `get_result`
+4. Read stage output with `get_stage_results(job, stage)` as each stage completes
 
 ## Example: Auth feature pipeline
 
@@ -313,31 +313,37 @@ The orchestrator creates a pane per worker, writes the role file as `CLAUDE.md` 
 └─────────────────────┴────────────────────┘
 ```
 
-### Step 4 — Workers self-bootstrap
+### Step 4 — Orchestrator loads all tasks
 
-Each worker independently runs its bootstrap loop. Because it's a pipeline session, the worktree already exists — workers just register and start pulling tasks:
-
-```
-register_worker(worker_id="bob", pane_id="%23")
-# worktree .worktrees/auth-login already exists — no git worktree add needed
-get_task(worker_id="bob", role="frontend")
-→ task p1: "Build auth login form"
-```
-
-### Step 5 — Orchestrator loads the pipeline
+All four tasks are loaded upfront with `depends_on` declaring the stage ordering:
 
 ```json
 load_tasks([
-  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "job": "auth-login", "stage": "build"                                       },
-  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "job": "auth-login", "stage": "review",   "depends_on": ["build"]            },
-  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",            "job": "auth-login", "stage": "security", "depends_on": ["build"]            },
-  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/auth-login into main",       "job": "auth-login", "stage": "ship",     "depends_on": ["review", "security"] }
+  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "job": "auth-login", "stage": "build"                                        },
+  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "job": "auth-login", "stage": "review",   "depends_on": ["build"]             },
+  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",            "job": "auth-login", "stage": "security", "depends_on": ["build"]             },
+  { "id": "p4", "role": "git",      "description": "Open PR from agent/auth-login → main",               "job": "auth-login", "stage": "ship",     "depends_on": ["review", "security"] }
 ])
 ```
 
-All tasks are loaded at once. Bob picks up `p1` immediately. Rex and Sam call `get_task` but get `NO_TASKS` — the server withholds `review` and `security` until `build` is complete. They retry every 30 seconds automatically.
+The server withholds `review`, `security`, and `ship` until their dependencies complete. No manual stage-by-stage loading needed.
 
-### Step 6 — Build stage
+### Step 5 — Workers self-bootstrap
+
+Each worker registers and starts calling `get_task`. The worktree already exists — no `git worktree add` needed:
+
+```
+register_worker(worker_id="bob", pane_id="%23")
+get_task(worker_id="bob", role="frontend")
+→ p1: "Build login + signup forms..."   ✓ (no depends_on — available immediately)
+
+get_task(worker_id="rex", role="review")
+→ NO_TASKS  (depends_on: ["build"] — withheld until build completes)
+```
+
+Rex and Sam retry every 30 seconds automatically.
+
+### Step 6 — Build stage completes
 
 Bob works in `.worktrees/auth-login`. The orchestrator polls:
 
@@ -375,24 +381,21 @@ stage_done("auth-login", "security") → false ... false ... true ✓
 
 ### Step 8 — Ship stage
 
-Both stages done. Orchestrator reads their results and loads the final task with the findings baked into the description:
+Both stages done. The server automatically releases `p4` — its `depends_on: ["review", "security"]` is now satisfied. Git picks it up on its next `get_task` retry:
+
+```
+get_task(worker_id="git", role="git")
+→ p4: "Open PR from agent/auth-login → main"   ✓
+```
+
+The orchestrator can read the findings for its own monitoring:
 
 ```
 get_stage_results("auth-login", "review")   → { "rex": "LGTM, 2 minor comments..." }
 get_stage_results("auth-login", "security") → { "sam": "No critical issues. CSRF token missing on signup form." }
 ```
 
-```json
-load_tasks([{
-  "id": "p4",
-  "role": "git",
-  "description": "Open PR: agent/auth-login → main. Review notes: LGTM, 2 minor comments. Security: add CSRF token to signup form before merging.",
-  "job": "auth-login",
-  "stage": "ship"
-}])
-```
-
-The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and opens a PR from `agent/auth-login` → `main`. All the pipeline's work is already on one branch — no merging needed.
+The git worker reads the diff, runs `/pr-description`, and opens a PR from `agent/auth-login` → `main`. All the pipeline's work is already on one branch — no merging needed.
 
 ### Step 9 — Done
 
@@ -545,30 +548,42 @@ Built-in skills (shipped in `skills/`):
 | `/dependency-audit` | Audit dependencies for known vulnerabilities and abandoned packages |
 | `/pr-description` | Generate a structured PR description from the current branch diff |
 
-### Adding a custom role
+### Custom roles and skills
 
-Role files are looked up in this order:
+Roles and skills follow the same two-level lookup — project-level takes precedence over plugin built-ins:
 
-1. `.claude/roles/<role>.md` — project-level, takes precedence
-2. `~/.tmux/plugins/tmux-claude-agents/roles/<role>.md` — plugin built-ins, fallback
+| | Project-level | Plugin built-in |
+|---|---|---|
+| Roles | `.claude/roles/<role>.md` | `~/.tmux/plugins/tmux-claude-agents/roles/<role>.md` |
+| Skills | `.claude/skills/<skill>.md` | `~/.tmux/plugins/tmux-claude-agents/skills/<skill>.md` |
 
-To add a project-specific role, create it alongside your `agents.json`:
+You never need to touch the plugin folder. Put files in `.claude/` and they automatically override or extend what ships with the plugin.
+
+**Adding a new role** — create `.claude/roles/data-engineer.md` and reference it in `agents.json`:
 
 ```
-your-project/
-  .claude/
-    agents.json
-    roles/
-      data-engineer.md   ← project-specific role
+.claude/
+  agents.json
+  roles/
+    data-engineer.md   ← picked up automatically
 ```
-
-The file defines the worker's persona, expertise, and standards. Then reference it in `agents.json`:
 
 ```json
-{ "id": "dave-the-data", "role": "data-engineer", "domain": "pipelines/" }
+{ "id": "dave", "role": "data-engineer" }
 ```
 
-If a role is used in `agents.json` but has no matching file in either location, the session will fail to start with a clear error.
+**Overriding a built-in role** — create `.claude/roles/frontend.md` with your project's conventions. Workers in this project get your version; the plugin built-in is ignored.
+
+**Adding a custom skill** — create `.claude/skills/my-check.md` and list it in a role file:
+
+```markdown
+## Skills
+- `/my-check` — description of what it does
+```
+
+**Overriding a built-in skill** — create `.claude/skills/pr-description.md` to replace the plugin's default with a project-specific version.
+
+`validate.sh` checks all roles and skills referenced in role files before the session starts, so missing files are caught early.
 
 ### Inspection Endpoints
 
