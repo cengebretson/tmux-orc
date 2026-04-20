@@ -1,10 +1,12 @@
+import { appendFileSync, mkdirSync } from "fs";
 import type { Task, StageStatus, StageInfo, JobStatus, Status } from "./types.js";
 export type { Task, StageStatus, StageInfo, JobStatus, Status };
 
 interface WorkerState {
-  status: "idle" | "working" | "submitted";
+  status: "idle" | "working" | "submitted" | "blocked";
   paneId?: string;
   currentTask?: Task;
+  blockedReason?: string;
 }
 
 interface StageState {
@@ -136,6 +138,32 @@ export function resetJob(job: string): boolean {
   const before = taskQueue.length;
   taskQueue.splice(0, taskQueue.length, ...taskQueue.filter((t) => t.job !== job));
   return true;
+}
+
+export function reportBlocked(workerId: string, reason: string): void {
+  const existing = workerState.get(workerId);
+  workerState.set(workerId, { ...existing, status: "blocked", blockedReason: reason });
+}
+
+export function resolveBlock(workerId: string, resolution: string): void {
+  const existing = workerState.get(workerId);
+  if (!existing) return;
+  workerState.set(workerId, { ...existing, status: "working", blockedReason: undefined });
+
+  const task = existing.currentTask;
+  if (task) {
+    const dir = `.claude/knowledge`;
+    const date = new Date().toISOString().slice(0, 10);
+    const entry = [
+      ``,
+      `## ${date} | job: ${task.job} | stage: ${task.stage}`,
+      `**Blocked:** ${existing.blockedReason ?? "(no reason given)"}`,
+      `**Resolution:** ${resolution}`,
+      ``,
+    ].join("\n");
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(`${dir}/${task.role}.md`, entry);
+  }
 }
 
 export function reset(): void {

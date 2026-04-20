@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import {
   loadTasks,
   registerWorker,
@@ -12,6 +15,8 @@ import {
   getJobStatus,
   getAllJobsStatus,
   resetJob,
+  reportBlocked,
+  resolveBlock,
   reset,
   type Task,
 } from "./state.js";
@@ -353,5 +358,58 @@ describe("job: resetJob", () => {
 
     expect(stageDone("auth-login", "build")).toBe(true);
     expect(getStageResults("auth-login", "build")).toEqual({ alice: "v2" });
+  });
+});
+
+describe("reportBlocked / resolveBlock", () => {
+  it("sets worker status to blocked with reason", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    reportBlocked("bob", "can't find the component");
+    const w = getStatus().workers["bob"];
+    expect(w.status).toBe("blocked");
+    expect(w.blockedReason).toBe("can't find the component");
+  });
+
+  it("resolveBlock sets status back to working and clears reason", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    reportBlocked("bob", "stuck");
+    resolveBlock("bob", "fixed it");
+    const w = getStatus().workers["bob"];
+    expect(w.status).toBe("working");
+    expect(w.blockedReason).toBeUndefined();
+  });
+
+  it("allDone returns false when a worker is blocked", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    reportBlocked("bob", "stuck");
+    expect(allDone()).toBe(false);
+  });
+
+  it("resolveBlock writes a knowledge entry to .claude/knowledge/<role>.md", () => {
+    const origCwd = process.cwd();
+    const tmpDir = mkdtempSync(join(tmpdir(), "state-test-"));
+    process.chdir(tmpDir);
+    try {
+      loadTasks([pFrontend]);
+      getTask("bob", "frontend");
+      reportBlocked("bob", "missing env var VITE_API_URL");
+      resolveBlock("bob", "document required env vars in .env.example before starting");
+
+      const content = readFileSync(".claude/knowledge/frontend.md", "utf8");
+      expect(content).toContain("missing env var VITE_API_URL");
+      expect(content).toContain("document required env vars");
+      expect(content).toContain("job: auth-login");
+      expect(content).toContain("stage: build");
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolveBlock does nothing when worker is unknown", () => {
+    expect(() => resolveBlock("nobody", "resolution")).not.toThrow();
   });
 });

@@ -13,6 +13,8 @@ import {
   getJobStatus,
   getAllJobsStatus,
   resetJob,
+  reportBlocked,
+  resolveBlock,
 } from "./state.js";
 
 export const taskSchema = z.object({
@@ -131,6 +133,30 @@ mcp.tool(
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
     return { content: [{ type: "text", text: JSON.stringify(getAllJobsStatus(), null, 2) }] };
+  }
+);
+
+mcp.tool(
+  "report_blocked",
+  "Worker signals it is stuck and needs human input — records the reason and notifies",
+  { worker_id: z.string(), reason: z.string() },
+  async ({ worker_id, reason }) => {
+    reportBlocked(worker_id, reason);
+    Bun.spawn([
+      "osascript", "-e",
+      `display notification "Worker ${worker_id} is blocked: ${reason}" with title "Claude Agent" sound name "Basso"`,
+    ]);
+    return { content: [{ type: "text", text: "Blocked state recorded. Orchestrator notified." }] };
+  }
+);
+
+mcp.tool(
+  "resolve_block",
+  "Orchestrator unblocks a worker after human intervention and saves the resolution to .claude/knowledge/<role>.md",
+  { worker_id: z.string(), resolution: z.string() },
+  async ({ worker_id, resolution }) => {
+    resolveBlock(worker_id, resolution);
+    return { content: [{ type: "text", text: `Worker '${worker_id}' unblocked. Resolution saved to .claude/knowledge/.` }] };
   }
 );
 

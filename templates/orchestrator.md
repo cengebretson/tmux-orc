@@ -11,13 +11,7 @@ git worktree add .worktrees/<job> -b agent/<job>
 # e.g. git worktree add .worktrees/auth-login -b agent/auth-login
 ```
 
-For standalone sessions (no pipeline), create one worktree per worker:
-
-```bash
-git worktree add .worktrees/<id> -b agent/<id>
-```
-
-In both cases the orchestrator creates the worktree — workers never create their own.
+The orchestrator creates the worktree — workers never create their own.
 
 ## Step 2 — Spin up workers
 
@@ -51,7 +45,9 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    cp <role_file> .worktrees/<worktree>/CLAUDE.md
    ```
 
-6. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
+6. Check for a knowledge file at `.claude/knowledge/<role>.md`. If it exists, append its contents to the task description so the worker has institutional memory from past sessions.
+
+7. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
    - `{{id}}` — worker id
    - `{{role}}` — worker role
    - `{{mcp_url}}` — the MCP server URL
@@ -155,12 +151,27 @@ The recap should draw from the stage results you've already read — build summa
 ## Step 4 — Monitor
 
 - Poll `get_status` to see worker states and which task each is on.
-- If a worker has been in "working" state too long, inspect it:
-  ```
-  tmux capture-pane -t <pane_id> -p | tail -20
-  ```
 - Use `get_stage_results(job, stage)` to read completed stage output.
 - Use `get_jobs_status()` for a full cross-job view.
+
+### Handling blocked workers
+
+When `get_status` shows a worker with `status: "blocked"`, tell the human immediately:
+
+```
+Worker bob is blocked in pane <paneId>.
+Reason: <blockedReason>
+Switch to that pane: tmux select-pane -t <paneId>
+```
+
+The human will switch to the pane, fix the issue directly, and tell you what they did.
+Once resolved, call:
+
+```
+resolve_block(worker_id="bob", resolution="<what was done to fix it>")
+```
+
+This saves the resolution to `.claude/knowledge/<role>.md` so future runs avoid the same block, and sets the worker back to `"working"` so they continue their task.
 
 ## Communication rules
 

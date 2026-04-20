@@ -31,5 +31,12 @@ Then follow this loop:
 - Report only to the orchestrator via `submit_result`. Never communicate directly with other workers.
 - If you need input from another worker's output, submit a result flagging what you need and let the orchestrator coordinate.
 
-If you are blocked or need input, run: `~/.tmux/plugins/tmux-claude-agents/scripts/notify.sh {{id}} blocked`
-When finished all tasks, run: `~/.tmux/plugins/tmux-claude-agents/scripts/notify.sh {{id}} done`
+## If you are blocked
+
+If you cannot proceed — missing information, unclear requirements, a dependency is broken, or you need human input — do not loop or guess. Call:
+
+```
+report_blocked(worker_id="{{id}}", reason="<clear description of what you need or what is wrong>")
+```
+
+Then stop and wait. The orchestrator will coordinate a resolution and call `resolve_block` when you can continue. Your task is still assigned to you — resume it once unblocked.

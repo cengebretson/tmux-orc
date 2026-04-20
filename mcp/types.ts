@@ -23,8 +23,9 @@ export interface JobStatus {
 export interface Status {
   queue: number;
   workers: Record<string, {
-    status: "idle" | "working" | "submitted";
+    status: "idle" | "working" | "submitted" | "blocked";
     paneId?: string;
     currentTask?: Task;
+    blockedReason?: string;
   }>;
 }
