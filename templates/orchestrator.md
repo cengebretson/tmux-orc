@@ -20,14 +20,25 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
 
    Write the role file as `CLAUDE.md` into the worker's worktree so it is automatically loaded.
 
-4. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
+4. Install skills into the worker's worktree so they are available as slash commands:
+   ```bash
+   mkdir -p .worktrees/<id>/.claude/commands
+
+   # plugin built-ins first
+   cp ~/.tmux/plugins/tmux-claude-agents/skills/*.md .worktrees/<id>/.claude/commands/
+
+   # project-level skills override built-ins
+   [ -d .claude/skills ] && cp .claude/skills/*.md .worktrees/<id>/.claude/commands/
+   ```
+
+5. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
    - `{{id}}` — worker id
    - `{{role}}` — worker role
    - `{{mcp_url}}` — the MCP server URL
    - `{{domain}}` — format as a bullet list. `domain` may be a string or an array:
      - String: `"src/frontend/"` → `- src/frontend/`
      - Array: `["src/frontend/", "src/shared/"]` → `- src/frontend/\n- src/shared/`
-4. Send the prompt to the pane via tmux paste-buffer.
+6. Send the prompt to the pane via tmux paste-buffer.
 
 Keep a note of each worker's pane ID — you'll use them to health-check stuck workers.
 

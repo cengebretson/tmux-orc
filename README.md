@@ -169,9 +169,24 @@ Workers only receive tasks matching their role.
 
 ### Skills and plugins
 
-Workers have access to all skills (`.claude/commands/`) and MCP plugins configured for the project — there is no per-worker filtering. Instead, each role file documents which skills and plugins that role should use via `## Skills` and `## Plugins` sections. Workers read this from their CLAUDE.md and know what tools are relevant to them.
+Workers have access to all skills (`.claude/commands/`) and MCP plugins configured for the project — there is no per-worker filtering. Each role file documents which skills and plugins that role should use via `## Skills` and `## Plugins` sections. Workers read this from their CLAUDE.md and know what tools are relevant to them.
 
-This keeps the system simple — no enforcement machinery — while still giving workers clear guidance on what to reach for.
+During bootstrap the orchestrator copies skill files into each worker's worktree at `.worktrees/<id>/.claude/commands/`, making them available as slash commands. The lookup order mirrors roles:
+
+1. `.claude/skills/<skill>.md` — project-level, takes precedence
+2. `~/.tmux/plugins/tmux-claude-agents/skills/<skill>.md` — plugin built-ins, fallback
+
+Built-in skills (shipped in `skills/`):
+
+| Skill | Description |
+|---|---|
+| `/component-review` | Self-review a React component before submitting |
+| `/accessibility-check` | Check UI for keyboard, screen reader, and contrast issues |
+| `/api-review` | Review an API endpoint for validation, auth, and error handling |
+| `/test-coverage` | Assess test coverage by reading source and test files |
+| `/security-review` | Security-focused pass covering injection, auth, secrets, and config |
+| `/doc-review` | Review documentation for accuracy, clarity, and completeness |
+| `/dependency-audit` | Audit dependencies for known vulnerabilities and abandoned packages |
 
 ### Adding a custom role
 

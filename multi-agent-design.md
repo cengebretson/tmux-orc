@@ -212,11 +212,17 @@ any prior MCP configuration — the plugin handles all the wiring.
 
 ## Skills and Plugins
 
-Workers have access to all skills (`.claude/commands/`) and MCP plugins configured for
-the project — there is no per-worker filtering. Each role file documents which skills
-and plugins that role should use via `## Skills` and `## Plugins` sections. Workers
-load this from their CLAUDE.md and know what tools are relevant without any enforcement
-machinery.
+During worker bootstrap the orchestrator copies skill files into each worker's worktree
+at `.worktrees/<id>/.claude/commands/`, making them available as slash commands.
+
+Lookup order (same pattern as roles):
+1. `.claude/skills/<skill>.md` — project-level, takes precedence
+2. `~/.tmux/plugins/tmux-claude-agents/skills/<skill>.md` — plugin built-ins, fallback
+
+Workers have access to all installed skills — there is no per-worker filtering. Each
+role file documents which skills and plugins that role should use via `## Skills` and
+`## Plugins` sections. Workers read this from their CLAUDE.md and know what tools are
+relevant without any enforcement machinery.
 
 This is intentionally simple. Per-worker skill/plugin scoping can be added later if
 needed — the role file approach gives clear guidance with zero infrastructure overhead.
