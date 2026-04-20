@@ -89,18 +89,14 @@ Create `.claude/agents.json` in your project repo:
   ],
   "pipelines": [
     {
-      "name": "auth-feature",
-      "domain": ["src/frontend/auth/", "src/backend/auth/"],
-      "stages": [
-        { "stage": "build",    "role": "frontend" },
-        { "stage": "review",   "role": "review",   "input": "build" },
-        { "stage": "security", "role": "security", "input": "build" },
-        { "stage": "ship",     "role": "git",      "input": ["review", "security"] }
-      ]
+      "name": "frontend",
+      "stages": ["build", "review", "security", "ship"]
     }
   ]
 }
 ```
+
+Pipelines are reusable definitions — just a name and an ordered list of stages. Domain and feature-specific context live on the **job**, which the orchestrator creates at runtime by loading tasks tagged with `pipeline`, `job`, and `stage`.
 
 Add to `.gitignore`:
 
@@ -207,10 +203,10 @@ get_task(worker_id="bob", role="frontend")
 
 ```json
 load_tasks([
-  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "pipeline": "auth", "stage": "build",    "domain": "src/frontend/auth/" },
-  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "pipeline": "auth", "stage": "review"   },
-  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",             "pipeline": "auth", "stage": "security" },
-  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/bob into main",               "pipeline": "auth", "stage": "ship"     }
+  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "pipeline": "frontend", "job": "auth-login", "stage": "build",    "domain": "src/frontend/auth/" },
+  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "pipeline": "frontend", "job": "auth-login", "stage": "review"   },
+  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",             "pipeline": "frontend", "job": "auth-login", "stage": "security" },
+  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/auth-login into main",        "pipeline": "frontend", "job": "auth-login", "stage": "ship"     }
 ])
 ```
 
@@ -221,7 +217,7 @@ All tasks are loaded at once. Workers self-schedule by role — bob picks up `p1
 Bob works in `.worktrees/bob`. The orchestrator polls:
 
 ```
-stage_done(pipeline="auth", stage="build") → false ... false ... true ✓
+stage_done(job="auth-login", stage="build") → false ... false ... true ✓
 ```
 
 Bob submits his result:
@@ -235,8 +231,8 @@ submit_result(worker_id="bob", result="Login + signup forms complete. JWT stored
 Both `review` and `security` depend only on `build`, so they run simultaneously. Rex and Sam both call `get_task` and pick up their tasks. The orchestrator polls both:
 
 ```
-stage_done("auth", "review")   → false ... true ✓
-stage_done("auth", "security") → false ... false ... true ✓
+stage_done("auth-login", "review")   → false ... true ✓
+stage_done("auth-login", "security") → false ... false ... true ✓
 ```
 
 ```
@@ -257,16 +253,17 @@ stage_done("auth", "security") → false ... false ... true ✓
 Both stages done. Orchestrator reads their results and loads the final task with the findings baked into the description:
 
 ```
-get_stage_results("auth", "review")   → { "rex": "LGTM, 2 minor comments..." }
-get_stage_results("auth", "security") → { "sam": "No critical issues. CSRF token missing on signup form." }
+get_stage_results("auth-login", "review")   → { "rex": "LGTM, 2 minor comments..." }
+get_stage_results("auth-login", "security") → { "sam": "No critical issues. CSRF token missing on signup form." }
 ```
 
 ```json
 load_tasks([{
   "id": "p4",
   "role": "git",
-  "description": "Open PR: agent/bob → main. Review notes: LGTM, 2 minor comments. Security: add CSRF token to signup form before merging.",
-  "pipeline": "auth",
+  "description": "Open PR: agent/auth-login → main. Review notes: LGTM, 2 minor comments. Security: add CSRF token to signup form before merging.",
+  "pipeline": "frontend",
+  "job": "auth-login",
   "stage": "ship"
 }])
 ```
@@ -276,7 +273,7 @@ The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and 
 ### Step 9 — Done
 
 ```
-stage_done("auth", "ship") → true
+stage_done("auth-login", "ship") → true
 ```
 
 macOS notification fires: **"Worker git finished"** (Glass sound).
@@ -296,9 +293,9 @@ Press `prefix+Ctrl+M` to kill the MCP server. If any worktrees are still around 
 While the session runs, press `prefix+S` for the status menu or query the API directly:
 
 ```bash
-curl localhost:7777/status                        # all worker states
-curl localhost:7777/pipeline/auth                 # stage breakdown
-curl localhost:7777/pipeline/auth/build/results   # bob's build output
+curl localhost:7777/status                             # all worker states
+curl localhost:7777/job/auth-login                     # stage breakdown
+curl localhost:7777/job/auth-login/build/results       # bob's build output
 ```
 
 ## Status Menu
@@ -332,8 +329,9 @@ The MCP server runs as a local HTTP/SSE server (Bun/TypeScript) bundled inside t
 | `get_result(worker_id)` | Orchestrator | Reads a worker's result |
 | `get_status()` | Orchestrator | Queue depth + all worker states |
 | `all_done(worker_count)` | Orchestrator | True when all workers have submitted |
-| `stage_done(pipeline, stage)` | Orchestrator | True when all tasks in a stage are submitted |
-| `get_stage_results(pipeline, stage)` | Orchestrator | All results from a completed stage |
+| `stage_done(job, stage)` | Orchestrator | True when all tasks in a job stage are submitted |
+| `get_stage_results(job, stage)` | Orchestrator | All results from a completed job stage |
+| `reset_job(job)` | Orchestrator | Clears job state so the same pipeline can rerun for a new feature |
 
 ### Tasks
 
@@ -356,7 +354,7 @@ Workers only receive tasks matching their role.
 
 There are two ways to use tasks, chosen per session:
 
-**Standalone** — tasks are independent, can run in any order. No `pipeline` or `stage` fields. Orchestrator monitors with `all_done(workerCount)` and reads results via `get_result(workerId)`.
+**Standalone** — tasks are independent, can run in any order. No `pipeline`, `job`, or `stage` fields. Orchestrator monitors with `all_done(workerCount)` and reads results via `get_result(workerId)`.
 
 ```json
 [
@@ -365,18 +363,25 @@ There are two ways to use tasks, chosen per session:
 ]
 ```
 
-**Pipeline** — tasks belong to named stages that run in sequence. Results from one stage feed the next. Tasks carry `pipeline` and `stage` fields; result attribution is automatic.
+**Pipeline** — tasks belong to named stages that run in sequence. Results from one stage feed the next. Tasks carry `pipeline` (the reusable definition name), `job` (this specific feature run), and `stage` fields. Result attribution is automatic.
 
 ```json
 [
-  { "id": "p1", "role": "frontend", "description": "Build login form", "pipeline": "auth", "stage": "build"    },
-  { "id": "p2", "role": "review",   "description": "Review auth PR",   "pipeline": "auth", "stage": "review"   },
-  { "id": "p3", "role": "security", "description": "Security audit",   "pipeline": "auth", "stage": "security" },
-  { "id": "p4", "role": "git",      "description": "Open PR",          "pipeline": "auth", "stage": "ship"     }
+  { "id": "p1", "role": "frontend", "description": "Build login form", "pipeline": "frontend", "job": "auth-login", "stage": "build"    },
+  { "id": "p2", "role": "review",   "description": "Review auth PR",   "pipeline": "frontend", "job": "auth-login", "stage": "review"   },
+  { "id": "p3", "role": "security", "description": "Security audit",   "pipeline": "frontend", "job": "auth-login", "stage": "security" },
+  { "id": "p4", "role": "git",      "description": "Open PR",          "pipeline": "frontend", "job": "auth-login", "stage": "ship"     }
 ]
 ```
 
-Orchestrator polls `stage_done(pipeline, stage)`, then reads `get_stage_results(pipeline, stage)` to build the next stage's tasks. Stages with multiple inputs (e.g. `ship` after both `review` and `security`) run their inputs in parallel and wait for both.
+Orchestrator polls `stage_done(job, stage)`, then reads `get_stage_results(job, stage)` to build the next stage's tasks. Stages with multiple inputs (e.g. `ship` after both `review` and `security`) run their inputs in parallel and wait for both.
+
+Two jobs can run the same pipeline simultaneously with different `job` names — each gets its own worktree and independent stage state:
+
+```json
+{ "pipeline": "frontend", "job": "auth-login",  "stage": "build", ... }
+{ "pipeline": "frontend", "job": "dashboard",   "stage": "build", ... }
+```
 
 ### Skills and plugins
 
@@ -430,13 +435,13 @@ If a role is used in `agents.json` but has no matching file in either location, 
 The MCP server also exposes plain HTTP endpoints for quick inspection:
 
 ```bash
-curl http://localhost:7777/status                          # queue depth + worker states
-curl http://localhost:7777/queue                           # pending tasks
-curl http://localhost:7777/results                         # all submitted results
-curl http://localhost:7777/result/bob                      # result for a specific worker
-curl http://localhost:7777/pipelines                       # all pipeline statuses
-curl http://localhost:7777/pipeline/auth-feature           # stage breakdown for one pipeline
-curl http://localhost:7777/pipeline/auth-feature/build/results  # results from a stage
+curl http://localhost:7777/status                            # queue depth + worker states
+curl http://localhost:7777/queue                             # pending tasks
+curl http://localhost:7777/results                           # all submitted results
+curl http://localhost:7777/result/bob                        # result for a specific worker
+curl http://localhost:7777/jobs                              # all job statuses
+curl http://localhost:7777/job/auth-login                    # stage breakdown for one job
+curl http://localhost:7777/job/auth-login/build/results      # results from a stage
 ```
 
 ## Architecture

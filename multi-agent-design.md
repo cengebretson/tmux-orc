@@ -254,24 +254,34 @@ simultaneously.
 
 ### Pipeline (sequential stages, results feed forward)
 
-Tasks carry `pipeline` and `stage` fields. Results are automatically attributed to the
-correct stage when a worker calls `submit_result`. The orchestrator sequences stages via:
-- `stage_done(pipeline, stage)` — poll until all tasks in a stage are submitted
-- `get_stage_results(pipeline, stage)` — read all results from a completed stage, then
+Tasks carry three extra fields:
+- `pipeline` — the reusable definition name (e.g. `"frontend"`) — label only
+- `job` — the specific feature run (e.g. `"auth-login"`) — coordination key
+- `stage` — the stage within the job (e.g. `"build"`)
+
+Results are automatically attributed to the correct job/stage when a worker calls
+`submit_result`. The orchestrator sequences stages via:
+- `stage_done(job, stage)` — poll until all tasks in a stage are submitted
+- `get_stage_results(job, stage)` — read all results from a completed stage, then
   build and load the next stage's tasks
 
 Use this when work must happen in order: e.g. build → review → security → ship.
+
+Multiple jobs can run the same pipeline simultaneously — each job gets its own
+worktree, branch, and independent stage state on the server.
 
 All tasks can be loaded up front with `load_tasks` — workers self-schedule by role,
 pulling only tasks that match their role from the queue.
 
 ---
 
-## Pipelines
+## Pipelines and Jobs
 
-Pipelines define sequential stage-based workflows where each stage's results feed the
-next. Domain belongs to the pipeline, not the worker — the same role can participate
-in multiple pipelines across different domains.
+A **pipeline** is a reusable definition of stages and roles. A **job** is a specific
+execution of a pipeline for a particular feature. The separation means the same
+pipeline can run twice in parallel for two different features simultaneously.
+
+`agents.json` defines the workforce and available pipeline definitions:
 
 ```json
 {
@@ -283,28 +293,32 @@ in multiple pipelines across different domains.
   ],
   "pipelines": [
     {
-      "name": "auth-feature",
-      "domain": ["src/frontend/auth/", "src/backend/auth/"],
-      "stages": [
-        { "stage": "build",    "role": "frontend" },
-        { "stage": "review",   "role": "review",   "input": "build" },
-        { "stage": "security", "role": "security", "input": "build" },
-        { "stage": "ship",     "role": "git",      "input": ["review", "security"] }
-      ]
+      "name": "frontend",
+      "stages": ["build", "review", "security", "ship"]
     }
   ]
 }
 ```
 
-The orchestrator manages sequencing using two MCP tools:
-- `stage_done(pipeline, stage)` — poll until a stage is complete
-- `get_stage_results(pipeline, stage)` — read results to build the next stage's tasks
+The orchestrator creates jobs at runtime by loading tasks tagged with `pipeline`,
+`job`, and `stage`. Domain belongs to the job, not the pipeline definition:
 
-Stages with multiple `input` entries (e.g. `ship` depends on both `review` and
+```json
+[
+  { "id": "1", "role": "frontend", "pipeline": "frontend", "job": "auth-login", "stage": "build", "domain": "src/frontend/auth/" },
+  { "id": "2", "role": "frontend", "pipeline": "frontend", "job": "dashboard",  "stage": "build", "domain": "src/frontend/dashboard/" }
+]
+```
+
+The orchestrator manages sequencing using two MCP tools:
+- `stage_done(job, stage)` — poll until a stage is complete
+- `get_stage_results(job, stage)` — read results to build the next stage's tasks
+
+Stages with multiple dependencies (e.g. `ship` depends on both `review` and
 `security`) run their dependencies in parallel and wait for both before proceeding.
 
 Stage status is tracked automatically — when a worker submits a result the server
-attributes it to the correct pipeline/stage via the worker's current task.
+attributes it to the correct job/stage via the worker's current task.
 
 ## Communication Rules (Hub-and-Spoke)
 

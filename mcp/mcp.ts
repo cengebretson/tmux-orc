@@ -10,6 +10,7 @@ import {
   getStatus,
   stageDone,
   getStageResults,
+  resetJob,
 } from "./state.js";
 
 export const taskSchema = z.object({
@@ -18,6 +19,7 @@ export const taskSchema = z.object({
   description: z.string(),
   domain: z.union([z.string(), z.array(z.string())]).optional(),
   pipeline: z.string().optional(),
+  job: z.string().optional(),
   stage: z.string().optional(),
 });
 
@@ -98,18 +100,28 @@ mcp.tool(
 
 mcp.tool(
   "stage_done",
-  "Returns true when all tasks in a pipeline stage have been submitted",
-  { pipeline: z.string(), stage: z.string() },
-  async ({ pipeline, stage }) => {
-    return { content: [{ type: "text", text: String(stageDone(pipeline, stage)) }] };
+  "Returns true when all tasks in a job stage have been submitted",
+  { job: z.string(), stage: z.string() },
+  async ({ job, stage }) => {
+    return { content: [{ type: "text", text: String(stageDone(job, stage)) }] };
   }
 );
 
 mcp.tool(
   "get_stage_results",
-  "Returns all worker results from a completed pipeline stage",
-  { pipeline: z.string(), stage: z.string() },
-  async ({ pipeline, stage }) => {
-    return { content: [{ type: "text", text: JSON.stringify(getStageResults(pipeline, stage), null, 2) }] };
+  "Returns all worker results from a completed job stage",
+  { job: z.string(), stage: z.string() },
+  async ({ job, stage }) => {
+    return { content: [{ type: "text", text: JSON.stringify(getStageResults(job, stage), null, 2) }] };
+  }
+);
+
+mcp.tool(
+  "reset_job",
+  "Clears all stage state for a job so the same pipeline can be rerun for a new feature in the same session",
+  { job: z.string() },
+  async ({ job }) => {
+    const found = resetJob(job);
+    return { content: [{ type: "text", text: found ? `Job '${job}' reset` : `No job '${job}' found` }] };
   }
 );

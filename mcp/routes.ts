@@ -4,8 +4,8 @@ import {
   getQueue,
   getAllResults,
   getResult,
-  getAllPipelinesStatus,
-  getPipelineStatus,
+  getAllJobsStatus,
+  getJobStatus,
   getStageResults,
 } from "./state.js";
 
@@ -49,28 +49,28 @@ export function handleInspection(
     return true;
   }
 
-  if (pathname === "/pipelines") {
-    json(res, 200, getAllPipelinesStatus());
+  if (pathname === "/jobs") {
+    json(res, 200, getAllJobsStatus());
     return true;
   }
 
-  const pipelineMatch = pathname.match(/^\/pipeline\/([^/]+)$/);
-  if (pipelineMatch) {
-    const name = decodeURIComponent(pipelineMatch[1]);
-    const status = getPipelineStatus(name);
+  const jobMatch = pathname.match(/^\/job\/([^/]+)$/);
+  if (jobMatch) {
+    const name = decodeURIComponent(jobMatch[1]);
+    const status = getJobStatus(name);
     if (status === null) {
-      json(res, 404, { error: `no pipeline '${name}'` });
+      json(res, 404, { error: `no job '${name}'` });
     } else {
       json(res, 200, status);
     }
     return true;
   }
 
-  const stageResultsMatch = pathname.match(/^\/pipeline\/([^/]+)\/([^/]+)\/results$/);
+  const stageResultsMatch = pathname.match(/^\/job\/([^/]+)\/([^/]+)\/results$/);
   if (stageResultsMatch) {
-    const pipeline = decodeURIComponent(stageResultsMatch[1]);
+    const job = decodeURIComponent(stageResultsMatch[1]);
     const stage = decodeURIComponent(stageResultsMatch[2]);
-    json(res, 200, getStageResults(pipeline, stage));
+    json(res, 200, getStageResults(job, stage));
     return true;
   }
 
