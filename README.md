@@ -179,12 +179,12 @@ To start a specific job immediately, pass `--job`:
 ~/.tmux/plugins/tmux-claude-agents/scripts/start_session.sh --job=auth-login
 ```
 
-The orchestrator reads the job definition from `agents.json`, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks` — no manual task authoring needed.
+The orchestrator reads the job file from `.claude/jobs/auth-login.md`, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks` — no manual task authoring needed.
 
 ### What the orchestrator does
 
-1. Registers the MCP server and loads tasks via `load_tasks`
-2. Workers spin up, create their own git worktrees, and start pulling tasks
+1. Registers the MCP server, creates worktrees, spins up workers, and loads tasks via `load_tasks`
+2. Workers register, then start pulling tasks via `get_task`
 3. Monitor progress with `get_status` or `prefix+S`
 4. When `all_done()` returns true, aggregate results with `get_result`
 
@@ -194,7 +194,7 @@ This walkthrough shows a full pipeline session: four workers, four stages, resul
 
 ### Project config
 
-`.claude/agents.json`:
+`.claude/agents.json` (workers + pipeline definition) and `.claude/jobs/auth-login.md` (the feature spec, as shown in [Job files](#job-files)):
 
 ```json
 {
@@ -203,6 +203,17 @@ This walkthrough shows a full pipeline session: four workers, four stages, resul
     { "id": "rex",  "role": "review"   },
     { "id": "sam",  "role": "security" },
     { "id": "git",  "role": "git"      }
+  ],
+  "pipelines": [
+    {
+      "name": "frontend",
+      "stages": [
+        { "name": "build",    "role": "frontend" },
+        { "name": "review",   "role": "review"   },
+        { "name": "security", "role": "security" },
+        { "name": "ship",     "role": "git"      }
+      ]
+    }
   ]
 }
 ```
@@ -223,17 +234,17 @@ Press `prefix+M` from your project directory. The plugin starts the MCP server a
 
 ### Step 2 — Orchestrator creates the pipeline worktree
 
-Before spinning up any workers, the orchestrator creates a single shared worktree for the pipeline:
+Before spinning up any workers, the orchestrator creates a single shared worktree for the job:
 
 ```bash
-git worktree add .worktrees/auth -b agent/auth
+git worktree add .worktrees/auth-login -b agent/auth-login
 ```
 
-All pipeline workers (`bob`, `rex`, `sam`, `git`) will work inside `.worktrees/auth` on branch `agent/auth`. This means the review worker sees bob's commits immediately, and the git worker opens one PR from `agent/auth` → `main`.
+All pipeline workers (`bob`, `rex`, `sam`, `git`) will work inside `.worktrees/auth-login` on branch `agent/auth-login`. This means the review worker sees bob's commits immediately, and the git worker opens one PR from `agent/auth-login` → `main`.
 
 ### Step 3 — Orchestrator spins up workers
 
-The orchestrator creates a pane per worker, writes the role file as `CLAUDE.md` into `.worktrees/auth`, installs skills there, and pastes each worker's bootstrap prompt:
+The orchestrator creates a pane per worker, writes the role file as `CLAUDE.md` into `.worktrees/auth-login`, installs skills there, and pastes each worker's bootstrap prompt:
 
 ```
 ┌─────────────────────┬────────────────────┐
@@ -254,7 +265,7 @@ Each worker independently runs its bootstrap loop. Because it's a pipeline sessi
 
 ```
 register_worker(worker_id="bob", pane_id="%23")
-# worktree .worktrees/auth already exists — no git worktree add needed
+# worktree .worktrees/auth-login already exists — no git worktree add needed
 get_task(worker_id="bob", role="frontend")
 → task p1: "Build auth login form"
 ```
@@ -274,7 +285,7 @@ All tasks are loaded at once. Workers self-schedule by role — bob picks up `p1
 
 ### Step 6 — Build stage
 
-Bob works in `.worktrees/bob`. The orchestrator polls:
+Bob works in `.worktrees/auth-login`. The orchestrator polls:
 
 ```
 stage_done(job="auth-login", stage="build") → false ... false ... true ✓
@@ -327,7 +338,7 @@ load_tasks([{
 }])
 ```
 
-The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and opens a PR from `agent/auth` → `main`. All the pipeline's work is already on one branch — no merging needed.
+The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and opens a PR from `agent/auth-login` → `main`. All the pipeline's work is already on one branch — no merging needed.
 
 ### Step 9 — Done
 
@@ -337,12 +348,12 @@ stage_done("auth-login", "ship") → true
 
 macOS notification fires: **"Worker git finished"** (Glass sound).
 
-The orchestrator removes the pipeline worktree — the git worker has already committed everything to the branch:
+The orchestrator removes the job worktree — the git worker has already committed everything to the branch:
 
 ```bash
-git worktree remove .worktrees/auth
-# branch agent/auth stays alive for the open PR
-# delete it manually after the PR is merged: git branch -d agent/auth
+git worktree remove .worktrees/auth-login
+# branch agent/auth-login stays alive for the open PR
+# delete it manually after the PR is merged: git branch -d agent/auth-login
 ```
 
 Press `prefix+Ctrl+M` to kill the MCP server. If any worktrees are still around (e.g. session was aborted), cleanup will force-remove them and warn about any open branches.
@@ -413,7 +424,7 @@ Workers only receive tasks matching their role.
 
 There are two ways to use tasks, chosen per session:
 
-**Standalone** — tasks are independent, can run in any order. No `pipeline`, `job`, or `stage` fields. Orchestrator monitors with `all_done(workerCount)` and reads results via `get_result(workerId)`.
+**Standalone** — tasks are independent, can run in any order. No `job` or `stage` fields. Orchestrator monitors with `all_done()` and reads results via `get_result(workerId)`.
 
 ```json
 [

@@ -25,11 +25,19 @@ server acting as a message bus, with git worktrees providing isolation.
 
 ### MCP Server (message bus)
 A small local Bun/TypeScript server. Exposes tools to all agents:
-- `get_task(worker_id, role)` — worker pulls its next assignment
-- `submit_result(worker_id, result)` — worker posts output when done
-- `get_result(worker_id)` — orchestrator reads worker output
-- `all_done()` — returns true when all registered workers have submitted
+
+**Workers call:**
+- `register_worker(worker_id, pane_id)` — register on startup so the orchestrator can health-check
+- `get_task(worker_id, role)` — pull the next role-matched assignment
+- `submit_result(worker_id, result)` — post output when done
+
+**Orchestrator calls:**
+- `load_tasks(tasks[])` — seed the task queue
+- `get_result(worker_id)` — read a worker's submitted result
+- `get_status()` — queue depth + all worker states
+- `all_done()` — true when queue is empty and all registered workers have submitted
 - `stage_done(job, stage)` / `get_stage_results(job, stage)` — pipeline sequencing
+- `reset_job(job)` — clear stage state to rerun a pipeline for a new feature
 
 Workers are pull-based — they call `get_task()` themselves when ready,
 making the system self-scheduling.
