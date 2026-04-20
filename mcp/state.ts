@@ -1,11 +1,5 @@
-export interface Task {
-  id: string;
-  role: string;
-  description: string;
-  job: string;
-  stage: string;
-  depends_on?: string[];
-}
+import type { Task, StageStatus, StageInfo, JobStatus, Status } from "./types.js";
+export type { Task, StageStatus, StageInfo, JobStatus, Status };
 
 interface WorkerState {
   status: "idle" | "working" | "submitted";
@@ -15,20 +9,7 @@ interface WorkerState {
 
 interface StageState {
   taskCount: number;
-  results: Map<string, string>; // workerId -> result
-}
-
-export type StageStatus = "active" | "complete";
-
-export interface StageInfo {
-  status: StageStatus;
-  taskCount: number;
-  resultCount: number;
-  results: Record<string, string>;
-}
-
-export interface JobStatus {
-  stages: Record<string, StageInfo>;
+  results: Map<string, string>;
 }
 
 const taskQueue: Task[] = [];
@@ -133,10 +114,6 @@ export function allDone(): boolean {
     Array.from(workerState.values()).every(w => w.status === "submitted" || w.status === "idle");
 }
 
-export interface Status {
-  queue: number;
-  workers: Record<string, WorkerState>;
-}
 
 export function getStatus(): Status {
   return {
