@@ -19,15 +19,15 @@ beforeEach(() => reset());
 
 describe("registerWorker", () => {
   it("stores the pane ID for a worker", () => {
-    registerWorker(2, "%12");
-    expect(getStatus().workers[2].paneId).toBe("%12");
+    registerWorker("bob", "%12");
+    expect(getStatus().workers["bob"].paneId).toBe("%12");
   });
 
   it("preserves existing worker state when registering", () => {
     loadTasks([frontend]);
-    getTask(2, "frontend");
-    registerWorker(2, "%12");
-    const w = getStatus().workers[2];
+    getTask("bob", "frontend");
+    registerWorker("bob", "%12");
+    const w = getStatus().workers["bob"];
     expect(w.paneId).toBe("%12");
     expect(w.status).toBe("working");
   });
@@ -41,65 +41,65 @@ describe("loadTasks", () => {
   it("appends to existing tasks", () => {
     loadTasks([frontend]);
     loadTasks([backend]);
-    expect(getTask(2, "frontend")).toEqual(frontend);
-    expect(getTask(3, "backend")).toEqual(backend);
+    expect(getTask("bob", "frontend")).toEqual(frontend);
+    expect(getTask("alice", "backend")).toEqual(backend);
   });
 });
 
 describe("getTask", () => {
   it("returns a task matching the worker's role", () => {
     loadTasks([backend, frontend]);
-    expect(getTask(2, "frontend")).toEqual(frontend);
+    expect(getTask("bob", "frontend")).toEqual(frontend);
   });
 
   it("skips tasks that don't match the role", () => {
     loadTasks([backend, backend, frontend]);
-    expect(getTask(2, "frontend")).toEqual(frontend);
-    expect(getTask(3, "backend")).toEqual(backend);
+    expect(getTask("bob", "frontend")).toEqual(frontend);
+    expect(getTask("alice", "backend")).toEqual(backend);
   });
 
   it("returns null when no matching task exists", () => {
     loadTasks([backend]);
-    expect(getTask(2, "frontend")).toBeNull();
+    expect(getTask("bob", "frontend")).toBeNull();
   });
 
   it("returns null when queue is empty", () => {
-    expect(getTask(2, "backend")).toBeNull();
+    expect(getTask("bob", "backend")).toBeNull();
   });
 
   it("marks the worker as working with the claimed task", () => {
     loadTasks([frontend]);
-    getTask(2, "frontend");
+    getTask("bob", "frontend");
     const status = getStatus();
-    expect(status.workers[2].status).toBe("working");
-    expect(status.workers[2].currentTask).toEqual(frontend);
+    expect(status.workers["bob"].status).toBe("working");
+    expect(status.workers["bob"].currentTask).toEqual(frontend);
   });
 
   it("does not mark worker as working when no matching task", () => {
-    getTask(2, "backend");
-    expect(getStatus().workers[2]).toBeUndefined();
+    getTask("bob", "backend");
+    expect(getStatus().workers["bob"]).toBeUndefined();
   });
 });
 
 describe("submitResult / getResult", () => {
   it("stores and retrieves a result by worker id", () => {
-    submitResult(2, "done");
-    expect(getResult(2)).toBe("done");
+    submitResult("bob", "done");
+    expect(getResult("bob")).toBe("done");
   });
 
   it("returns null for a worker that hasn't submitted", () => {
-    expect(getResult(99)).toBeNull();
+    expect(getResult("nobody")).toBeNull();
   });
 
   it("overwrites a previous result from the same worker", () => {
-    submitResult(2, "v1");
-    submitResult(2, "v2");
-    expect(getResult(2)).toBe("v2");
+    submitResult("bob", "v1");
+    submitResult("bob", "v2");
+    expect(getResult("bob")).toBe("v2");
   });
 
   it("marks the worker as submitted", () => {
-    submitResult(2, "done");
-    expect(getStatus().workers[2].status).toBe("submitted");
+    submitResult("bob", "done");
+    expect(getStatus().workers["bob"].status).toBe("submitted");
   });
 });
 
@@ -110,20 +110,20 @@ describe("allDone", () => {
   });
 
   it("returns false when queue is empty but not all workers submitted", () => {
-    submitResult(2, "done");
+    submitResult("bob", "done");
     expect(allDone(2)).toBe(false);
   });
 
   it("returns true when queue is empty and all workers submitted", () => {
-    submitResult(2, "done");
-    submitResult(3, "done");
+    submitResult("bob", "done");
+    submitResult("alice", "done");
     expect(allDone(2)).toBe(true);
   });
 
   it("returns false mid-run with tasks and partial results", () => {
     loadTasks([frontend, backend]);
-    getTask(2, "frontend");
-    submitResult(2, "done");
+    getTask("bob", "frontend");
+    submitResult("bob", "done");
     expect(allDone(2)).toBe(false);
   });
 });
@@ -136,21 +136,21 @@ describe("getStatus", () => {
 
   it("reflects working and submitted states together", () => {
     loadTasks([frontend, backend]);
-    getTask(2, "frontend");
-    getTask(3, "backend");
-    submitResult(2, "done");
+    getTask("bob", "frontend");
+    getTask("alice", "backend");
+    submitResult("bob", "done");
     const status = getStatus();
     expect(status.queue).toBe(0);
-    expect(status.workers[2].status).toBe("submitted");
-    expect(status.workers[3].status).toBe("working");
-    expect(status.workers[3].currentTask).toEqual(backend);
+    expect(status.workers["bob"].status).toBe("submitted");
+    expect(status.workers["alice"].status).toBe("working");
+    expect(status.workers["alice"].currentTask).toEqual(backend);
   });
 
   it("updates worker from working to submitted", () => {
     loadTasks([frontend]);
-    getTask(2, "frontend");
-    expect(getStatus().workers[2].status).toBe("working");
-    submitResult(2, "done");
-    expect(getStatus().workers[2].status).toBe("submitted");
+    getTask("bob", "frontend");
+    expect(getStatus().workers["bob"].status).toBe("working");
+    submitResult("bob", "done");
+    expect(getStatus().workers["bob"].status).toBe("submitted");
   });
 });

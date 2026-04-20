@@ -68,8 +68,8 @@ Custom config (not official Claude Code) the orchestrator reads to know worker r
 ```json
 {
   "workers": [
-    { "id": 2, "role": "frontend", "domain": "src/frontend/", "stack": "React" },
-    { "id": 3, "role": "backend", "domain": "src/backend/", "stack": "FastAPI" }
+    { "id": "bob-the-webdev", "role": "frontend", "domain": ["src/frontend/", "src/shared/"] },
+    { "id": "alice-the-api",  "role": "backend",  "domain": "src/backend/" }
   ]
 }
 ```

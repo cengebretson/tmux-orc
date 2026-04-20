@@ -34,6 +34,17 @@ if ! command -v bun &>/dev/null; then
   exit 1
 fi
 
+# --- validate roles ---
+
+worker_count=$(jq '.workers | length' "$AGENTS_CONFIG")
+for i in $(seq 0 $((worker_count - 1))); do
+  role=$(jq -r ".workers[$i].role" "$AGENTS_CONFIG")
+  if [[ ! -f "$PLUGIN_DIR/roles/$role.md" ]]; then
+    echo "Error: no role file found for '$role' (expected $PLUGIN_DIR/roles/$role.md)" >&2
+    exit 1
+  fi
+done
+
 # --- start MCP server ---
 
 "$PLUGIN_DIR/scripts/start_mcp.sh" "$MCP_PORT"

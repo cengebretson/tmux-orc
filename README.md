@@ -82,8 +82,8 @@ Create `.claude/agents.json` in your project repo:
 ```json
 {
   "workers": [
-    { "id": 2, "role": "frontend", "domain": "src/frontend/", "stack": "React" },
-    { "id": 3, "role": "backend",  "domain": "src/backend/",  "stack": "FastAPI" }
+    { "id": "bob-the-webdev", "role": "frontend", "domain": ["src/frontend/", "src/shared/"] },
+    { "id": "alice-the-api",  "role": "backend",  "domain": "src/backend/" }
   ]
 }
 ```
@@ -163,9 +163,25 @@ Tasks are structured objects:
 }
 ```
 
-Roles: `backend` | `frontend` | `code-review`
+Built-in roles: `backend`, `frontend`, `code-review`, `documentation-writer`
 
 Workers only receive tasks matching their role.
+
+### Adding a custom role
+
+Create a markdown file in the plugin's `roles/` directory named after the role:
+
+```bash
+# ~/.tmux/plugins/tmux-claude-agents/roles/data-engineer.md
+```
+
+The file defines the worker's persona, expertise, and standards. Then use the role name in `agents.json` and tasks:
+
+```json
+{ "id": "dave-the-data", "role": "data-engineer", "domain": "pipelines/" }
+```
+
+If a role is used in `agents.json` but has no matching file in `roles/`, the session will fail to start with a clear error.
 
 ### Inspection Endpoints
 

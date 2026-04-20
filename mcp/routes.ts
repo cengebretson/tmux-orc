@@ -29,9 +29,9 @@ export function handleInspection(
     return true;
   }
 
-  const resultMatch = pathname.match(/^\/result\/(\d+)$/);
+  const resultMatch = pathname.match(/^\/result\/([^/]+)$/);
   if (resultMatch) {
-    const workerId = parseInt(resultMatch[1]);
+    const workerId = resultMatch[1];
     const result = getResult(workerId);
     if (result === null) {
       json(res, 404, { error: `no result for worker ${workerId}` });

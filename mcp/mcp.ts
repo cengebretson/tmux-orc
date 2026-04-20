@@ -12,12 +12,12 @@ import {
 
 export const taskSchema = z.object({
   id: z.string(),
-  role: z.enum(["backend", "frontend", "code-review"]),
+  role: z.string(),
   description: z.string(),
   domain: z.string().optional(),
 });
 
-const roleSchema = z.enum(["backend", "frontend", "code-review"]);
+const roleSchema = z.string();
 
 export const mcp = new McpServer({
   name: "claude-agents-mcp",
@@ -27,7 +27,7 @@ export const mcp = new McpServer({
 mcp.tool(
   "register_worker",
   "Worker registers itself with its tmux pane ID on startup",
-  { worker_id: z.number(), pane_id: z.string() },
+  { worker_id: z.string(), pane_id: z.string() },
   async ({ worker_id, pane_id }) => {
     registerWorker(worker_id, pane_id);
     return { content: [{ type: "text", text: "OK" }] };
@@ -47,7 +47,7 @@ mcp.tool(
 mcp.tool(
   "get_task",
   "Pull the next role-matched task from the queue (worker calls this when ready)",
-  { worker_id: z.number(), role: roleSchema },
+  { worker_id: z.string(), role: roleSchema },
   async ({ worker_id, role }) => {
     const task = getTask(worker_id, role);
     return { content: [{ type: "text", text: task ? JSON.stringify(task) : "NO_TASKS" }] };
@@ -57,7 +57,7 @@ mcp.tool(
 mcp.tool(
   "submit_result",
   "Post completed output for a task (worker calls this when done)",
-  { worker_id: z.number(), result: z.string() },
+  { worker_id: z.string(), result: z.string() },
   async ({ worker_id, result }) => {
     submitResult(worker_id, result);
     return { content: [{ type: "text", text: "OK" }] };
@@ -67,7 +67,7 @@ mcp.tool(
 mcp.tool(
   "get_result",
   "Read a worker's submitted result (orchestrator calls this)",
-  { worker_id: z.number() },
+  { worker_id: z.string() },
   async ({ worker_id }) => {
     const result = getResult(worker_id);
     return { content: [{ type: "text", text: result ?? "NO_RESULT" }] };

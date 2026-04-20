@@ -1,4 +1,4 @@
-export type TaskRole = "backend" | "frontend" | "code-review";
+export type TaskRole = string;
 
 export interface Task {
   id: string;
@@ -14,20 +14,20 @@ interface WorkerState {
 }
 
 const taskQueue: Task[] = [];
-const results = new Map<number, string>();
-const workerState = new Map<number, WorkerState>();
+const results = new Map<string, string>();
+const workerState = new Map<string, WorkerState>();
 
 export function loadTasks(tasks: Task[]): number {
   taskQueue.push(...tasks);
   return tasks.length;
 }
 
-export function registerWorker(workerId: number, paneId: string): void {
+export function registerWorker(workerId: string, paneId: string): void {
   const existing = workerState.get(workerId);
   workerState.set(workerId, { ...existing, paneId });
 }
 
-export function getTask(workerId: number, role: TaskRole): Task | null {
+export function getTask(workerId: string, role: TaskRole): Task | null {
   const idx = taskQueue.findIndex((t) => t.role === role);
   if (idx === -1) return null;
   const [task] = taskQueue.splice(idx, 1);
@@ -36,13 +36,13 @@ export function getTask(workerId: number, role: TaskRole): Task | null {
   return task;
 }
 
-export function submitResult(workerId: number, result: string): void {
+export function submitResult(workerId: string, result: string): void {
   results.set(workerId, result);
   const existing = workerState.get(workerId);
   workerState.set(workerId, { ...existing, status: "submitted" });
 }
 
-export function getResult(workerId: number): string | null {
+export function getResult(workerId: string): string | null {
   return results.get(workerId) ?? null;
 }
 
@@ -52,7 +52,7 @@ export function allDone(workerCount: number): boolean {
 
 export interface Status {
   queue: number;
-  workers: Record<number, WorkerState>;
+  workers: Record<string, WorkerState>;
 }
 
 export function getStatus(): Status {
@@ -66,7 +66,7 @@ export function getQueue(): Task[] {
   return [...taskQueue];
 }
 
-export function getAllResults(): Record<number, string> {
+export function getAllResults(): Record<string, string> {
   return Object.fromEntries(results);
 }
 

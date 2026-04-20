@@ -14,7 +14,14 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    ```
    pane_id=$(tmux split-window -P -F "#{pane_id}" -v -t <prev_pane_id> -e "MCP_URL={{mcp_url}}")
    ```
-3. Start claude in each pane and send the worker bootstrap prompt (from `templates/worker.md`), substituting the worker's id, role, domain, and stack.
+3. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
+   - `{{id}}` — worker id
+   - `{{role}}` — worker role
+   - `{{mcp_url}}` — the MCP server URL
+   - `{{domain}}` — format as a bullet list. `domain` may be a string or an array:
+     - String: `"src/frontend/"` → `- src/frontend/`
+     - Array: `["src/frontend/", "src/shared/"]` → `- src/frontend/\n- src/shared/`
+4. Send the prompt to the pane via tmux paste-buffer.
 
 Keep a note of each worker's pane ID — you'll use them to health-check stuck workers.
 
