@@ -22,11 +22,6 @@ done
 
 # --- validate ---
 
-if [[ ! -f "$AGENTS_CONFIG" ]]; then
-  echo "Error: $AGENTS_CONFIG not found. Create it with your worker and pipeline definitions." >&2
-  exit 1
-fi
-
 if ! command -v jq &>/dev/null; then
   echo "Error: jq is required (brew install jq)" >&2
   exit 1
@@ -37,63 +32,14 @@ if ! command -v bun &>/dev/null; then
   exit 1
 fi
 
-# --- validate roles ---
+validate_args="--config=$AGENTS_CONFIG"
+[[ -n "$JOB_NAME" ]] && validate_args="$validate_args --job=$JOB_NAME"
 
-find_role_file() {
-  local role=$1
-  local project_role=".claude/roles/$role.md"
-  local plugin_role="$PLUGIN_DIR/roles/$role.md"
-  if [[ -f "$project_role" ]]; then
-    echo "$project_role"
-  elif [[ -f "$plugin_role" ]]; then
-    echo "$plugin_role"
-  else
-    echo ""
-  fi
-}
-
-worker_count=$(jq '.workers | length' "$AGENTS_CONFIG")
-for i in $(seq 0 $((worker_count - 1))); do
-  role=$(jq -r ".workers[$i].role" "$AGENTS_CONFIG")
-  if [[ -z "$(find_role_file "$role")" ]]; then
-    echo "Error: no role file found for '$role'" >&2
-    echo "  Looked in: .claude/roles/$role.md, $PLUGIN_DIR/roles/$role.md" >&2
-    exit 1
-  fi
-done
-
-# --- validate job file (if specified) ---
-
-if [[ -n "$JOB_NAME" ]]; then
-  JOB_FILE=".claude/jobs/$JOB_NAME.md"
-  if [[ -f ".claude/jobs/done/$JOB_NAME.md" ]]; then
-    echo "Error: job '$JOB_NAME' already completed — move it from .claude/jobs/done/ to rerun." >&2
-    exit 1
-  fi
-  if [[ ! -f "$JOB_FILE" ]]; then
-    echo "Error: job file not found: $JOB_FILE" >&2
-    if [[ -d ".claude/jobs" ]]; then
-      available=$(ls .claude/jobs/*.md 2>/dev/null | xargs -I{} basename {} .md | tr '\n' ' ')
-      echo "  Available jobs: ${available:-none}" >&2
-    fi
-    exit 1
-  fi
-  mkdir -p .claude/jobs/done
-
-  # extract pipeline from frontmatter
-  pipeline=$(awk '/^---/{f=!f;next} f && /^pipeline:/{gsub(/^pipeline:[[:space:]]*/,""); print; exit}' "$JOB_FILE")
-  if [[ -z "$pipeline" ]]; then
-    echo "Error: no 'pipeline:' found in frontmatter of $JOB_FILE" >&2
-    exit 1
-  fi
-
-  # validate pipeline exists in agents.json
-  pipeline_exists=$(jq --arg name "$pipeline" '.pipelines // [] | map(select(.name == $name)) | length' "$AGENTS_CONFIG")
-  if [[ "$pipeline_exists" -eq 0 ]]; then
-    echo "Error: pipeline '$pipeline' (from $JOB_FILE) not found in $AGENTS_CONFIG" >&2
-    exit 1
-  fi
+if ! "$PLUGIN_DIR/scripts/validate.sh" $validate_args; then
+  exit 1
 fi
+
+[[ -n "$JOB_NAME" ]] && JOB_FILE=".claude/jobs/$JOB_NAME.md" && mkdir -p .claude/jobs/done
 
 # --- start MCP server ---
 

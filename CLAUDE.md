@@ -86,6 +86,7 @@ All workers in the same job share this worktree. After the final stage the orche
 ```
 scripts/
   start_session.sh   # starts MCP server, creates orchestrator pane; --job=<name> to preload
+  validate.sh        # pre-flight checks: roles, skills, plugins, job frontmatter
   start_mcp.sh       # launches bun server, guards double-start via PID file
   menu.sh            # tmux display-menu for status inspection
   cleanup.sh         # kills MCP server, removes worktrees + branches

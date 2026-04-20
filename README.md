@@ -168,6 +168,26 @@ The orchestrator reads the job file, creates the worktree, generates tasks, and 
 
 To rerun a completed job, move it back from `done/` first.
 
+### Validating before you start
+
+Run `validate.sh` to check your config before starting a session:
+
+```bash
+~/.tmux/plugins/tmux-claude-agents/scripts/validate.sh
+~/.tmux/plugins/tmux-claude-agents/scripts/validate.sh --job=auth-login
+```
+
+It checks:
+- All workers have a role file
+- All skills listed in role files (`## Skills`) exist in `.claude/skills/` or the plugin's `skills/`
+- All pipeline stage roles have role files
+- Job frontmatter has `pipeline:` and `domain:`, and the pipeline is defined in `agents.json`
+- Job hasn't already been completed (not in `done/`)
+
+Plugins listed in role files (`## Plugins`) produce warnings — they can't be verified from the shell, so you'll need to confirm they're enabled in Claude Code settings manually.
+
+`start_session.sh` runs validation automatically before starting. If validation fails the session won't start.
+
 Add to `.gitignore`:
 
 ```

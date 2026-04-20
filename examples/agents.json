@@ -1,0 +1,19 @@
+{
+  "workers": [
+    { "id": "bob", "role": "frontend" },
+    { "id": "rex", "role": "review"   },
+    { "id": "sam", "role": "security" },
+    { "id": "git", "role": "git"      }
+  ],
+  "pipelines": [
+    {
+      "name": "frontend",
+      "stages": [
+        { "name": "build",    "role": "frontend" },
+        { "name": "review",   "role": "review"   },
+        { "name": "security", "role": "security" },
+        { "name": "ship",     "role": "git"      }
+      ]
+    }
+  ]
+}
