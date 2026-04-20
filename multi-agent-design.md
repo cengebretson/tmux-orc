@@ -57,11 +57,10 @@ git branch -d agent/auth-login
 
 ### Project Config
 
-`.claude/agents.json` defines three things:
+`.claude/agents.json` defines two things:
 
 - **`workers`** — the agent pool: id and role
 - **`pipelines`** — reusable stage definitions: each stage names the role that handles it
-- **`jobs`** — named feature runs: each references a pipeline, domain, and description
 
 ```json
 {
@@ -81,26 +80,48 @@ git branch -d agent/auth-login
         { "name": "ship",     "role": "git"      }
       ]
     }
-  ],
-  "jobs": [
-    {
-      "name": "auth-login",
-      "pipeline": "frontend",
-      "domain": "src/frontend/auth/login/",
-      "description": "Build the login flow with JWT token handling"
-    },
-    {
-      "name": "auth-signup",
-      "pipeline": "frontend",
-      "domain": "src/frontend/auth/signup/",
-      "description": "Build the signup flow with email verification"
-    }
   ]
 }
 ```
 
-The orchestrator reads a job definition, looks up its pipeline's stages, and generates
-tasks automatically — one per stage with the job's domain and description as context.
+### Job Files
+
+Jobs live as markdown files in `.claude/jobs/<name>.md`. YAML frontmatter specifies
+the pipeline and domain; the body is the full feature spec passed as context to each stage.
+
+```
+.claude/
+  agents.json
+  jobs/
+    auth-login.md
+    auth-signup.md
+```
+
+Example — `.claude/jobs/auth-login.md`:
+
+```markdown
+---
+pipeline: frontend
+domain: src/frontend/auth/login/
+---
+
+## Goal
+Build the login flow with JWT token handling.
+
+## Acceptance criteria
+- Email + password form with client-side validation
+- JWT stored in httpOnly cookie, not localStorage
+- Redirects to /dashboard on success
+- Shows inline field-level errors on failure
+- Mobile responsive
+
+## Context
+Backend JWT endpoint exists at `POST /api/auth/login` and returns `{ token, user }`.
+Extend the existing `useAuth` hook at `src/shared/hooks/useAuth.ts`.
+```
+
+The orchestrator reads the job file, looks up its pipeline's stages, and generates
+tasks automatically — one per stage with the markdown body as context.
 
 ### CLAUDE.md Files
 - Root `CLAUDE.md` — shared conventions, project structure, coordination protocol
@@ -112,11 +133,11 @@ Add to `.gitignore`:
 ```
 
 ## Orchestrator Startup Sequence
-1. Read `.claude/agents.json` for workers, pipelines, and jobs
+1. Read `.claude/agents.json` for workers and pipelines
 2. Start MCP server as background process
 3. Create a worktree per job being started (`git worktree add .worktrees/<job> -b agent/<job>`)
 4. Spin up worker panes, copying the role file as CLAUDE.md and installing skills into the worktree
-5. Generate tasks from job definitions (pipeline stages + job domain/description) and call `load_tasks`
+5. Read each job file, look up its pipeline's stages, generate one task per stage using the markdown body as context, and call `load_tasks`
 6. Workers self-bootstrap, register, and call `get_task()` when ready
 
 ## Worker Bootstrap

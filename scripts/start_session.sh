@@ -7,6 +7,7 @@ MCP_URL="http://localhost:${MCP_PORT}"
 AGENTS_CONFIG=".claude/agents.json"
 USE_CURRENT_PANE=false
 JOB_NAME=""
+JOB_FILE=""
 
 # --- parse args ---
 
@@ -22,7 +23,7 @@ done
 # --- validate ---
 
 if [[ ! -f "$AGENTS_CONFIG" ]]; then
-  echo "Error: $AGENTS_CONFIG not found. Create it with your worker definitions." >&2
+  echo "Error: $AGENTS_CONFIG not found. Create it with your worker and pipeline definitions." >&2
   exit 1
 fi
 
@@ -61,13 +62,30 @@ for i in $(seq 0 $((worker_count - 1))); do
   fi
 done
 
-# --- validate job (if specified) ---
+# --- validate job file (if specified) ---
 
 if [[ -n "$JOB_NAME" ]]; then
-  job_exists=$(jq --arg name "$JOB_NAME" '.jobs // [] | map(select(.name == $name)) | length' "$AGENTS_CONFIG")
-  if [[ "$job_exists" -eq 0 ]]; then
-    echo "Error: job '$JOB_NAME' not found in $AGENTS_CONFIG" >&2
-    echo "  Available jobs: $(jq -r '.jobs // [] | map(.name) | join(", ")' "$AGENTS_CONFIG")" >&2
+  JOB_FILE=".claude/jobs/$JOB_NAME.md"
+  if [[ ! -f "$JOB_FILE" ]]; then
+    echo "Error: job file not found: $JOB_FILE" >&2
+    if [[ -d ".claude/jobs" ]]; then
+      available=$(ls .claude/jobs/*.md 2>/dev/null | xargs -I{} basename {} .md | tr '\n' ' ')
+      echo "  Available jobs: ${available:-none}" >&2
+    fi
+    exit 1
+  fi
+
+  # extract pipeline from frontmatter
+  pipeline=$(awk '/^---/{f=!f;next} f && /^pipeline:/{gsub(/^pipeline:[[:space:]]*/,""); print; exit}' "$JOB_FILE")
+  if [[ -z "$pipeline" ]]; then
+    echo "Error: no 'pipeline:' found in frontmatter of $JOB_FILE" >&2
+    exit 1
+  fi
+
+  # validate pipeline exists in agents.json
+  pipeline_exists=$(jq --arg name "$pipeline" '.pipelines // [] | map(select(.name == $name)) | length' "$AGENTS_CONFIG")
+  if [[ "$pipeline_exists" -eq 0 ]]; then
+    echo "Error: pipeline '$pipeline' (from $JOB_FILE) not found in $AGENTS_CONFIG" >&2
     exit 1
   fi
 fi
@@ -83,11 +101,11 @@ if [[ "$USE_CURRENT_PANE" == true ]]; then
   ORCH_PANE="$TMUX_PANE"
   tmux setenv MCP_URL "$MCP_URL"
   tmux setenv AGENTS_CONFIG "$AGENTS_CONFIG"
-  [[ -n "$JOB_NAME" ]] && tmux setenv JOB_NAME "$JOB_NAME"
+  [[ -n "$JOB_FILE" ]] && tmux setenv JOB_FILE "$JOB_FILE"
 else
   ORCH_PANE=$(tmux new-window -P -F "#{pane_id}" -n "agents" \
     -e "MCP_URL=$MCP_URL" -e "AGENTS_CONFIG=$AGENTS_CONFIG" \
-    ${JOB_NAME:+-e "JOB_NAME=$JOB_NAME"})
+    ${JOB_FILE:+-e "JOB_FILE=$JOB_FILE"})
 fi
 
 # --- send orchestrator prompt ---
@@ -95,7 +113,7 @@ fi
 ORCH_PROMPT=$(cat "$PLUGIN_DIR/templates/orchestrator.md" \
   | sed "s|{{mcp_url}}|$MCP_URL|g" \
   | sed "s|{{agents_config}}|$AGENTS_CONFIG|g" \
-  | sed "s|{{job}}|$JOB_NAME|g")
+  | sed "s|{{job_file}}|$JOB_FILE|g")
 
 tmux send-keys -t "$ORCH_PANE" "claude" Enter
 

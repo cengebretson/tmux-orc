@@ -44,7 +44,6 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    # project-level skills override built-ins
    [ -d .claude/skills ] && cp .claude/skills/*.md .worktrees/<worktree>/.claude/commands/
    ```
-   For job workers `<worktree>` is the job name. For standalone workers it is the worker id.
 
 5. Write the role file as `CLAUDE.md` into the worktree so it is automatically loaded:
    ```bash
@@ -59,9 +58,7 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    - `{{worktree_setup}}` — one of:
      - Job/pipeline: `"Your worktree is already set up at {{worktree}} — do not create a new one."`
      - Standalone: `"Create your worktree: git worktree add {{worktree}} -b agent/{{id}}"`
-   - `{{domain}}` — format as a bullet list. `domain` may be a string or an array:
-     - String: `"src/frontend/"` → `- src/frontend/`
-     - Array: `["src/frontend/", "src/shared/"]` → `- src/frontend/\n- src/shared/`
+   - `{{domain}}` — from the job file's frontmatter `domain:` field
 
 7. Send the prompt to the pane via tmux paste-buffer.
 
@@ -69,46 +66,45 @@ Keep a note of each worker's pane ID — you'll use them to health-check stuck w
 
 ## Step 3 — Load tasks
 
-### Starting a job from `agents.json`
+### Starting a job from a job file
 
-If `{{agents_config}}` contains a `jobs` section, read the job definition to generate
-tasks automatically. For a job named `{{job}}`:
+If `{{job_file}}` is set, read it to generate tasks:
 
-1. Look up the job in `jobs[]` by name — get its `pipeline`, `domain`, and `description`
-2. Look up the pipeline in `pipelines[]` by name — get its ordered `stages`
-3. For each stage, generate a task:
+1. Parse the frontmatter — extract `pipeline` and `domain`
+2. Look up the pipeline in `{{agents_config}}` to get the ordered stages and their roles
+3. Read the markdown body — this is the full job spec (goal, acceptance criteria, context)
+4. Generate one task per stage, using the job body as context for each description:
    ```json
    {
      "id": "<job>-<stage>",
      "role": "<stage.role>",
-     "description": "<derived from job description + stage context>",
+     "description": "<stage-specific instruction derived from the job spec>",
      "job": "<job name>",
      "stage": "<stage name>"
    }
    ```
-   Do not include `domain` on job tasks — workers already know their domain from their
-   bootstrap prompt (which was generated from the job definition).
+5. Call `load_tasks` with all generated tasks.
 
-4. Call `load_tasks` with all generated tasks.
+The job name is the filename without extension (e.g. `auth-login` from `auth-login.md`).
 
-Example — job `auth-login` using pipeline `frontend`:
+Example — job file `.claude/jobs/auth-login.md` with pipeline `frontend` (stages: build → review → security → ship):
 ```json
 load_tasks([
-  { "id": "auth-login-build",    "role": "frontend", "job": "auth-login", "stage": "build",    "description": "Build the login flow with JWT token handling" },
-  { "id": "auth-login-review",   "role": "review",   "job": "auth-login", "stage": "review",   "description": "Review the auth-login frontend changes"       },
-  { "id": "auth-login-security", "role": "security", "job": "auth-login", "stage": "security", "description": "Security audit of the login flow"              },
-  { "id": "auth-login-ship",     "role": "git",      "job": "auth-login", "stage": "ship",     "description": "Open PR: agent/auth-login → main"              }
+  { "id": "auth-login-build",    "role": "frontend", "job": "auth-login", "stage": "build",    "description": "Build login form per spec: JWT in httpOnly cookie, extend useAuth hook, mobile responsive" },
+  { "id": "auth-login-review",   "role": "review",   "job": "auth-login", "stage": "review",   "description": "Review auth-login changes against acceptance criteria in job spec"                          },
+  { "id": "auth-login-security", "role": "security", "job": "auth-login", "stage": "security", "description": "Audit login flow: JWT handling, cookie flags, CSRF, injection"                              },
+  { "id": "auth-login-ship",     "role": "git",      "job": "auth-login", "stage": "ship",     "description": "Open PR: agent/auth-login → main, summarising review and security findings"                }
 ])
 ```
 
-To start an additional job in the same session, create its worktree and call
-`load_tasks` again with the new job's tasks. Workers pick them up automatically.
+To start an additional job mid-session, read its job file, create its worktree, and
+call `load_tasks` again. Workers pick up the new tasks automatically.
 
 ---
 
 ### Mode A: Standalone tasks (parallel, independent)
 
-Use when tasks are independent with no stage ordering. No `pipeline`, `job`, or `stage` fields.
+Use when tasks are independent with no stage ordering. No `job` or `stage` fields.
 
 ```json
 [

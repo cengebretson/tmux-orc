@@ -97,28 +97,58 @@ Create `.claude/agents.json` in your project repo:
         { "name": "ship",     "role": "git"      }
       ]
     }
-  ],
-  "jobs": [
-    {
-      "name": "auth-login",
-      "pipeline": "frontend",
-      "domain": "src/frontend/auth/login/",
-      "description": "Build the login flow with JWT token handling"
-    },
-    {
-      "name": "auth-signup",
-      "pipeline": "frontend",
-      "domain": "src/frontend/auth/signup/",
-      "description": "Build the signup flow with email verification"
-    }
   ]
 }
 ```
 
-- **`pipelines`** — reusable stage definitions. Each stage names the role that handles it.
-- **`jobs`** — specific feature runs. Each job references a pipeline and provides the domain and description the orchestrator uses to generate tasks.
+`agents.json` defines your permanent workforce and pipeline definitions. Jobs are separate markdown files.
 
-To start a job, press `prefix+M` or pass `--job` to the start script — the orchestrator reads the job definition and generates tasks automatically.
+### Job files
+
+Each job lives in `.claude/jobs/<name>.md`. The frontmatter specifies which pipeline to use and the domain to work in. The body is the full spec — the orchestrator reads it to generate task descriptions for each stage.
+
+```
+.claude/
+  agents.json
+  jobs/
+    auth-login.md
+    auth-signup.md
+  roles/        ← optional project-specific role overrides
+  skills/       ← optional project-specific skill overrides
+```
+
+Example `.claude/jobs/auth-login.md`:
+
+```markdown
+---
+pipeline: frontend
+domain: src/frontend/auth/login/
+---
+
+## Goal
+Build the login flow with JWT token handling.
+
+## Acceptance criteria
+- Email + password form with client-side validation
+- JWT stored in httpOnly cookie, not localStorage
+- Redirects to /dashboard on success
+- Shows inline errors on failure
+
+## Context
+Backend JWT endpoint already exists at `POST /api/auth/login`.
+Extend `src/shared/hooks/useAuth.ts`, don't replace it.
+
+## Related
+- Linear: AUTH-42
+```
+
+To start a job:
+
+```bash
+~/.tmux/plugins/tmux-claude-agents/scripts/start_session.sh --job=auth-login
+```
+
+Or bind it to a key and pass the job name. The plugin validates that the job file exists and its `pipeline` is defined in `agents.json` before starting.
 
 Add to `.gitignore`:
 
