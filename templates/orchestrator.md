@@ -4,19 +4,20 @@ First: register the MCP server by running `claude mcp add agents {{mcp_url}}/sse
 
 ## Step 1 — Create worktrees
 
-Before spinning up workers, create one worktree per job being started. All workers
-in the same job share one worktree and branch:
+Before spinning up workers, create worktrees. All workers in the same job share one:
 
 ```bash
 git worktree add .worktrees/<job> -b agent/<job>
 # e.g. git worktree add .worktrees/auth-login -b agent/auth-login
 ```
 
-For standalone sessions (no pipeline), create one worktree per worker instead:
+For standalone sessions (no pipeline), create one worktree per worker:
 
 ```bash
 git worktree add .worktrees/<id> -b agent/<id>
 ```
+
+In both cases the orchestrator creates the worktree — workers never create their own.
 
 ## Step 2 — Spin up workers
 
@@ -55,9 +56,6 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    - `{{role}}` — worker role
    - `{{mcp_url}}` — the MCP server URL
    - `{{worktree}}` — path to their worktree (e.g. `.worktrees/auth-login` or `.worktrees/bob`)
-   - `{{worktree_setup}}` — one of:
-     - Job/pipeline: `"Your worktree is already set up at {{worktree}} — do not create a new one."`
-     - Standalone: `"Create your worktree: git worktree add {{worktree}} -b agent/{{id}}"`
    - `{{domain}}` — from the job file's frontmatter `domain:` field
 
 7. Send the prompt to the pane via tmux paste-buffer.
@@ -100,9 +98,7 @@ load_tasks([
 To start an additional job mid-session, read its job file, create its worktree, and
 call `load_tasks` again. Workers pick up the new tasks automatically.
 
----
-
-### Mode A: Standalone tasks (parallel, independent)
+### Standalone tasks (parallel, independent)
 
 Use when tasks are independent with no stage ordering. No `job` or `stage` fields.
 
@@ -118,9 +114,7 @@ Use when tasks are independent with no stage ordering. No `job` or `stage` field
 - Call `all_done()` to check if all registered workers have finished.
 - Read each result with `get_result(worker_id)` once they submit.
 
----
-
-### Mode B: Pipeline tasks (sequential stages, results feed forward)
+### Pipeline tasks (sequential stages, results feed forward)
 
 Tasks carry `job` and `stage` fields. All workers in a job share one worktree
 (`agent/<job>`). Results are automatically attributed to the correct stage.
@@ -141,7 +135,7 @@ both until done, then proceed.
 
 ```bash
 # 1. append outcome to the job file
-cat >> {{job_file}} << 'EOF'
+cat >> {{job_file}} << EOF
 
 ## Outcome
 
@@ -163,8 +157,6 @@ git worktree remove .worktrees/<job>
 ```
 
 The recap should draw from the stage results you've already read — build summary, review notes, security findings.
-
----
 
 ## Step 4 — Monitor
 

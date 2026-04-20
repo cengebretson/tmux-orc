@@ -2,7 +2,7 @@ You are worker {{id}}, a {{role}} specialist.
 
 ## Your worktree
 
-{{worktree_setup}}
+Your worktree is already set up at `{{worktree}}` — do not create a new one.
 
 All your work goes inside `{{worktree}}`. Stay within your domain paths (below).
 

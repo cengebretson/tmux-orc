@@ -160,13 +160,13 @@ Review: LGTM with 2 minor comments addressed. Security: CSRF token added to
 form after sam flagged it. PR opened from agent/auth-login → main.
 ```
 
-To start a job:
+Once the orchestrator is running, start a job by just telling it:
 
-```bash
-~/.tmux/plugins/tmux-claude-agents/scripts/start_session.sh --job=auth-login
-```
+> "start job auth-login"
 
-The plugin validates that the job file exists, its `pipeline` is defined in `agents.json`, and the job hasn't already been completed (i.e. not in `done/`). To rerun a completed job, move it back from `done/`.
+The orchestrator reads the job file, creates the worktree, generates tasks, and calls `load_tasks`. You can start additional jobs the same way mid-session — workers pick them up automatically.
+
+To rerun a completed job, move it back from `done/` first.
 
 Add to `.gitignore`:
 
@@ -189,15 +189,20 @@ Press `prefix+M` from inside your project directory. The plugin will:
 
 1. Start the MCP server in the background
 2. Open a new window and launch the orchestrator Claude agent
-3. The orchestrator reads `agents.json`, creates worker panes, and sends each worker its bootstrap prompt
+3. The orchestrator spins up worker panes and waits for instructions
 
-To start a specific job immediately, pass `--job`:
+Once the orchestrator is running, **just tell it what to do**:
+
+> "start job auth-login"
+> "start jobs auth-login and auth-signup in parallel"
+
+The orchestrator reads the job file, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks`. You can start additional jobs at any point mid-session the same way — workers pick them up automatically.
+
+To pre-load a job at cold-start, pass `--job`:
 
 ```bash
 ~/.tmux/plugins/tmux-claude-agents/scripts/start_session.sh --job=auth-login
 ```
-
-The orchestrator reads the job file from `.claude/jobs/auth-login.md`, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks` — no manual task authoring needed.
 
 ### What the orchestrator does
 

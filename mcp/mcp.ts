@@ -120,8 +120,14 @@ mcp.tool(
   "Returns stage breakdown for one job (if job is provided) or all active jobs",
   { job: z.string().optional() },
   async ({ job }) => {
-    const result = job ? getJobStatus(job) : getAllJobsStatus();
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    if (job) {
+      const result = getJobStatus(job);
+      if (result === null) {
+        return { content: [{ type: "text", text: `No job '${job}' found` }] };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+    return { content: [{ type: "text", text: JSON.stringify(getAllJobsStatus(), null, 2) }] };
   }
 );
 
