@@ -165,9 +165,19 @@ Press `prefix+M` from your project directory. The plugin starts the MCP server a
 └──────────────────────────────────────────┘
 ```
 
-### Step 2 — Orchestrator spins up workers
+### Step 2 — Orchestrator creates the pipeline worktree
 
-The orchestrator creates a pane per worker, copies each role file in as their `CLAUDE.md`, installs skills, and pastes each worker's bootstrap prompt:
+Before spinning up any workers, the orchestrator creates a single shared worktree for the pipeline:
+
+```bash
+git worktree add .worktrees/auth -b agent/auth
+```
+
+All pipeline workers (`bob`, `rex`, `sam`, `git`) will work inside `.worktrees/auth` on branch `agent/auth`. This means the review worker sees bob's commits immediately, and the git worker opens one PR from `agent/auth` → `main`.
+
+### Step 3 — Orchestrator spins up workers
+
+The orchestrator creates a pane per worker, writes the role file as `CLAUDE.md` into `.worktrees/auth`, installs skills there, and pastes each worker's bootstrap prompt:
 
 ```
 ┌─────────────────────┬────────────────────┐
@@ -182,18 +192,18 @@ The orchestrator creates a pane per worker, copies each role file in as their `C
 └─────────────────────┴────────────────────┘
 ```
 
-### Step 3 — Workers self-bootstrap
+### Step 4 — Workers self-bootstrap
 
-Each worker independently runs its bootstrap loop:
+Each worker independently runs its bootstrap loop. Because it's a pipeline session, the worktree already exists — workers just register and start pulling tasks:
 
 ```
 register_worker(worker_id="bob", pane_id="%23")
-git worktree add .worktrees/bob -b agent/bob
+# worktree .worktrees/auth already exists — no git worktree add needed
 get_task(worker_id="bob", role="frontend")
 → task p1: "Build auth login form"
 ```
 
-### Step 4 — Orchestrator loads the pipeline
+### Step 5 — Orchestrator loads the pipeline
 
 ```json
 load_tasks([
@@ -206,7 +216,7 @@ load_tasks([
 
 All tasks are loaded at once. Workers self-schedule by role — bob picks up `p1` immediately since he already called `get_task`. Rex and Sam are waiting; their tasks are in the queue and will be claimed when they call `get_task`.
 
-### Step 5 — Build stage
+### Step 6 — Build stage
 
 Bob works in `.worktrees/bob`. The orchestrator polls:
 
@@ -220,7 +230,7 @@ Bob submits his result:
 submit_result(worker_id="bob", result="Login + signup forms complete. JWT stored in httpOnly cookie. Files: src/frontend/auth/Login.tsx, Signup.tsx, useAuth.ts")
 ```
 
-### Step 6 — Review + security run in parallel
+### Step 7 — Review + security run in parallel
 
 Both `review` and `security` depend only on `build`, so they run simultaneously. Rex and Sam both call `get_task` and pick up their tasks. The orchestrator polls both:
 
@@ -242,7 +252,7 @@ stage_done("auth", "security") → false ... false ... true ✓
 └─────────────────────┴────────────────────┘
 ```
 
-### Step 7 — Ship stage
+### Step 8 — Ship stage
 
 Both stages done. Orchestrator reads their results and loads the final task with the findings baked into the description:
 
@@ -261,9 +271,9 @@ load_tasks([{
 }])
 ```
 
-The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and opens the PR.
+The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and opens a PR from `agent/auth` → `main`. All the pipeline's work is already on one branch — no merging needed.
 
-### Step 8 — Done
+### Step 9 — Done
 
 ```
 stage_done("auth", "ship") → true
@@ -444,13 +454,21 @@ tmux-claude-agents/
 
 ### Worker isolation
 
-Each worker operates on its own git worktree and branch:
+Worktree ownership depends on the task mode:
+
+**Pipeline** — all workers in a pipeline share one worktree and branch, created by the orchestrator before dispatching:
 
 ```bash
-git worktree add .worktrees/worker2 -b agent/worker2
+git worktree add .worktrees/auth -b agent/auth
 ```
 
-Workers create and clean up their own worktrees — the orchestrator doesn't manage them.
+Sharing one branch means the review worker immediately sees the build worker's commits, and the git worker opens a single PR (`agent/auth` → `main`) with all the work on one branch.
+
+**Standalone** — each worker gets its own worktree and branch, also created by the orchestrator:
+
+```bash
+git worktree add .worktrees/bob -b agent/bob
+```
 
 ### Communication rules
 

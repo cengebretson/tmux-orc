@@ -33,16 +33,30 @@ Workers are pull-based — they call `get_task()` themselves when ready,
 making the system self-scheduling.
 
 ### Git Worktrees
-Each worker gets an isolated copy of the repo on its own branch:
+
+Worktree ownership depends on the task mode:
+
+**Pipeline** — one shared worktree per pipeline, created by the orchestrator before dispatching workers:
 ```bash
-git worktree add .worktrees/worker2 -b agent/worker2
-git worktree add .worktrees/worker3 -b agent/worker3
+git worktree add .worktrees/auth -b agent/auth
 ```
+All workers in the pipeline share this worktree and branch. The review worker sees the build worker's commits immediately. The git worker opens a single PR from `agent/auth` → `main` with everything on one branch — no cross-branch merging.
+
+**Standalone** — one worktree per worker, also created by the orchestrator:
+```bash
+git worktree add .worktrees/bob   -b agent/bob
+git worktree add .worktrees/alice -b agent/alice
+```
+
 Cleanup after merge:
 ```bash
-git worktree remove .worktrees/worker2
-git worktree remove .worktrees/worker3
-git branch -d agent/worker2 agent/worker3
+# pipeline
+git worktree remove .worktrees/auth
+git branch -d agent/auth
+
+# standalone
+git worktree remove .worktrees/bob
+git branch -d agent/bob
 ```
 
 ### Project Config
@@ -74,29 +88,26 @@ Add to `.gitignore` to keep agent-generated files out of commits:
 5. Workers self-bootstrap and call `get_task()` when ready
 
 ## Worker Bootstrap (first actions on startup)
-The orchestrator dispatches each worker with its role and domain in the initial
-`send-keys` message. The worker then self-bootstraps:
 
+The orchestrator creates all worktrees before dispatching workers, then pastes each worker's bootstrap prompt via tmux. The prompt tells the worker whether a worktree is already set up (pipeline) or needs creating (standalone).
+
+**Pipeline worker prompt:**
+```
+You are the frontend worker. Your pipeline worktree is already set up at
+.worktrees/auth on branch agent/auth. Do not create a new worktree.
+Call register_worker, then get_task(worker_id="bob", role="frontend") and begin.
+```
+
+**Standalone worker prompt:**
 ```
 You are the frontend worker. Your domain is src/frontend/ (React).
-First: create your worktree at .worktrees/worker2 on branch agent/worker2.
-Then: write your CLAUDE.md into the worktree for reference.
-Then: call get_task(worker_id=2) and begin.
+Create your worktree: git worktree add .worktrees/bob -b agent/bob
+Then call register_worker, then get_task(worker_id="bob", role="frontend") and begin.
 ```
-
-Worker's first steps:
-```bash
-git worktree add .worktrees/worker2 -b agent/worker2
-# write own CLAUDE.md into worktree for persistent reference
-# call get_task(worker_id=2)
-```
-
-This avoids the orchestrator needing to manage worktree creation — each worker
-owns its full lifecycle from creation to cleanup.
 
 ## Worker Lifecycle
 ```
-receive initial prompt → create worktree → write CLAUDE.md → call get_task() → do work → call submit_result() → notify orchestrator → call get_task() again
+receive initial prompt → [create worktree if standalone] → register_worker() → call get_task() → do work → call submit_result() → call get_task() again
 ```
 
 ## macOS Notifications

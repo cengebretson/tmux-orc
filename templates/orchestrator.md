@@ -2,7 +2,29 @@ You are the orchestrator for a multi-agent Claude session. Your first job is to 
 
 First: register the MCP server by running `claude mcp add agents {{mcp_url}}/sse` in your shell, then restart to pick it up.
 
-## Step 1 — Spin up workers
+## Step 1 — Create worktrees
+
+Before spinning up workers, create the worktrees they will work in.
+
+**Pipeline sessions** — one shared worktree per pipeline, named after the pipeline:
+
+```bash
+git worktree add .worktrees/<pipeline> -b agent/<pipeline>
+# e.g. git worktree add .worktrees/auth -b agent/auth
+```
+
+All workers in the same pipeline share this worktree. This means a review worker
+immediately sees what the build worker committed, and the git worker opens a single
+PR from `agent/<pipeline>` → `main` with all the work on one branch.
+
+**Standalone sessions** — one worktree per worker, named after the worker:
+
+```bash
+git worktree add .worktrees/<id> -b agent/<id>
+# e.g. git worktree add .worktrees/bob -b agent/bob
+```
+
+## Step 2 — Spin up workers
 
 Read `{{agents_config}}` to get worker definitions. For each worker:
 
@@ -18,31 +40,40 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    - `.claude/roles/<role>.md` — project-level (takes precedence)
    - `~/.tmux/plugins/tmux-claude-agents/roles/<role>.md` — plugin built-in (fallback)
 
-   Write the role file as `CLAUDE.md` into the worker's worktree so it is automatically loaded.
-
-4. Install skills into the worker's worktree so they are available as slash commands:
+4. Install skills into the worktree so they are available as slash commands:
    ```bash
-   mkdir -p .worktrees/<id>/.claude/commands
+   mkdir -p .worktrees/<worktree>/.claude/commands
 
    # plugin built-ins first
-   cp ~/.tmux/plugins/tmux-claude-agents/skills/*.md .worktrees/<id>/.claude/commands/
+   cp ~/.tmux/plugins/tmux-claude-agents/skills/*.md .worktrees/<worktree>/.claude/commands/
 
    # project-level skills override built-ins
-   [ -d .claude/skills ] && cp .claude/skills/*.md .worktrees/<id>/.claude/commands/
+   [ -d .claude/skills ] && cp .claude/skills/*.md .worktrees/<worktree>/.claude/commands/
+   ```
+   For pipeline workers `<worktree>` is the pipeline name. For standalone workers it is the worker id.
+
+5. Write the role file as `CLAUDE.md` into the worktree so it is automatically loaded:
+   ```bash
+   cp <role_file> .worktrees/<worktree>/CLAUDE.md
    ```
 
-5. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
+6. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
    - `{{id}}` — worker id
    - `{{role}}` — worker role
    - `{{mcp_url}}` — the MCP server URL
+   - `{{worktree}}` — path to their worktree (e.g. `.worktrees/auth` or `.worktrees/bob`)
+   - `{{worktree_setup}}` — one of:
+     - Pipeline: `"Your worktree is already set up at {{worktree}} — do not create a new one."`
+     - Standalone: `"Create your worktree: git worktree add {{worktree}} -b agent/{{id}}"`
    - `{{domain}}` — format as a bullet list. `domain` may be a string or an array:
      - String: `"src/frontend/"` → `- src/frontend/`
      - Array: `["src/frontend/", "src/shared/"]` → `- src/frontend/\n- src/shared/`
-6. Send the prompt to the pane via tmux paste-buffer.
+
+7. Send the prompt to the pane via tmux paste-buffer.
 
 Keep a note of each worker's pane ID — you'll use them to health-check stuck workers.
 
-## Step 2 — Load tasks
+## Step 3 — Load tasks
 
 Call `load_tasks` with the full task list. Each task has:
 
@@ -61,7 +92,7 @@ There are two task modes. Choose one per session based on whether work is indepe
 
 ### Mode A: Standalone tasks (parallel, independent)
 
-Use when tasks are independent and can be worked in any order. No `pipeline` or `stage` fields on tasks.
+Use when tasks are independent and can be worked in any order. No `pipeline` or `stage` fields on tasks. Each worker has their own branch and worktree.
 
 ```json
 [
@@ -81,7 +112,7 @@ Use when tasks are independent and can be worked in any order. No `pipeline` or 
 
 ### Mode B: Pipeline tasks (sequential stages, results feed forward)
 
-Use when work must happen in order — e.g. build → review → ship. Tasks carry `pipeline` and `stage` fields so results are automatically attributed to the right stage.
+Use when work must happen in order — e.g. build → review → ship. All workers in the pipeline share one worktree and branch (`agent/<pipeline>`). Tasks carry `pipeline` and `stage` fields so results are automatically attributed to the right stage.
 
 ```json
 [
@@ -92,7 +123,7 @@ Use when work must happen in order — e.g. build → review → ship. Tasks car
 ]
 ```
 
-Load all tasks up front with `load_tasks` — workers will self-schedule by role, pulling only tasks that match their role from the queue. There is no need to load tasks stage by stage.
+Load all tasks up front with `load_tasks` — workers self-schedule by role, pulling only tasks that match their role from the queue.
 
 **Orchestrator sequence for a pipeline:**
 
@@ -110,7 +141,7 @@ Stages whose tasks have multiple `input` dependencies (e.g. `ship` depends on bo
 
 ---
 
-## Step 3 — Monitor
+## Step 4 — Monitor
 
 - Poll `get_status` to see worker states and which task each is on.
 - If a worker has been in "working" state too long, inspect it:
