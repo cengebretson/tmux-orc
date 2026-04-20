@@ -37,6 +37,7 @@ A small local Bun/TypeScript server. Exposes tools to all agents:
 - `get_status()` — queue depth + all worker states
 - `all_done()` — true when queue is empty and all registered workers have submitted
 - `stage_done(job, stage)` / `get_stage_results(job, stage)` — pipeline sequencing
+- `get_jobs_status(job?)` — stage breakdown for one job or all active jobs
 - `reset_job(job)` — clear stage state to rerun a pipeline for a new feature
 
 Workers are pull-based — they call `get_task()` themselves when ready,

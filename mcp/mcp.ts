@@ -10,6 +10,8 @@ import {
   getStatus,
   stageDone,
   getStageResults,
+  getJobStatus,
+  getAllJobsStatus,
   resetJob,
 } from "./state.js";
 
@@ -110,6 +112,16 @@ mcp.tool(
   { job: z.string(), stage: z.string() },
   async ({ job, stage }) => {
     return { content: [{ type: "text", text: JSON.stringify(getStageResults(job, stage), null, 2) }] };
+  }
+);
+
+mcp.tool(
+  "get_jobs_status",
+  "Returns stage breakdown for one job (if job is provided) or all active jobs",
+  { job: z.string().optional() },
+  async ({ job }) => {
+    const result = job ? getJobStatus(job) : getAllJobsStatus();
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 );
 

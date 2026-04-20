@@ -435,6 +435,7 @@ The MCP server runs as a local HTTP/SSE server (Bun/TypeScript) bundled inside t
 | `all_done()` | Orchestrator | True when queue is empty and all registered workers have submitted |
 | `stage_done(job, stage)` | Orchestrator | True when all tasks in a job stage are submitted |
 | `get_stage_results(job, stage)` | Orchestrator | All results from a completed job stage |
+| `get_jobs_status(job?)` | Orchestrator | Stage breakdown for one job or all active jobs |
 | `reset_job(job)` | Orchestrator | Clears job state so the same pipeline can rerun for a new feature |
 
 ### Tasks
