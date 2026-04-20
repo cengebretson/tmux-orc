@@ -132,6 +132,155 @@ Press `prefix+M` from inside your project directory. The plugin will:
 3. Monitor progress with `get_status` or `prefix+S`
 4. When `all_done` returns true, aggregate results with `get_result`
 
+## Example: Auth feature pipeline
+
+This walkthrough shows a full pipeline session: four workers, four stages, results feeding forward.
+
+### Project config
+
+`.claude/agents.json`:
+
+```json
+{
+  "workers": [
+    { "id": "bob",  "role": "frontend" },
+    { "id": "rex",  "role": "review"   },
+    { "id": "sam",  "role": "security" },
+    { "id": "git",  "role": "git"      }
+  ]
+}
+```
+
+### Step 1 — Start the session
+
+Press `prefix+M` from your project directory. The plugin starts the MCP server and opens a new `agents` window with the orchestrator:
+
+```
+┌──────────────────────────────────────────┐
+│  agents window                           │
+│                                          │
+│  > claude                                │
+│  [orchestrator reading prompt...]        │
+│                                          │
+└──────────────────────────────────────────┘
+```
+
+### Step 2 — Orchestrator spins up workers
+
+The orchestrator creates a pane per worker, copies each role file in as their `CLAUDE.md`, installs skills, and pastes each worker's bootstrap prompt:
+
+```
+┌─────────────────────┬────────────────────┐
+│  orchestrator       │  bob (frontend)    │
+│                     │  > claude          │
+│  "Spinning up       ├────────────────────┤
+│   workers..."       │  rex (review)      │
+│                     │  > claude          │
+│                     ├────────────────────┤
+│                     │  sam (security)    │
+│                     │  > claude          │
+└─────────────────────┴────────────────────┘
+```
+
+### Step 3 — Workers self-bootstrap
+
+Each worker independently runs its bootstrap loop:
+
+```
+register_worker(worker_id="bob", pane_id="%23")
+git worktree add .worktrees/bob -b agent/bob
+get_task(worker_id="bob", role="frontend")
+→ task p1: "Build auth login form"
+```
+
+### Step 4 — Orchestrator loads the pipeline
+
+```json
+load_tasks([
+  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "pipeline": "auth", "stage": "build",    "domain": "src/frontend/auth/" },
+  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "pipeline": "auth", "stage": "review"   },
+  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",             "pipeline": "auth", "stage": "security" },
+  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/bob into main",               "pipeline": "auth", "stage": "ship"     }
+])
+```
+
+All tasks are loaded at once. Workers self-schedule by role — bob picks up `p1` immediately since he already called `get_task`. Rex and Sam are waiting; their tasks are in the queue and will be claimed when they call `get_task`.
+
+### Step 5 — Build stage
+
+Bob works in `.worktrees/bob`. The orchestrator polls:
+
+```
+stage_done(pipeline="auth", stage="build") → false ... false ... true ✓
+```
+
+Bob submits his result:
+
+```
+submit_result(worker_id="bob", result="Login + signup forms complete. JWT stored in httpOnly cookie. Files: src/frontend/auth/Login.tsx, Signup.tsx, useAuth.ts")
+```
+
+### Step 6 — Review + security run in parallel
+
+Both `review` and `security` depend only on `build`, so they run simultaneously. Rex and Sam both call `get_task` and pick up their tasks. The orchestrator polls both:
+
+```
+stage_done("auth", "review")   → false ... true ✓
+stage_done("auth", "security") → false ... false ... true ✓
+```
+
+```
+┌─────────────────────┬────────────────────┐
+│  orchestrator       │  bob (frontend)    │
+│                     │  ✓ submitted       │
+│  "build done,       ├────────────────────┤
+│   review+security   │  rex (review)      │
+│   running..."       │  [reading diff...] │
+│                     ├────────────────────┤
+│                     │  sam (security)    │
+│                     │  [auditing auth..] │
+└─────────────────────┴────────────────────┘
+```
+
+### Step 7 — Ship stage
+
+Both stages done. Orchestrator reads their results and loads the final task with the findings baked into the description:
+
+```
+get_stage_results("auth", "review")   → { "rex": "LGTM, 2 minor comments..." }
+get_stage_results("auth", "security") → { "sam": "No critical issues. CSRF token missing on signup form." }
+```
+
+```json
+load_tasks([{
+  "id": "p4",
+  "role": "git",
+  "description": "Open PR: agent/bob → main. Review notes: LGTM, 2 minor comments. Security: add CSRF token to signup form before merging.",
+  "pipeline": "auth",
+  "stage": "ship"
+}])
+```
+
+The `git` worker picks it up, applies the CSRF fix, runs `/pr-description`, and opens the PR.
+
+### Step 8 — Done
+
+```
+stage_done("auth", "ship") → true
+```
+
+macOS notification fires: **"Worker git finished"** (Glass sound). Press `prefix+Ctrl+M` to remove worktrees and kill the MCP server.
+
+### Inspect anytime
+
+While the session runs, press `prefix+S` for the status menu or query the API directly:
+
+```bash
+curl localhost:7777/status                        # all worker states
+curl localhost:7777/pipeline/auth                 # stage breakdown
+curl localhost:7777/pipeline/auth/build/results   # bob's build output
+```
+
 ## Status Menu
 
 Press `prefix+S` to open the status menu. Worker entries are populated dynamically from the current session:
