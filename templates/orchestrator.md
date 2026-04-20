@@ -4,24 +4,18 @@ First: register the MCP server by running `claude mcp add agents {{mcp_url}}/sse
 
 ## Step 1 — Create worktrees
 
-Before spinning up workers, create the worktrees they will work in.
-
-**Pipeline sessions** — one shared worktree per pipeline, named after the pipeline:
+Before spinning up workers, create one worktree per job being started. All workers
+in the same job share one worktree and branch:
 
 ```bash
-git worktree add .worktrees/<pipeline> -b agent/<pipeline>
-# e.g. git worktree add .worktrees/auth -b agent/auth
+git worktree add .worktrees/<job> -b agent/<job>
+# e.g. git worktree add .worktrees/auth-login -b agent/auth-login
 ```
 
-All workers in the same pipeline share this worktree. This means a review worker
-immediately sees what the build worker committed, and the git worker opens a single
-PR from `agent/<pipeline>` → `main` with all the work on one branch.
-
-**Standalone sessions** — one worktree per worker, named after the worker:
+For standalone sessions (no pipeline), create one worktree per worker instead:
 
 ```bash
 git worktree add .worktrees/<id> -b agent/<id>
-# e.g. git worktree add .worktrees/bob -b agent/bob
 ```
 
 ## Step 2 — Spin up workers
@@ -50,7 +44,7 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    # project-level skills override built-ins
    [ -d .claude/skills ] && cp .claude/skills/*.md .worktrees/<worktree>/.claude/commands/
    ```
-   For pipeline workers `<worktree>` is the pipeline name. For standalone workers it is the worker id.
+   For job workers `<worktree>` is the job name. For standalone workers it is the worker id.
 
 5. Write the role file as `CLAUDE.md` into the worktree so it is automatically loaded:
    ```bash
@@ -61,9 +55,9 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    - `{{id}}` — worker id
    - `{{role}}` — worker role
    - `{{mcp_url}}` — the MCP server URL
-   - `{{worktree}}` — path to their worktree (e.g. `.worktrees/auth` or `.worktrees/bob`)
+   - `{{worktree}}` — path to their worktree (e.g. `.worktrees/auth-login` or `.worktrees/bob`)
    - `{{worktree_setup}}` — one of:
-     - Pipeline: `"Your worktree is already set up at {{worktree}} — do not create a new one."`
+     - Job/pipeline: `"Your worktree is already set up at {{worktree}} — do not create a new one."`
      - Standalone: `"Create your worktree: git worktree add {{worktree}} -b agent/{{id}}"`
    - `{{domain}}` — format as a bullet list. `domain` may be a string or an array:
      - String: `"src/frontend/"` → `- src/frontend/`
@@ -75,24 +69,46 @@ Keep a note of each worker's pane ID — you'll use them to health-check stuck w
 
 ## Step 3 — Load tasks
 
-Call `load_tasks` with the full task list. Each task has:
+### Starting a job from `agents.json`
 
+If `{{agents_config}}` contains a `jobs` section, read the job definition to generate
+tasks automatically. For a job named `{{job}}`:
+
+1. Look up the job in `jobs[]` by name — get its `pipeline`, `domain`, and `description`
+2. Look up the pipeline in `pipelines[]` by name — get its ordered `stages`
+3. For each stage, generate a task:
+   ```json
+   {
+     "id": "<job>-<stage>",
+     "role": "<stage.role>",
+     "description": "<derived from job description + stage context>",
+     "job": "<job name>",
+     "stage": "<stage name>"
+   }
+   ```
+   Do not include `domain` on job tasks — workers already know their domain from their
+   bootstrap prompt (which was generated from the job definition).
+
+4. Call `load_tasks` with all generated tasks.
+
+Example — job `auth-login` using pipeline `frontend`:
 ```json
-{
-  "id": "string",
-  "role": "backend | frontend | review | ...",
-  "description": "what the worker should do",
-  "domain": "src/backend/"
-}
+load_tasks([
+  { "id": "auth-login-build",    "role": "frontend", "job": "auth-login", "stage": "build",    "description": "Build the login flow with JWT token handling" },
+  { "id": "auth-login-review",   "role": "review",   "job": "auth-login", "stage": "review",   "description": "Review the auth-login frontend changes"       },
+  { "id": "auth-login-security", "role": "security", "job": "auth-login", "stage": "security", "description": "Security audit of the login flow"              },
+  { "id": "auth-login-ship",     "role": "git",      "job": "auth-login", "stage": "ship",     "description": "Open PR: agent/auth-login → main"              }
+])
 ```
 
-There are two task modes. Choose one per session based on whether work is independent or sequential.
+To start an additional job in the same session, create its worktree and call
+`load_tasks` again with the new job's tasks. Workers pick them up automatically.
 
 ---
 
 ### Mode A: Standalone tasks (parallel, independent)
 
-Use when tasks are independent and can be worked in any order. No `pipeline` or `stage` fields on tasks. Each worker has their own branch and worktree.
+Use when tasks are independent with no stage ordering. No `pipeline`, `job`, or `stage` fields.
 
 ```json
 [
@@ -103,46 +119,34 @@ Use when tasks are independent and can be worked in any order. No `pipeline` or 
 
 **Monitoring:**
 - Poll `get_status` to watch worker states.
-- Call `all_done(worker_count=N)` to check if all workers are finished.
+- Call `all_done()` to check if all registered workers have finished.
 - Read each result with `get_result(worker_id)` once they submit.
-
-**When done:** `all_done` returns `true` → gather results → aggregate and summarise.
 
 ---
 
 ### Mode B: Pipeline tasks (sequential stages, results feed forward)
 
-Use when work must happen in order — e.g. build → review → ship. All workers in the pipeline share one worktree and branch (`agent/<pipeline>`). Tasks carry `pipeline` and `stage` fields so results are automatically attributed to the right stage.
+Tasks carry `job` and `stage` fields. All workers in a job share one worktree
+(`agent/<job>`). Results are automatically attributed to the correct stage.
 
-```json
-[
-  { "id": "p1", "role": "frontend", "description": "Build login form", "pipeline": "auth", "stage": "build",    "domain": "src/frontend/" },
-  { "id": "p2", "role": "review",   "description": "Review auth PR",   "pipeline": "auth", "stage": "review"   },
-  { "id": "p3", "role": "security", "description": "Security audit",   "pipeline": "auth", "stage": "security" },
-  { "id": "p4", "role": "git",      "description": "Open PR",          "pipeline": "auth", "stage": "ship"     }
-]
-```
-
-Load all tasks up front with `load_tasks` — workers self-schedule by role, pulling only tasks that match their role from the queue.
-
-**Orchestrator sequence for a pipeline:**
+**Orchestrator sequence for a job:**
 
 ```
-for each stage in order:
-  1. poll stage_done(pipeline, stage) until true
-  2. read get_stage_results(pipeline, stage)   ← results keyed by worker id
-  3. use those results to build the next stage's tasks (if needed)
-  4. call load_tasks([...next stage tasks...])  ← only if building tasks dynamically
+for each stage in pipeline order:
+  1. poll stage_done(job, stage) until true
+  2. read get_stage_results(job, stage)   ← results keyed by worker id
+  3. pass relevant results as context into the next stage's task descriptions
 ```
 
-Stages whose tasks have multiple `input` dependencies (e.g. `ship` depends on both `review` and `security`) run their inputs in parallel — poll both until done, then proceed.
+Stages with parallel inputs (e.g. `ship` after both `review` and `security`) — poll
+both until done, then proceed.
 
-**When done:** `stage_done` returns `true` for the final stage → remove the worktree, leave the branch:
+**When the final stage is done** — remove the worktree, leave the branch for the open PR:
 
 ```bash
-git worktree remove .worktrees/<pipeline>
-# branch agent/<pipeline> stays alive for the open PR — delete it after merge:
-# git branch -d agent/<pipeline>
+git worktree remove .worktrees/<job>
+# branch agent/<job> stays alive until the PR is merged:
+# git branch -d agent/<job>
 ```
 
 ---
@@ -154,8 +158,8 @@ git worktree remove .worktrees/<pipeline>
   ```
   tmux capture-pane -t <pane_id> -p | tail -20
   ```
-- For pipeline sessions, use `get_stage_results(pipeline, stage)` to read completed stage output.
-- For standalone sessions, use `get_result(worker_id)` to read individual results.
+- Use `get_stage_results(job, stage)` to read completed stage output.
+- Use `get_result(worker_id)` for standalone results.
 
 ## Communication rules
 

@@ -17,13 +17,13 @@ import {
 } from "./state.js";
 
 const frontend: Task = { id: "1", role: "frontend", description: "Build login form", domain: "src/frontend/" };
-const backend: Task = { id: "2", role: "backend", description: "Build login endpoint", domain: "src/backend/" };
-const review: Task = { id: "3", role: "review", description: "Review auth PR" };
+const backend: Task  = { id: "2", role: "backend",  description: "Build login endpoint", domain: "src/backend/" };
+const review: Task   = { id: "3", role: "review",   description: "Review auth PR" };
 
-const pFrontend: Task = { ...frontend, id: "p1", pipeline: "fe-pipeline", job: "auth-login", stage: "build" };
-const pReview: Task = { ...review,   id: "p2", pipeline: "fe-pipeline", job: "auth-login", stage: "review" };
-const pSecurity: Task = { id: "p3", role: "security", description: "Security check", pipeline: "fe-pipeline", job: "auth-login", stage: "security" };
-const pGit: Task = { id: "p4", role: "git", description: "Create PR", pipeline: "fe-pipeline", job: "auth-login", stage: "ship" };
+const pFrontend: Task = { ...frontend, id: "p1", job: "auth-login", stage: "build" };
+const pReview: Task   = { ...review,   id: "p2", job: "auth-login", stage: "review" };
+const pSecurity: Task = { id: "p3", role: "security", description: "Security check", job: "auth-login", stage: "security" };
+const pGit: Task      = { id: "p4", role: "git",      description: "Create PR",      job: "auth-login", stage: "ship" };
 
 beforeEach(() => reset());
 
@@ -60,11 +60,6 @@ describe("loadTasks", () => {
     const status = getJobStatus("auth-login")!;
     expect(status.stages["build"].taskCount).toBe(1);
     expect(status.stages["review"].taskCount).toBe(1);
-  });
-
-  it("records the pipeline name on the job", () => {
-    loadTasks([pFrontend]);
-    expect(getJobStatus("auth-login")!.pipeline).toBe("fe-pipeline");
   });
 });
 
@@ -133,27 +128,30 @@ describe("submitResult / getResult", () => {
 });
 
 describe("allDone", () => {
-  it("returns false when tasks remain", () => {
+  it("returns false when no workers have registered", () => {
+    expect(allDone()).toBe(false);
+  });
+
+  it("returns false when tasks remain in the queue", () => {
     loadTasks([frontend]);
-    expect(allDone(2)).toBe(false);
+    expect(allDone()).toBe(false);
   });
 
-  it("returns false when queue is empty but not all workers submitted", () => {
-    submitResult("bob", "done");
-    expect(allDone(2)).toBe(false);
-  });
-
-  it("returns true when queue is empty and all workers submitted", () => {
-    submitResult("bob", "done");
-    submitResult("alice", "done");
-    expect(allDone(2)).toBe(true);
-  });
-
-  it("returns false mid-run with tasks and partial results", () => {
+  it("returns false when some workers are still working", () => {
     loadTasks([frontend, backend]);
     getTask("bob", "frontend");
+    getTask("alice", "backend");
     submitResult("bob", "done");
-    expect(allDone(2)).toBe(false);
+    expect(allDone()).toBe(false);
+  });
+
+  it("returns true when queue is empty and all registered workers have submitted", () => {
+    loadTasks([frontend, backend]);
+    getTask("bob", "frontend");
+    getTask("alice", "backend");
+    submitResult("bob", "done");
+    submitResult("alice", "done");
+    expect(allDone()).toBe(true);
   });
 });
 

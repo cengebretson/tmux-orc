@@ -60,16 +60,39 @@ git branch -d agent/bob
 ```
 
 ### Project Config
-`.claude/agents.json` (custom, not official Claude Code):
+`.claude/agents.json` (custom, not official Claude Code) defines three things:
+
+- **`workers`** — the agent pool: id and role
+- **`pipelines`** — reusable stage definitions: each stage names the role that handles it
+- **`jobs`** — named feature runs: each references a pipeline, domain, and description
+
 ```json
 {
   "workers": [
-    { "id": "bob-the-webdev", "role": "frontend", "domain": ["src/frontend/", "src/shared/"] },
-    { "id": "alice-the-api",  "role": "backend",  "domain": "src/backend/" }
+    { "id": "bob", "role": "frontend" },
+    { "id": "rex", "role": "review"   }
+  ],
+  "pipelines": [
+    {
+      "name": "frontend",
+      "stages": [
+        { "name": "build",  "role": "frontend" },
+        { "name": "review", "role": "review"   }
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "name": "auth-login",
+      "pipeline": "frontend",
+      "domain": "src/frontend/auth/login/",
+      "description": "Build the login flow with JWT token handling"
+    }
   ]
 }
 ```
-Orchestrator reads this to know domain boundaries when writing worker CLAUDE.md files.
+
+The orchestrator reads this to generate tasks, create worktrees, and dispatch workers.
 
 ### CLAUDE.md Files
 - Root `CLAUDE.md` — shared conventions, project structure, coordination protocol
@@ -81,11 +104,12 @@ Add to `.gitignore` to keep agent-generated files out of commits:
 ```
 
 ## Orchestrator Startup Sequence
-1. Read `.claude/agents.json` for worker roles/domains
+1. Read `.claude/agents.json` for workers, pipelines, and jobs
 2. Start MCP server as background process
-3. Spin up worker panes via `tmux send-keys` with role/domain in the initial prompt
-4. Load tasks into MCP server
-5. Workers self-bootstrap and call `get_task()` when ready
+3. Create a worktree per job being started (`git worktree add .worktrees/<job> -b agent/<job>`)
+4. Spin up worker panes, installing skills and role files into the job worktree
+5. Generate tasks from job definitions (pipeline stages + job domain/description) and call `load_tasks`
+6. Workers self-bootstrap, register, and call `get_task()` when ready
 
 ## Worker Bootstrap (first actions on startup)
 
@@ -281,7 +305,7 @@ A **pipeline** is a reusable definition of stages and roles. A **job** is a spec
 execution of a pipeline for a particular feature. The separation means the same
 pipeline can run twice in parallel for two different features simultaneously.
 
-`agents.json` defines the workforce and available pipeline definitions:
+`agents.json` defines the workforce, available pipeline definitions, and named jobs:
 
 ```json
 {
@@ -294,21 +318,35 @@ pipeline can run twice in parallel for two different features simultaneously.
   "pipelines": [
     {
       "name": "frontend",
-      "stages": ["build", "review", "security", "ship"]
+      "stages": [
+        { "name": "build",    "role": "frontend" },
+        { "name": "review",   "role": "review"   },
+        { "name": "security", "role": "security" },
+        { "name": "ship",     "role": "git"      }
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "name": "auth-login",
+      "pipeline": "frontend",
+      "domain": "src/frontend/auth/login/",
+      "description": "Build the login flow with JWT token handling"
+    },
+    {
+      "name": "auth-signup",
+      "pipeline": "frontend",
+      "domain": "src/frontend/auth/signup/",
+      "description": "Build the signup flow with email verification"
     }
   ]
 }
 ```
 
-The orchestrator creates jobs at runtime by loading tasks tagged with `pipeline`,
-`job`, and `stage`. Domain belongs to the job, not the pipeline definition:
-
-```json
-[
-  { "id": "1", "role": "frontend", "pipeline": "frontend", "job": "auth-login", "stage": "build", "domain": "src/frontend/auth/" },
-  { "id": "2", "role": "frontend", "pipeline": "frontend", "job": "dashboard",  "stage": "build", "domain": "src/frontend/dashboard/" }
-]
-```
+The orchestrator reads a job definition, looks up its pipeline's stages, and generates
+tasks automatically — one task per stage with the job's domain and description as context.
+Multiple jobs can run simultaneously; each gets its own worktree and independent stage
+state on the server.
 
 The orchestrator manages sequencing using two MCP tools:
 - `stage_done(job, stage)` — poll until a stage is complete

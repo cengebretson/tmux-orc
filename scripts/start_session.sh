@@ -6,6 +6,7 @@ MCP_PORT="${CLAUDE_AGENTS_MCP_PORT:-7777}"
 MCP_URL="http://localhost:${MCP_PORT}"
 AGENTS_CONFIG=".claude/agents.json"
 USE_CURRENT_PANE=false
+JOB_NAME=""
 
 # --- parse args ---
 
@@ -13,6 +14,7 @@ for arg in "$@"; do
   case "$arg" in
     --here) USE_CURRENT_PANE=true ;;
     --config=*) AGENTS_CONFIG="${arg#--config=}" ;;
+    --job=*) JOB_NAME="${arg#--job=}" ;;
     *) AGENTS_CONFIG="$arg" ;;
   esac
 done
@@ -59,6 +61,17 @@ for i in $(seq 0 $((worker_count - 1))); do
   fi
 done
 
+# --- validate job (if specified) ---
+
+if [[ -n "$JOB_NAME" ]]; then
+  job_exists=$(jq --arg name "$JOB_NAME" '.jobs // [] | map(select(.name == $name)) | length' "$AGENTS_CONFIG")
+  if [[ "$job_exists" -eq 0 ]]; then
+    echo "Error: job '$JOB_NAME' not found in $AGENTS_CONFIG" >&2
+    echo "  Available jobs: $(jq -r '.jobs // [] | map(.name) | join(", ")' "$AGENTS_CONFIG")" >&2
+    exit 1
+  fi
+fi
+
 # --- start MCP server ---
 
 "$PLUGIN_DIR/scripts/start_mcp.sh" "$MCP_PORT"
@@ -70,16 +83,19 @@ if [[ "$USE_CURRENT_PANE" == true ]]; then
   ORCH_PANE="$TMUX_PANE"
   tmux setenv MCP_URL "$MCP_URL"
   tmux setenv AGENTS_CONFIG "$AGENTS_CONFIG"
+  [[ -n "$JOB_NAME" ]] && tmux setenv JOB_NAME "$JOB_NAME"
 else
   ORCH_PANE=$(tmux new-window -P -F "#{pane_id}" -n "agents" \
-    -e "MCP_URL=$MCP_URL" -e "AGENTS_CONFIG=$AGENTS_CONFIG")
+    -e "MCP_URL=$MCP_URL" -e "AGENTS_CONFIG=$AGENTS_CONFIG" \
+    ${JOB_NAME:+-e "JOB_NAME=$JOB_NAME"})
 fi
 
 # --- send orchestrator prompt ---
 
 ORCH_PROMPT=$(cat "$PLUGIN_DIR/templates/orchestrator.md" \
   | sed "s|{{mcp_url}}|$MCP_URL|g" \
-  | sed "s|{{agents_config}}|$AGENTS_CONFIG|g")
+  | sed "s|{{agents_config}}|$AGENTS_CONFIG|g" \
+  | sed "s|{{job}}|$JOB_NAME|g")
 
 tmux send-keys -t "$ORCH_PANE" "claude" Enter
 
@@ -89,4 +105,4 @@ tmux paste-buffer -b "orch-prompt" -t "$ORCH_PANE"
 tmux send-keys -t "$ORCH_PANE" "" Enter
 tmux delete-buffer -b "orch-prompt" 2>/dev/null || true
 
-echo "Orchestrator started in pane $ORCH_PANE. MCP: $MCP_URL"
+echo "Orchestrator started in pane $ORCH_PANE. MCP: $MCP_URL${JOB_NAME:+, Job: $JOB_NAME}"

@@ -90,13 +90,35 @@ Create `.claude/agents.json` in your project repo:
   "pipelines": [
     {
       "name": "frontend",
-      "stages": ["build", "review", "security", "ship"]
+      "stages": [
+        { "name": "build",    "role": "frontend" },
+        { "name": "review",   "role": "review"   },
+        { "name": "security", "role": "security" },
+        { "name": "ship",     "role": "git"      }
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "name": "auth-login",
+      "pipeline": "frontend",
+      "domain": "src/frontend/auth/login/",
+      "description": "Build the login flow with JWT token handling"
+    },
+    {
+      "name": "auth-signup",
+      "pipeline": "frontend",
+      "domain": "src/frontend/auth/signup/",
+      "description": "Build the signup flow with email verification"
     }
   ]
 }
 ```
 
-Pipelines are reusable definitions — just a name and an ordered list of stages. Domain and feature-specific context live on the **job**, which the orchestrator creates at runtime by loading tasks tagged with `pipeline`, `job`, and `stage`.
+- **`pipelines`** — reusable stage definitions. Each stage names the role that handles it.
+- **`jobs`** — specific feature runs. Each job references a pipeline and provides the domain and description the orchestrator uses to generate tasks.
+
+To start a job, press `prefix+M` or pass `--job` to the start script — the orchestrator reads the job definition and generates tasks automatically.
 
 Add to `.gitignore`:
 
@@ -121,12 +143,20 @@ Press `prefix+M` from inside your project directory. The plugin will:
 2. Open a new window and launch the orchestrator Claude agent
 3. The orchestrator reads `agents.json`, creates worker panes, and sends each worker its bootstrap prompt
 
+To start a specific job immediately, pass `--job`:
+
+```bash
+~/.tmux/plugins/tmux-claude-agents/scripts/start_session.sh --job=auth-login
+```
+
+The orchestrator reads the job definition from `agents.json`, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks` — no manual task authoring needed.
+
 ### What the orchestrator does
 
 1. Registers the MCP server and loads tasks via `load_tasks`
 2. Workers spin up, create their own git worktrees, and start pulling tasks
 3. Monitor progress with `get_status` or `prefix+S`
-4. When `all_done` returns true, aggregate results with `get_result`
+4. When `all_done()` returns true, aggregate results with `get_result`
 
 ## Example: Auth feature pipeline
 
@@ -203,10 +233,10 @@ get_task(worker_id="bob", role="frontend")
 
 ```json
 load_tasks([
-  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "pipeline": "frontend", "job": "auth-login", "stage": "build",    "domain": "src/frontend/auth/" },
-  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "pipeline": "frontend", "job": "auth-login", "stage": "review"   },
-  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",             "pipeline": "frontend", "job": "auth-login", "stage": "security" },
-  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/auth-login into main",        "pipeline": "frontend", "job": "auth-login", "stage": "ship"     }
+  { "id": "p1", "role": "frontend", "description": "Build login + signup forms with JWT token handling", "job": "auth-login", "stage": "build"    },
+  { "id": "p2", "role": "review",   "description": "Review the auth frontend changes",                   "job": "auth-login", "stage": "review"   },
+  { "id": "p3", "role": "security", "description": "Audit the auth flow for vulnerabilities",            "job": "auth-login", "stage": "security" },
+  { "id": "p4", "role": "git",      "description": "Open a PR merging agent/auth-login into main",       "job": "auth-login", "stage": "ship"     }
 ])
 ```
 
@@ -262,7 +292,6 @@ load_tasks([{
   "id": "p4",
   "role": "git",
   "description": "Open PR: agent/auth-login → main. Review notes: LGTM, 2 minor comments. Security: add CSRF token to signup form before merging.",
-  "pipeline": "frontend",
   "job": "auth-login",
   "stage": "ship"
 }])
@@ -328,7 +357,7 @@ The MCP server runs as a local HTTP/SSE server (Bun/TypeScript) bundled inside t
 | `submit_result(worker_id, result)` | Worker | Posts completed output |
 | `get_result(worker_id)` | Orchestrator | Reads a worker's result |
 | `get_status()` | Orchestrator | Queue depth + all worker states |
-| `all_done(worker_count)` | Orchestrator | True when all workers have submitted |
+| `all_done()` | Orchestrator | True when queue is empty and all registered workers have submitted |
 | `stage_done(job, stage)` | Orchestrator | True when all tasks in a job stage are submitted |
 | `get_stage_results(job, stage)` | Orchestrator | All results from a completed job stage |
 | `reset_job(job)` | Orchestrator | Clears job state so the same pipeline can rerun for a new feature |
@@ -363,24 +392,24 @@ There are two ways to use tasks, chosen per session:
 ]
 ```
 
-**Pipeline** — tasks belong to named stages that run in sequence. Results from one stage feed the next. Tasks carry `pipeline` (the reusable definition name), `job` (this specific feature run), and `stage` fields. Result attribution is automatic.
+**Pipeline** — tasks belong to named stages that run in sequence. Results from one stage feed the next. Tasks carry `job` (the specific feature run) and `stage`. Result attribution is automatic. Workers know their domain from their bootstrap prompt — no need to repeat it on every task.
 
 ```json
 [
-  { "id": "p1", "role": "frontend", "description": "Build login form", "pipeline": "frontend", "job": "auth-login", "stage": "build"    },
-  { "id": "p2", "role": "review",   "description": "Review auth PR",   "pipeline": "frontend", "job": "auth-login", "stage": "review"   },
-  { "id": "p3", "role": "security", "description": "Security audit",   "pipeline": "frontend", "job": "auth-login", "stage": "security" },
-  { "id": "p4", "role": "git",      "description": "Open PR",          "pipeline": "frontend", "job": "auth-login", "stage": "ship"     }
+  { "id": "p1", "role": "frontend", "description": "Build login form", "job": "auth-login", "stage": "build"    },
+  { "id": "p2", "role": "review",   "description": "Review auth PR",   "job": "auth-login", "stage": "review"   },
+  { "id": "p3", "role": "security", "description": "Security audit",   "job": "auth-login", "stage": "security" },
+  { "id": "p4", "role": "git",      "description": "Open PR",          "job": "auth-login", "stage": "ship"     }
 ]
 ```
 
 Orchestrator polls `stage_done(job, stage)`, then reads `get_stage_results(job, stage)` to build the next stage's tasks. Stages with multiple inputs (e.g. `ship` after both `review` and `security`) run their inputs in parallel and wait for both.
 
-Two jobs can run the same pipeline simultaneously with different `job` names — each gets its own worktree and independent stage state:
+Two jobs can run the same pipeline simultaneously — each gets its own worktree and independent stage state:
 
 ```json
-{ "pipeline": "frontend", "job": "auth-login",  "stage": "build", ... }
-{ "pipeline": "frontend", "job": "dashboard",   "stage": "build", ... }
+{ "job": "auth-login", "stage": "build", ... }
+{ "job": "dashboard",  "stage": "build", ... }
 ```
 
 ### Skills and plugins

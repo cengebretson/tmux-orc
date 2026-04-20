@@ -4,9 +4,8 @@ export interface Task {
   id: string;
   role: TaskRole;
   description: string;
-  domain?: string | string[];
-  pipeline?: string;  // pipeline definition name (label only)
-  job?: string;       // specific execution instance — coordination key
+  domain?: string | string[];  // optional; used by standalone tasks
+  job?: string;                // specific execution instance — coordination key
   stage?: string;
 }
 
@@ -31,7 +30,6 @@ export interface StageInfo {
 }
 
 export interface JobStatus {
-  pipeline?: string;
   stages: Record<string, StageInfo>;
 }
 
@@ -39,7 +37,6 @@ const taskQueue: Task[] = [];
 const results = new Map<string, string>();
 const workerState = new Map<string, WorkerState>();
 const jobState = new Map<string, Map<string, StageState>>();
-const jobPipeline = new Map<string, string>(); // job -> pipeline name
 
 function getOrCreateStage(job: string, stage: string): StageState {
   if (!jobState.has(job)) jobState.set(job, new Map());
@@ -60,7 +57,6 @@ export function loadTasks(tasks: Task[]): number {
     if (task.job && task.stage) {
       const s = getOrCreateStage(task.job, task.stage);
       s.taskCount++;
-      if (task.pipeline) jobPipeline.set(task.job, task.pipeline);
     }
   }
   return tasks.length;
@@ -119,7 +115,7 @@ export function getJobStatus(job: string): JobStatus | null {
       results: Object.fromEntries(s.results),
     };
   }
-  return { pipeline: jobPipeline.get(job), stages: out };
+  return { stages: out };
 }
 
 export function getAllJobsStatus(): Record<string, JobStatus> {
@@ -130,8 +126,10 @@ export function getAllJobsStatus(): Record<string, JobStatus> {
   return out;
 }
 
-export function allDone(workerCount: number): boolean {
-  return taskQueue.length === 0 && results.size >= workerCount;
+export function allDone(): boolean {
+  if (workerState.size === 0) return false;
+  return taskQueue.length === 0 &&
+    Array.from(workerState.values()).every(w => w.status === "submitted");
 }
 
 export interface Status {
@@ -157,7 +155,6 @@ export function getAllResults(): Record<string, string> {
 export function resetJob(job: string): boolean {
   if (!jobState.has(job)) return false;
   jobState.delete(job);
-  jobPipeline.delete(job);
   return true;
 }
 
@@ -166,5 +163,4 @@ export function reset(): void {
   results.clear();
   workerState.clear();
   jobState.clear();
-  jobPipeline.clear();
 }

@@ -18,7 +18,6 @@ export const taskSchema = z.object({
   role: z.string(),
   description: z.string(),
   domain: z.union([z.string(), z.array(z.string())]).optional(),
-  pipeline: z.string().optional(),
   job: z.string().optional(),
   stage: z.string().optional(),
 });
@@ -82,10 +81,10 @@ mcp.tool(
 
 mcp.tool(
   "all_done",
-  "Returns true when the task queue is empty and all workers have submitted results",
-  { worker_count: z.number() },
-  async ({ worker_count }) => {
-    return { content: [{ type: "text", text: String(allDone(worker_count)) }] };
+  "Returns true when the task queue is empty and all registered workers have submitted results",
+  {},
+  async () => {
+    return { content: [{ type: "text", text: String(allDone()) }] };
   }
 );
 

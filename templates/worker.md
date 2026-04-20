@@ -24,7 +24,7 @@ Then follow this loop:
 2. Call `get_task(worker_id="{{id}}", role="{{role}}")` to pull your first assignment.
 3. Do the work inside `{{worktree}}`, staying within your domain paths.
 4. Call `submit_result(worker_id="{{id}}", result="<summary of what you did>")` when done.
-5. Go to step 2. When `get_task` returns NO_TASKS, your work is complete.
+5. When `get_task` returns NO_TASKS, wait 30 seconds and go to step 2. Only stop when the orchestrator tells you the session is over.
 
 ## Communication rules
 
