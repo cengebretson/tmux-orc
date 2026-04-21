@@ -70,9 +70,10 @@ cd ~/.tmux/plugins/tmux-claude-agents/mcp && bun install
 Add to `tmux.conf`:
 
 ```tmux
-set -g @claude-agents-mcp-port   7777   # default
-set -g @claude-agents-notify     true   # macOS notifications (Glass = done, Basso = blocked)
-set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if bun is elsewhere
+set -g @claude-agents-mcp-port   7777                    # default
+set -g @claude-agents-notify     true                    # macOS notifications (Glass = done, Basso = blocked)
+set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/
 ```
 
 When `@claude-agents-notify` is enabled, the MCP server fires a notification when a worker finishes or calls `report_blocked`. Two distinct sounds let you know what needs attention without looking at the screen:
