@@ -77,7 +77,7 @@ set -g @claude-agents-notify     true   # macOS notifications (Glass = done, Bas
 set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
 ```
 
-When `@claude-agents-notify` is enabled, workers call `notify.sh` at the end of each task. Two distinct sounds let you know what needs attention without looking at the screen:
+When `@claude-agents-notify` is enabled, the MCP server fires a notification when a worker finishes or calls `report_blocked`. Two distinct sounds let you know what needs attention without looking at the screen:
 - **Glass** — worker finished all tasks
 - **Basso** — worker is blocked and needs intervention
 
@@ -186,11 +186,11 @@ To rerun a completed job, move it back from `done/` first.
 
 ### Validating before you start
 
-Run `validate.sh` to check your config before starting a session:
+Run `cli.ts validate` to check your config before starting a session:
 
 ```bash
-~/.tmux/plugins/tmux-claude-agents/scripts/validate.sh
-~/.tmux/plugins/tmux-claude-agents/scripts/validate.sh --job=auth-login
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate --job=auth-login
 ```
 
 It checks:
@@ -202,7 +202,7 @@ It checks:
 
 Plugins listed in role files (`## Plugins`) produce warnings — they can't be verified from the shell, so you'll need to confirm they're enabled in Claude Code settings manually.
 
-`start_session.sh` runs validation automatically before starting. If validation fails the session won't start.
+`cli.ts start` runs validation automatically before starting. If validation fails the session won't start.
 
 Add to `.gitignore`:
 
@@ -237,7 +237,7 @@ The orchestrator reads the job file, creates the worktree, generates tasks from 
 To pre-load a job at cold-start, pass `--job`:
 
 ```bash
-~/.tmux/plugins/tmux-claude-agents/scripts/start_session.sh --job=auth-login
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts start --job=auth-login
 ```
 
 ### What the orchestrator does
@@ -588,7 +588,7 @@ You never need to touch the plugin folder. Put files in `.claude/` and they auto
 
 **Overriding a built-in skill** — create `.claude/skills/pr-description.md` to replace the plugin's default with a project-specific version.
 
-`validate.sh` checks all roles and skills referenced in role files before the session starts, so missing files are caught early.
+`cli.ts validate` checks all roles and skills referenced in role files before the session starts, so missing files are caught early.
 
 ### Inspection Endpoints
 
@@ -613,15 +613,12 @@ tmux-claude-agents/
     server.ts                # HTTP entry point, routes MCP + inspection traffic
     mcp.ts                   # MCP server instance + tool registrations
     routes.ts                # inspection GET handlers
+    types.ts                 # shared TypeScript interfaces
     state.ts                 # task queue, worker state, results (in-memory)
     state.test.ts            # unit tests (bun test)
     package.json
-  scripts/
-    start_session.sh         # starts MCP server, creates orchestrator pane
-    start_mcp.sh             # launches bun server, guards double-start via PID
-    menu.sh                  # tmux display-menu for status inspection
-    cleanup.sh               # kills MCP server, removes worktrees + branches
-    notify.sh                # macOS notifications (Glass = done, Basso = blocked)
+  cli.ts                     # primary CLI: validate, start, start-mcp, watch, menu, cleanup, notify
+  scripts/                   # bash backups (not invoked directly)
   templates/
     orchestrator.md          # bootstrap prompt for the orchestrator agent
     worker.md                # bootstrap prompt for each worker agent
