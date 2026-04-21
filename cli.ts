@@ -591,6 +591,41 @@ async function init(): Promise<void> {
   console.log("Next: bun run cli.ts validate");
 }
 
+// --- launch ---
+// Used by tmux keybinds. Reads available job files at runtime and either opens a
+// popup to start directly (0-1 jobs) or shows a menu to pick a job (2+ jobs).
+
+async function launch(args: string[]): Promise<void> {
+  const useCurrentPane = args.includes("--here");
+  const hereFlag = useCurrentPane ? " --here" : "";
+
+  const jobs = existsSync(".claude/jobs")
+    ? readdirSync(".claude/jobs").filter(f => f.endsWith(".md")).map(f => basename(f, ".md"))
+    : [];
+
+  // Self-reference: paths come from the running process so they're always correct
+  const self = `${process.execPath} run ${import.meta.path}`;
+  const pause = "; echo; read -r -s -n1";
+
+  if (jobs.length <= 1) {
+    const jobFlag = jobs.length === 1 ? ` --job=${jobs[0]}` : "";
+    await tmux("display-popup", "-E", "-w", "120", "-h", "30",
+      `${self} start${jobFlag}${hereFlag}${pause}`);
+    return;
+  }
+
+  // Multiple jobs — show a picker menu. Each item opens a popup with the chosen job.
+  const runPopup = (jobFlag: string) =>
+    `run-shell 'tmux display-popup -E -w 120 -h 30 "${self} start${jobFlag}${hereFlag}${pause}"'`;
+
+  const menuArgs = ["-T", " Start job "];
+  menuArgs.push("(orchestrator only)", "", runPopup(""));
+  for (const job of jobs) {
+    menuArgs.push(job, "", runPopup(` --job=${job}`));
+  }
+  await tmux("display-menu", ...menuArgs);
+}
+
 // --- dispatch ---
 
 if (!import.meta.main) { /* imported as module — skip dispatch */ }
@@ -601,6 +636,7 @@ const [,, subcmd, ...rest] = process.argv;
 switch (subcmd) {
   case "init":      await init(); break;
   case "validate":  process.exit((await validate(rest)) ? 0 : 1);
+  case "launch":    await launch(rest); break;
   case "start":     await start(rest); break;
   case "start-mcp": await startMcp(rest); break;
   case "watch":     await watch(rest); break;
@@ -608,7 +644,7 @@ switch (subcmd) {
   case "cleanup":   await cleanup(); break;
   case "notify":    await notify(rest); break;
   default:
-    console.error("Usage: cli.ts <init|validate|start|start-mcp|watch|menu|cleanup|notify> [args...]");
+    console.error("Usage: cli.ts <init|validate|launch|start|start-mcp|watch|menu|cleanup|notify> [args...]");
     process.exit(1);
 }
 
