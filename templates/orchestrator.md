@@ -45,9 +45,7 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    cp <role_file> .worktrees/<worktree>/CLAUDE.md
    ```
 
-6. Check for a knowledge file at `.claude/knowledge/<role>.md`. If it exists, append its contents to the task description so the worker has institutional memory from past sessions.
-
-7. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
+6. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
    - `{{id}}` — worker id
    - `{{role}}` — worker role
    - `{{mcp_url}}` — the MCP server URL

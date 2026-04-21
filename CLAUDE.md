@@ -46,7 +46,7 @@ Tools exposed to agents:
 | `get_jobs_status(job?)` | Orchestrator | Stage breakdown for one or all jobs |
 | `reset_job(job)` | Orchestrator | Clear stage state to rerun a job |
 | `report_blocked(worker_id, reason)` | Worker | Signal stuck state — fires Basso notification |
-| `resolve_block(worker_id, resolution)` | Orchestrator | Unblock worker and save resolution to `.claude/knowledge/<role>.md` |
+| `resolve_block(worker_id, resolution)` | Worker | Unblock self and append resolution to `## Lessons Learned` in `.claude/roles/<role>.md` |
 
 HTTP inspection endpoints (curl-friendly): `/status`, `/queue`, `/results`, `/result/:worker`, `/jobs`, `/job/:name`, `/job/:name/:stage/results`
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
@@ -388,7 +388,7 @@ describe("reportBlocked / resolveBlock", () => {
     expect(allDone()).toBe(false);
   });
 
-  it("resolveBlock writes a knowledge entry to .claude/knowledge/<role>.md", () => {
+  it("resolveBlock appends a Lessons Learned entry to .claude/roles/<role>.md", () => {
     const origCwd = process.cwd();
     const tmpDir = mkdtempSync(join(tmpdir(), "state-test-"));
     process.chdir(tmpDir);
@@ -398,7 +398,8 @@ describe("reportBlocked / resolveBlock", () => {
       reportBlocked("bob", "missing env var VITE_API_URL");
       resolveBlock("bob", "document required env vars in .env.example before starting");
 
-      const content = readFileSync(".claude/knowledge/frontend.md", "utf8");
+      const content = readFileSync(".claude/roles/frontend.md", "utf8");
+      expect(content).toContain("## Lessons Learned");
       expect(content).toContain("missing env var VITE_API_URL");
       expect(content).toContain("document required env vars");
       expect(content).toContain("job: auth-login");
@@ -409,7 +410,51 @@ describe("reportBlocked / resolveBlock", () => {
     }
   });
 
-  it("resolveBlock does nothing when worker is unknown", () => {
-    expect(() => resolveBlock("nobody", "resolution")).not.toThrow();
+  it("resolveBlock adds Lessons Learned section to existing role file", () => {
+    const origCwd = process.cwd();
+    const tmpDir = mkdtempSync(join(tmpdir(), "state-test-"));
+    process.chdir(tmpDir);
+    try {
+      mkdirSync(".claude/roles", { recursive: true });
+      writeFileSync(".claude/roles/frontend.md", "# Frontend\n\n## Skills\n- `/component-review`\n");
+
+      loadTasks([pFrontend]);
+      getTask("bob", "frontend");
+      reportBlocked("bob", "stuck");
+      resolveBlock("bob", "fixed it");
+
+      const content = readFileSync(".claude/roles/frontend.md", "utf8");
+      expect(content).toContain("## Skills");
+      expect(content).toContain("## Lessons Learned");
+      expect(content).toContain("fixed it");
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolveBlock returns unblocked:true saved:true on success", () => {
+    const origCwd = process.cwd();
+    const tmpDir = mkdtempSync(join(tmpdir(), "state-test-"));
+    process.chdir(tmpDir);
+    try {
+      loadTasks([pFrontend]);
+      getTask("bob", "frontend");
+      reportBlocked("bob", "stuck");
+      expect(resolveBlock("bob", "fixed")).toEqual({ unblocked: true, saved: true });
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolveBlock returns unblocked:false saved:false for unknown worker", () => {
+    expect(resolveBlock("nobody", "resolution")).toEqual({ unblocked: false, saved: false });
+  });
+
+  it("resolveBlock returns unblocked:true saved:false when currentTask is missing", () => {
+    registerWorker("bob", "%1");
+    reportBlocked("bob", "stuck");
+    expect(resolveBlock("bob", "fixed")).toEqual({ unblocked: true, saved: false });
   });
 });

@@ -1,4 +1,4 @@
-import { existsSync, statSync, appendFileSync, mkdirSync } from "fs";
+import { existsSync, statSync, readFileSync, writeFileSync, appendFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import type { Task, StageStatus, StageInfo, JobStatus, Status } from "./types.js";
 export type { Task, StageStatus, StageInfo, JobStatus, Status };
@@ -12,7 +12,7 @@ function findProjectRoot(): string {
     if (parent === dir) break;
     dir = parent;
   }
-  console.warn("WARNING: no .git directory found — knowledge files written relative to cwd");
+  console.warn("WARNING: no .git directory found — role files written relative to cwd");
   return process.cwd();
 }
 
@@ -160,24 +160,39 @@ export function reportBlocked(workerId: string, reason: string): void {
   workerState.set(workerId, { ...existing, status: "blocked", blockedReason: reason });
 }
 
-export function resolveBlock(workerId: string, resolution: string): void {
+export function resolveBlock(workerId: string, resolution: string): { unblocked: boolean; saved: boolean } {
   const existing = workerState.get(workerId);
-  if (!existing) return;
+  if (!existing) return { unblocked: false, saved: false };
   workerState.set(workerId, { ...existing, status: "working", blockedReason: undefined });
 
   const task = existing.currentTask;
-  if (task) {
-    const dir = join(findProjectRoot(), ".claude/knowledge");
+  if (!task) {
+    console.warn(`resolveBlock: worker '${workerId}' has no current task — resolution not saved to role file`);
+    return { unblocked: true, saved: false };
+  }
+
+  {
+    const roleFile = join(findProjectRoot(), `.claude/roles/${task.role}.md`);
     const date = new Date().toISOString().slice(0, 10);
     const entry = [
       ``,
-      `## ${date} | job: ${task.job} | stage: ${task.stage}`,
+      `### ${date} | job: ${task.job} | stage: ${task.stage}`,
       `**Blocked:** ${existing.blockedReason ?? "(no reason given)"}`,
       `**Resolution:** ${resolution}`,
       ``,
     ].join("\n");
-    mkdirSync(dir, { recursive: true });
-    appendFileSync(`${dir}/${task.role}.md`, entry);
+    mkdirSync(join(findProjectRoot(), ".claude/roles"), { recursive: true });
+    if (existsSync(roleFile)) {
+      const content = readFileSync(roleFile, "utf8");
+      if (content.includes("## Lessons Learned")) {
+        appendFileSync(roleFile, entry);
+      } else {
+        appendFileSync(roleFile, `\n## Lessons Learned\n${entry}`);
+      }
+    } else {
+      writeFileSync(roleFile, `# ${task.role}\n\n## Lessons Learned\n${entry}`);
+    }
+    return { unblocked: true, saved: true };
   }
 }
 

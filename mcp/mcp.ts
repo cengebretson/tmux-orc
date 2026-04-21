@@ -152,11 +152,15 @@ mcp.tool(
 
 mcp.tool(
   "resolve_block",
-  "Orchestrator unblocks a worker after human intervention and saves the resolution to .claude/knowledge/<role>.md",
+  "Worker calls this after human intervention — saves the resolution to the ## Lessons Learned section of .claude/roles/<role>.md",
   { worker_id: z.string(), resolution: z.string() },
   async ({ worker_id, resolution }) => {
-    resolveBlock(worker_id, resolution);
-    return { content: [{ type: "text", text: `Worker '${worker_id}' unblocked. Resolution saved to .claude/knowledge/.` }] };
+    const result = resolveBlock(worker_id, resolution);
+    if (!result.unblocked) {
+      return { content: [{ type: "text", text: `No worker '${worker_id}' found.` }] };
+    }
+    const saved = result.saved ? " Resolution saved to .claude/roles/." : " Warning: no current task found — resolution not saved.";
+    return { content: [{ type: "text", text: `Worker '${worker_id}' unblocked.${saved}` }] };
   }
 );
 

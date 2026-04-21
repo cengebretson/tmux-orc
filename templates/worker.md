@@ -47,4 +47,4 @@ Once the issue is resolved, call:
 resolve_block(worker_id="{{id}}", resolution="<description of what was done to fix it>")
 ```
 
-Then resume your task. This saves the resolution to the project knowledge base so future runs avoid the same block.
+Then resume your task. This appends the resolution to the `## Lessons Learned` section of your role file so future workers avoid the same block.
