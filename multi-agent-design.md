@@ -136,7 +136,9 @@ tasks automatically — one per stage with the markdown body as context.
 
 Add to `.gitignore`:
 ```
+node_modules/
 .worktrees/
+.mcp.json
 ```
 
 ## Orchestrator Startup Sequence
@@ -201,14 +203,13 @@ directly to each other. This prevents broadcast storms and keeps coordination pr
   relevant parts as a new task to B
 - n workers means n communication channels (to orchestrator), not n² between workers
 
-## macOS Notifications
-Workers alert you when done or blocked:
-```bash
-osascript -e 'display notification "Worker bob finished" with title "Claude Agent" sound name "Glass"'
-osascript -e 'display notification "Worker bob is blocked" with title "Claude Agent" sound name "Basso"'
-```
-Different sounds = know what needs attention without looking. Configure tmux to
-highlight panes on bell:
+## Notifications
+Workers alert you when done or blocked via `node-notifier` (cross-platform). Two distinct sounds:
+- **Glass** — worker finished
+- **Basso** — worker is blocked and needs intervention
+
+Enabled by default on macOS. Set `@claude-agents-notify false` in `tmux.conf` to disable.
+Configure tmux to also highlight panes on bell:
 ```tmux
 set -g bell-action any
 set -g visual-bell on
@@ -222,7 +223,7 @@ Bun — no separate npm package or publish step.
 ```
 tmux-claude-agents/
   tmux-claude-agents.tmux    # plugin entry point, registers keybinds
-  cli.ts                     # primary CLI: validate, start, start-mcp, watch, menu, cleanup, notify
+  cli.ts                     # primary CLI: init, validate, launch, new-job, start, start-mcp, watch, menu, cleanup, notify
   mcp/
     server.ts                # HTTP entry point
     mcp.ts                   # MCP tool registrations
@@ -246,17 +247,18 @@ set -g @plugin 'yourname/tmux-claude-agents'
 
 Configure in `tmux.conf`:
 ```tmux
-set -g @claude-agents-mcp-port   7777   # default
-set -g @claude-agents-notify     true   # macOS notifications (Glass = done, Basso = blocked)
-set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if bun is elsewhere
+set -g @claude-agents-mcp-port   7777                    # default
+set -g @claude-agents-notify     true                    # cross-platform notifications (default: true)
+set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/
 ```
 
-Keybinds:
+Keybinds (single entry point):
 ```
-prefix+M        start session (new window)
-prefix+Alt+M    start in current pane
-prefix+S        status menu
-prefix+Ctrl+M   cleanup
+prefix+O    open control panel — context-aware menu:
+              uninitialized → Init project
+              initialized, no session → Start session / Start here / New job… / Validate
+              session running → Status / Queue / Results / Jobs / New job… / Workers / Cleanup…
 ```
 
 ## MCP Transport: HTTP/SSE
@@ -285,6 +287,7 @@ Workers have access to all skills — no per-worker filtering. Each role file's
 ## Open Questions / Next Steps
 - [ ] Add tmux-logging plugin for full output capture
 - [ ] Test with a small real task (e.g. auth feature with React + FastAPI)
+- [ ] **Web dashboard** — serve a single zero-dependency HTML file from the existing Bun HTTP server (new `/` route in `routes.ts`) with vanilla JS polling the existing `/status`, `/jobs`, `/queue`, and `/results` endpoints. Auto-refreshes every few seconds. No new npm deps — the MCP server already runs an HTTP server on port 7777, so the dashboard is just a new route returning a self-contained HTML string. Would give a real-time browser view of all workers, stages, and results without requiring the tmux panes to be visible.
 
 ## Known Issues / Follow-up
 
