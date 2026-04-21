@@ -182,7 +182,7 @@ describe("allDone", () => {
 describe("getStatus", () => {
   it("returns empty status initially", () => {
     loadTasks([pFrontend]);
-    expect(getStatus()).toEqual({ queue: 1, workers: {} });
+    expect(getStatus()).toEqual({ queue: 1, allDone: false, workers: {} });
   });
 
   it("reflects working and submitted states together", () => {

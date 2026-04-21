@@ -181,6 +181,15 @@ export async function validate(args: string[]): Promise<boolean> {
 
   console.log(`Checking ${configPath}...`);
 
+  // Check claude CLI is available
+  const claudeCheck = Bun.spawn(["which", "claude"], { stdout: "pipe", stderr: "pipe" });
+  await claudeCheck.exited;
+  if (claudeCheck.exitCode !== 0) {
+    printWarn("'claude' not found in PATH — install Claude Code and ensure it is on your PATH"); warnings++;
+  } else {
+    printOk("claude CLI found");
+  }
+
   if (!existsSync(configPath)) {
     printErr(`agents.json not found: ${configPath}`);
     return false;
@@ -369,6 +378,7 @@ async function start(args: string[]): Promise<void> {
     if (jobFile) envArgs.push("-e", `JOB_FILE=${jobFile}`);
     orchPane = await tmuxOut("new-window", "-P", "-F", "#{pane_id}", "-n", "agents", ...envArgs);
   }
+  await tmux("select-pane", "-t", orchPane, "-T", "orchestrator");
 
   // Spawn workers when a job is given — CLI handles worktree + pane creation
   let workersSpawned = false;
@@ -404,6 +414,7 @@ async function start(args: string[]): Promise<void> {
         });
         const pane = await tmuxOut("split-window", "-v", "-t", prevPane, "-P", "-F", "#{pane_id}",
           "-e", `MCP_URL=${mcpUrl}`);
+        await tmux("select-pane", "-t", pane, "-T", `worker-${worker.id}`);
         prevPane = pane;
         await tmux("send-keys", "-t", pane, "claude", "Enter");
         await Bun.sleep(2000);
@@ -453,6 +464,23 @@ async function start(args: string[]): Promise<void> {
   }
 
   console.log(`Orchestrator started in pane ${orchPane}. MCP: ${mcpUrl}${jobName ? `, Job: ${jobName}` : ""}`);
+
+  // Background poller — notify when all jobs complete
+  if (jobName) {
+    (async () => {
+      await Bun.sleep(10000);
+      while (true) {
+        try {
+          const res = await fetch(`${mcpUrl}/status`, { signal: AbortSignal.timeout(2000) });
+          if (res.ok) {
+            const data = await res.json() as { allDone?: boolean };
+            if (data.allDone) { notifyFn(jobName, "done"); break; }
+          }
+        } catch { break; }
+        await Bun.sleep(10000);
+      }
+    })();
+  }
 }
 
 // --- watch ---
@@ -617,7 +645,10 @@ async function init(): Promise<void> {
   console.log("  .claude/jobs/example-feature.md  ← sample job file to adapt");
   console.log("  .claude/roles/                   ← project-level role overrides (optional)");
   console.log("  .claude/skills/                  ← project-level skill overrides (optional)\n");
-  console.log("Next: bun run cli.ts validate");
+  console.log("Next steps:");
+  console.log("  1. Edit .claude/agents.json to define your workers and pipelines");
+  console.log("  2. Press prefix+O → New job… to create your first job");
+  console.log("  3. Press prefix+O → Start session to launch the orchestrator");
 }
 
 // --- launch ---
@@ -690,7 +721,14 @@ async function newJob(): Promise<void> {
       return;
     }
 
-    const start = (await ask("Start now? [Y/n] ")).trim().toLowerCase();
+    console.log("");
+    if (!await validate([`--job=${jobName}`])) {
+      console.error("\nFix the errors above before starting.");
+      rl.close();
+      return;
+    }
+
+    const start = (await ask("\nStart now? [Y/n] ")).trim().toLowerCase();
     rl.close();
     if (start !== "n") {
       const proc = Bun.spawn(

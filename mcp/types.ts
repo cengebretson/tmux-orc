@@ -22,6 +22,7 @@ export interface JobStatus {
 
 export interface Status {
   queue: number;
+  allDone: boolean;
   workers: Record<string, {
     status: "idle" | "working" | "submitted" | "blocked";
     paneId?: string;

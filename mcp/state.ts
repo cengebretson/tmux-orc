@@ -137,6 +137,7 @@ export function allDone(): boolean {
 export function getStatus(): Status {
   return {
     queue: taskQueue.length,
+    allDone: allDone(),
     workers: Object.fromEntries(workerState),
   };
 }
