@@ -12,12 +12,15 @@ WATCH_JOBS=$(tmux show-option -gqv "@claude-agents-watch-jobs")
 WATCH_JOBS="${WATCH_JOBS:-false}"
 export CLAUDE_AGENTS_WATCH_JOBS="$WATCH_JOBS"
 
-# CMD is expanded at source time — no runtime variable resolution needed
-CMD="$BUN run $PLUGIN_DIR/cli.ts"
+# Wrap a string in single quotes, escaping any embedded single quotes.
+# This handles spaces and special characters in $BUN and $PLUGIN_DIR.
+# All variables are expanded now (at plugin load time), not at key-press time.
+sq() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
 
-# Wrap a subcommand in a popup so output (including errors) is always visible.
-# The popup stays open after the command finishes so the user can read the output.
-tmux bind-key M   run-shell "tmux display-popup -E -w 120 -h 30 '$CMD start; echo; read -r -p \"\" -s -n1'"
-tmux bind-key M-M run-shell "tmux display-popup -E -w 120 -h 30 '$CMD start --here; echo; read -r -p \"\" -s -n1'"
+CMD="$(sq "$BUN") run $(sq "$PLUGIN_DIR")/cli.ts"
+PAUSE='; echo; read -r -s -n1'
+
+tmux bind-key M   run-shell "tmux display-popup -E -w 120 -h 30 \"$CMD start$PAUSE\""
+tmux bind-key M-M run-shell "tmux display-popup -E -w 120 -h 30 \"$CMD start --here$PAUSE\""
 tmux bind-key S   run-shell "$CMD menu"
-tmux bind-key C-m run-shell "tmux display-popup -E -w 120 -h 30 '$CMD cleanup; echo; read -r -p \"\" -s -n1'"
+tmux bind-key C-m run-shell "tmux display-popup -E -w 120 -h 30 \"$CMD cleanup$PAUSE\""
