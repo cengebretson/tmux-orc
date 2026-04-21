@@ -99,7 +99,12 @@ bun run cli.ts cleanup    # kills MCP server, removes worktrees + branches
 bun run cli.ts notify     # macOS notifications (Glass = done, Basso = blocked)
 ```
 
-`start --job=<name>` creates the worktree, installs skills, opens a dedicated tmux window named after the job, spawns one pane per worker inside it (with role content injected into the bootstrap prompt), then starts the orchestrator in the `agents` window. Without `--job=`, only the orchestrator pane is created and it handles worker setup manually.
+`start --job=<name>` creates the worktree, installs skills, spawns workers according to the configured layout (see tmux config), then starts the orchestrator in the `agents` window. Without `--job=`, only the orchestrator pane is created and it handles worker setup manually.
+
+Worker layout is controlled by `@claude-agents-layout`:
+- `windows` (default) — one tmux window per job, workers as panes inside it
+- `sessions` — one new tmux session per job, workers as windows inside it
+- `panes` — all workers split as panes in the orchestrator's window
 
 
 ## Worker Lifecycle
@@ -120,9 +125,10 @@ bun test
 
 ```tmux
 set -g @plugin 'yourname/tmux-claude-agents'
-set -g @claude-agents-mcp-port   7777   # default
-set -g @claude-agents-notify     true   # macOS notifications (set false to disable)
-set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-mcp-port   7777      # default
+set -g @claude-agents-notify     true      # macOS notifications (set false to disable)
+set -g @claude-agents-watch-jobs true      # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-layout     windows   # windows | sessions | panes (default: windows)
 
 set -g bell-action any
 set -g visual-bell on

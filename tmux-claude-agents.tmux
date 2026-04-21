@@ -16,6 +16,10 @@ NOTIFY=$(tmux show-option -gqv "@claude-agents-notify")
 NOTIFY="${NOTIFY:-true}"
 export CLAUDE_AGENTS_NOTIFY="$NOTIFY"
 
+LAYOUT=$(tmux show-option -gqv "@claude-agents-layout")
+LAYOUT="${LAYOUT:-windows}"
+export CLAUDE_AGENTS_LAYOUT="$LAYOUT"
+
 # Auto-install dependencies on first use (bun install is fast with cache)
 if [ ! -d "$PLUGIN_DIR/node_modules" ] || [ ! -d "$PLUGIN_DIR/mcp/node_modules" ]; then
   tmux display-message "tmux-claude-agents: installing dependencies..."

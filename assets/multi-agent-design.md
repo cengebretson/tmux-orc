@@ -7,13 +7,36 @@ server acting as a message bus, with git worktrees providing isolation.
 
 ## Architecture
 
+Three worker layout modes are available via `@claude-agents-layout`:
+
+**`windows` (default)** — orchestrator in `agents` window, each job gets its own named window with workers as panes:
 ```
-┌─────────────────────────────────┐   ┌──────────────────────────────────┐
-│  agents window                  │   │  <job-name> window               │
-│  orchestrator (claude)          │   │  worker 1       │  worker 2      │
-│                                 │   │  (claude)       │  (claude)      │
-└─────────────────────────────────┘   └──────────────────────────────────┘
-         ↕                                       ↕
+agents          ← orchestrator
+auth-login      ← worker-bob │ worker-rex
+add-nav-item    ← worker-bob │ worker-rex
+         ↕               ↕
+    MCP Server (localhost:7777)
+```
+
+**`sessions`** — orchestrator in `agents` window of the current session, each job gets its own tmux session with workers as windows:
+```
+[current session]   agents window ← orchestrator
+[auth-login]        worker-bob window │ worker-rex window
+[add-nav-item]      worker-bob window │ worker-rex window
+         ↕                  ↕
+    MCP Server (localhost:7777)
+```
+
+**`panes`** — all workers split as panes in the orchestrator's window (compact, good for small screens):
+```
+┌──────────────────┬──────────────────┐
+│  orchestrator    │  worker 1        │
+│  (claude)        │  (claude)        │
+│                  ├──────────────────┤
+│                  │  worker 2        │
+│                  │  (claude)        │
+└──────────────────┴──────────────────┘
+         ↕                  ↕
     MCP Server (localhost:7777)
 ```
 
@@ -247,6 +270,7 @@ set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if 
 set -g @claude-agents-mcp-port   7777                    # default
 set -g @claude-agents-notify     true                    # cross-platform notifications (default: true)
 set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-layout     windows                 # windows | sessions | panes (default: windows)
 ```
 
 Keybinds (single entry point):

@@ -19,6 +19,18 @@ function windowName(name: string): string {
   return name.length <= 20 ? name : name.slice(0, 19) + "…";
 }
 
+async function sendWorkerPrompt(pane: string, workerId: string, prompt: string): Promise<void> {
+  await tmux("send-keys", "-t", pane, "claude", "Enter");
+  await Bun.sleep(2000);
+  const tmpFile = join(tmpdir(), `worker-${workerId}-${Date.now()}.md`);
+  await Bun.write(tmpFile, prompt);
+  await tmux("load-buffer", "-b", `w-${workerId}`, tmpFile);
+  unlinkSync(tmpFile);
+  await tmux("paste-buffer", "-b", `w-${workerId}`, "-t", pane);
+  await tmux("send-keys", "-t", pane, "", "Enter");
+  try { await tmux("delete-buffer", "-b", `w-${workerId}`); } catch {}
+}
+
 async function tmux(...args: string[]): Promise<void> {
   const proc = Bun.spawn(["tmux", ...args], { stdout: "inherit", stderr: "inherit" });
   await proc.exited;
@@ -406,42 +418,81 @@ async function start(args: string[]): Promise<void> {
       }
 
       const workerTemplate = readFileSync(join(PLUGIN_DIR, "assets/templates/worker.md"), "utf8");
+      const layout = (process.env.CLAUDE_AGENTS_LAYOUT ?? "windows").toLowerCase();
 
-      // Create a dedicated window for this job's workers
-      const jobWindow = await tmuxOut("new-window", "-P", "-F", "#{pane_id}",
-        "-n", windowName(jobName), "-e", `MCP_URL=${mcpUrl}`);
-      let prevPane = jobWindow;
-
-      for (const worker of config.workers) {
+      const buildPrompt = (worker: WorkerConfig) => {
         const roleFile = findRoleFile(worker.role);
-        if (!roleFile) { console.warn(`Skipping worker '${worker.id}': role '${worker.role}' not found`); continue; }
-        const workerPrompt = applyTemplate(workerTemplate, {
+        if (!roleFile) return null;
+        return applyTemplate(workerTemplate, {
           id: worker.id, role: worker.role, mcp_url: mcpUrl,
           worktree: worktreePath, domain: fm.domain ?? worktreePath,
           role_content: readFileSync(roleFile, "utf8"),
         });
-        // First worker reuses the window's initial pane; subsequent workers split within it
-        const pane = prevPane === jobWindow
-          ? jobWindow
-          : await tmuxOut("split-window", "-v", "-t", prevPane, "-P", "-F", "#{pane_id}",
-              "-e", `MCP_URL=${mcpUrl}`);
-        await tmux("select-pane", "-t", pane, "-T", `worker-${worker.id}`);
-        prevPane = pane;
-        await tmux("send-keys", "-t", pane, "claude", "Enter");
-        await Bun.sleep(2000);
-        const tmpFile = join(tmpdir(), `worker-${worker.id}-${Date.now()}.md`);
-        await Bun.write(tmpFile, workerPrompt);
-        await tmux("load-buffer", "-b", `w-${worker.id}`, tmpFile);
-        unlinkSync(tmpFile);
-        await tmux("paste-buffer", "-b", `w-${worker.id}`, "-t", pane);
-        await tmux("send-keys", "-t", pane, "", "Enter");
-        try { await tmux("delete-buffer", "-b", `w-${worker.id}`); } catch {}
-      }
+      };
 
-      // Return focus to the orchestrator
-      await tmux("select-window", "-t", orchPane);
-      workersSpawned = true;
-      console.log(`Spawned ${config.workers.length} worker(s) for job '${jobName}' in window '${windowName(jobName)}'`);
+      if (layout === "sessions") {
+        // Each job gets its own tmux session; each worker gets its own window inside it
+        const sessionName = windowName(jobName);
+        const firstPane = await tmuxOut("new-session", "-d", "-s", sessionName,
+          "-P", "-F", "#{pane_id}", "-e", `MCP_URL=${mcpUrl}`);
+        let isFirst = true;
+        for (const worker of config.workers) {
+          const workerPrompt = buildPrompt(worker);
+          if (!workerPrompt) { console.warn(`Skipping worker '${worker.id}': role '${worker.role}' not found`); continue; }
+          let pane: string;
+          if (isFirst) {
+            pane = firstPane;
+            await tmux("rename-window", "-t", `${sessionName}:0`, `worker-${worker.id}`);
+            isFirst = false;
+          } else {
+            pane = await tmuxOut("new-window", "-t", `${sessionName}:`, "-P", "-F", "#{pane_id}",
+              "-n", `worker-${worker.id}`, "-e", `MCP_URL=${mcpUrl}`);
+          }
+          await tmux("select-pane", "-t", pane, "-T", `worker-${worker.id}`);
+          await sendWorkerPrompt(pane, worker.id, workerPrompt);
+        }
+        // Switch the current client back to the orchestrator session/window
+        await tmux("switch-client", "-t", orchPane);
+        workersSpawned = true;
+        console.log(`Spawned ${config.workers.length} worker(s) for job '${jobName}' in session '${sessionName}'`);
+
+      } else if (layout === "panes") {
+        // All workers split as panes in the orchestrator's window
+        let prevPane = orchPane;
+        for (const worker of config.workers) {
+          const workerPrompt = buildPrompt(worker);
+          if (!workerPrompt) { console.warn(`Skipping worker '${worker.id}': role '${worker.role}' not found`); continue; }
+          const pane = await tmuxOut("split-window", "-v", "-t", prevPane, "-P", "-F", "#{pane_id}",
+            "-e", `MCP_URL=${mcpUrl}`);
+          await tmux("select-pane", "-t", pane, "-T", `worker-${worker.id}`);
+          prevPane = pane;
+          await sendWorkerPrompt(pane, worker.id, workerPrompt);
+        }
+        await tmux("select-pane", "-t", orchPane);
+        workersSpawned = true;
+        console.log(`Spawned ${config.workers.length} worker(s) for job '${jobName}' in current window (panes layout)`);
+
+      } else {
+        // windows (default) — dedicated window per job, workers as vertical splits inside it
+        const jobWindow = await tmuxOut("new-window", "-P", "-F", "#{pane_id}",
+          "-n", windowName(jobName), "-e", `MCP_URL=${mcpUrl}`);
+        let prevPane = jobWindow;
+        for (const worker of config.workers) {
+          const workerPrompt = buildPrompt(worker);
+          if (!workerPrompt) { console.warn(`Skipping worker '${worker.id}': role '${worker.role}' not found`); continue; }
+          // First worker reuses the window's initial pane; subsequent workers split within it
+          const pane = prevPane === jobWindow
+            ? jobWindow
+            : await tmuxOut("split-window", "-v", "-t", prevPane, "-P", "-F", "#{pane_id}",
+                "-e", `MCP_URL=${mcpUrl}`);
+          await tmux("select-pane", "-t", pane, "-T", `worker-${worker.id}`);
+          prevPane = pane;
+          await sendWorkerPrompt(pane, worker.id, workerPrompt);
+        }
+        await tmux("select-window", "-t", orchPane);
+        workersSpawned = true;
+        console.log(`Spawned ${config.workers.length} worker(s) for job '${jobName}' in window '${windowName(jobName)}'`);
+      }
     }
   }
 
