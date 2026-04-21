@@ -599,7 +599,7 @@ async function init(): Promise<void> {
   mkdirSync(".claude/roles", { recursive: true });
   mkdirSync(".claude/skills", { recursive: true });
   await Bun.write(".claude/agents.json", readFileSync(join(PLUGIN_DIR, "assets/examples/agents.json"), "utf8"));
-  await Bun.write(".claude/jobs/example-feature.md", readFileSync(join(PLUGIN_DIR, "assets/examples/jobs/auth-login.md"), "utf8"));
+  await Bun.write(".claude/jobs/example-feature.md", readFileSync(join(PLUGIN_DIR, "assets/examples/jobs/example-feature.md"), "utf8"));
 
   const gitignoreBlock = "\n# tmux-claude-agents\n.mcp.json\n.worktrees/\n";
   if (existsSync(".gitignore")) {
