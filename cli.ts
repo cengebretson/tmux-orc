@@ -69,6 +69,54 @@ export function parseFrontmatter(content: string): Record<string, string> {
   return result;
 }
 
+// --- pure logic (exported for testing) ---
+
+export interface StartArgs {
+  useCurrentPane: boolean;
+  configPath: string;
+  jobName: string;
+}
+
+export function parseStartArgs(args: string[]): StartArgs {
+  let useCurrentPane = false;
+  let configPath = ".claude/agents.json";
+  let jobName = "";
+  for (const arg of args) {
+    if (arg === "--here") useCurrentPane = true;
+    else if (arg.startsWith("--config=")) configPath = arg.slice(9);
+    else if (arg.startsWith("--job=")) jobName = arg.slice(6);
+    else configPath = arg;
+  }
+  return { useCurrentPane, configPath, jobName };
+}
+
+export function applyTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (t, [k, v]) => t.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v),
+    template
+  );
+}
+
+export function shouldProcessFile(filePath: string, seen: Set<string>): boolean {
+  if (!basename(filePath).endsWith(".md")) return false;
+  if (filePath.includes("/done/")) return false;
+  if (seen.has(filePath)) return false;
+  return true;
+}
+
+export function buildMenuArgs(cliPath: string, workers: string[]): string[] {
+  const args: string[] = [
+    "Status",  "s", `run-shell 'bun run "${cliPath}" menu show status'`,
+    "Queue",   "q", `run-shell 'bun run "${cliPath}" menu show queue'`,
+    "Results", "r", `run-shell 'bun run "${cliPath}" menu show results'`,
+    "", "", "",
+  ];
+  for (const w of workers) {
+    args.push(`Worker ${w}`, "", `run-shell 'bun run "${cliPath}" menu show result/${w}'`);
+  }
+  return args;
+}
+
 // --- types ---
 
 interface WorkerConfig {
@@ -251,16 +299,7 @@ async function startMcp(args: string[]): Promise<void> {
 // --- start ---
 
 async function start(args: string[]): Promise<void> {
-  let useCurrentPane = false;
-  let configPath = ".claude/agents.json";
-  let jobName = "";
-
-  for (const arg of args) {
-    if (arg === "--here") useCurrentPane = true;
-    else if (arg.startsWith("--config=")) configPath = arg.slice(9);
-    else if (arg.startsWith("--job=")) jobName = arg.slice(6);
-    else configPath = arg;
-  }
+  const { useCurrentPane, configPath, jobName } = parseStartArgs(args);
 
   const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
   const mcpUrl = `http://localhost:${port}`;
@@ -287,11 +326,10 @@ async function start(args: string[]): Promise<void> {
     orchPane = await tmuxOut("new-window", "-P", "-F", "#{pane_id}", "-n", "agents", ...envArgs);
   }
 
-  let prompt = readFileSync(join(PLUGIN_DIR, "templates/orchestrator.md"), "utf8");
-  prompt = prompt
-    .replace(/\{\{mcp_url\}\}/g, mcpUrl)
-    .replace(/\{\{agents_config\}\}/g, configPath)
-    .replace(/\{\{job_file\}\}/g, jobFile);
+  const prompt = applyTemplate(
+    readFileSync(join(PLUGIN_DIR, "templates/orchestrator.md"), "utf8"),
+    { mcp_url: mcpUrl, agents_config: configPath, job_file: jobFile }
+  );
 
   await tmux("send-keys", "-t", orchPane, "claude", "Enter");
   await Bun.sleep(3000);
@@ -335,11 +373,8 @@ async function watch(args: string[]): Promise<void> {
   const seen = new Set<string>();
 
   async function onNewFile(filePath: string): Promise<void> {
-    const file = basename(filePath);
-    if (!file.endsWith(".md")) return;
-    if (filePath.includes("/done/")) return;
+    if (!shouldProcessFile(filePath, seen)) return;
     if (!existsSync(filePath)) return;
-    if (seen.has(filePath)) return;
     seen.add(filePath);
 
     const job = file.slice(0, -3);
@@ -380,24 +415,16 @@ async function menu(args: string[]): Promise<void> {
     return;
   }
 
-  const menuArgs: string[] = [
-    "Status",  "s", `run-shell 'bun run "${cliPath}" menu show status'`,
-    "Queue",   "q", `run-shell 'bun run "${cliPath}" menu show queue'`,
-    "Results", "r", `run-shell 'bun run "${cliPath}" menu show results'`,
-    "", "", "",
-  ];
-
+  let workers: string[] = [];
   try {
     const res = await fetch(`${baseUrl}/status`, { signal: AbortSignal.timeout(1000) });
     if (res.ok) {
       const data = await res.json() as { workers?: Record<string, unknown> };
-      for (const w of Object.keys(data.workers ?? {})) {
-        menuArgs.push(`Worker ${w}`, "", `run-shell 'bun run "${cliPath}" menu show result/${w}'`);
-      }
+      workers = Object.keys(data.workers ?? {});
     }
   } catch { /* server not running */ }
 
-  await tmux("display-menu", "-T", " Claude Agents ", ...menuArgs);
+  await tmux("display-menu", "-T", " Claude Agents ", ...buildMenuArgs(cliPath, workers));
 }
 
 // --- cleanup ---

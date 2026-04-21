@@ -284,3 +284,15 @@ Workers have access to all skills — no per-worker filtering. Each role file's
 ## Open Questions / Next Steps
 - [ ] Add tmux-logging plugin for full output capture
 - [ ] Test with a small real task (e.g. auth feature with React + FastAPI)
+
+## Known Issues / Follow-up
+
+- [ ] **`cli.ts` tmux paths untested** — `start`, `watch`, `menu`, `cleanup` have no test coverage. The logic is non-trivial and failures will be hard to diagnose. Need an integration test strategy or at minimum manual test runbook.
+
+- [ ] **Knowledge file path is cwd-relative** — `state.ts` writes `.claude/knowledge/<role>.md` relative to wherever the MCP server process started. If launched from the wrong directory the files go to the wrong place or fail silently. Should either assert cwd on startup or make the path configurable.
+
+- [ ] **Knowledge file loading is unenforced** — `orchestrator.md` instructs the LLM to read knowledge files when building task descriptions, but there is no hard enforcement. If the LLM skips it, past resolutions are ignored. Consider injecting knowledge file content server-side into the task description returned by `get_task`.
+
+- [ ] **`resolveBlock` silently skips file write if `currentTask` is missing** — if a worker's task reference is lost (e.g. after a `reset`) the resolution is recorded in worker state but never written to the knowledge file. Should log a warning or return an error.
+
+- [ ] **No state persistence** — MCP server state is fully in-memory. A crash or restart mid-job loses all task assignments, worker states, and stage results. For long-running jobs this is a real failure mode. Options: periodic state snapshot to disk, or replay from a task log.

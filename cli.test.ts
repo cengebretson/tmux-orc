@@ -2,7 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { parseFrontmatter, sectionLines, validate } from "./cli.ts";
+import {
+  parseFrontmatter,
+  sectionLines,
+  validate,
+  parseStartArgs,
+  applyTemplate,
+  shouldProcessFile,
+  buildMenuArgs,
+} from "./cli.ts";
 
 // --- pure helpers ---
 
@@ -207,5 +215,124 @@ describe("validate: --job", () => {
   it("passes with valid job file and matching pipeline", async () => {
     write(".claude/jobs/my-feature.md", "---\npipeline: testpipe\ndomain: auth\n---\n# Feature\n");
     expect(await validate(["--job=my-feature"])).toBe(true);
+  });
+});
+
+// --- parseStartArgs ---
+
+describe("parseStartArgs", () => {
+  it("returns defaults when no args given", () => {
+    expect(parseStartArgs([])).toEqual({
+      useCurrentPane: false,
+      configPath: ".claude/agents.json",
+      jobName: "",
+    });
+  });
+
+  it("sets useCurrentPane from --here", () => {
+    expect(parseStartArgs(["--here"]).useCurrentPane).toBe(true);
+  });
+
+  it("parses --config=", () => {
+    expect(parseStartArgs(["--config=custom/agents.json"]).configPath).toBe("custom/agents.json");
+  });
+
+  it("parses --job=", () => {
+    expect(parseStartArgs(["--job=auth-login"]).jobName).toBe("auth-login");
+  });
+
+  it("treats a bare positional arg as configPath", () => {
+    expect(parseStartArgs(["other/agents.json"]).configPath).toBe("other/agents.json");
+  });
+
+  it("handles all flags together", () => {
+    expect(parseStartArgs(["--here", "--config=c.json", "--job=my-job"])).toEqual({
+      useCurrentPane: true,
+      configPath: "c.json",
+      jobName: "my-job",
+    });
+  });
+});
+
+// --- applyTemplate ---
+
+describe("applyTemplate", () => {
+  it("replaces a single placeholder", () => {
+    expect(applyTemplate("hello {{name}}", { name: "world" })).toBe("hello world");
+  });
+
+  it("replaces multiple different placeholders", () => {
+    expect(applyTemplate("{{a}} and {{b}}", { a: "foo", b: "bar" })).toBe("foo and bar");
+  });
+
+  it("replaces the same placeholder multiple times", () => {
+    expect(applyTemplate("{{x}} {{x}}", { x: "hi" })).toBe("hi hi");
+  });
+
+  it("leaves unknown placeholders untouched", () => {
+    expect(applyTemplate("{{unknown}}", { other: "val" })).toBe("{{unknown}}");
+  });
+
+  it("substitutes all three orchestrator variables", () => {
+    const result = applyTemplate(
+      "url={{mcp_url}} config={{agents_config}} job={{job_file}}",
+      { mcp_url: "http://localhost:7777", agents_config: ".claude/agents.json", job_file: "auth-login.md" }
+    );
+    expect(result).toBe("url=http://localhost:7777 config=.claude/agents.json job=auth-login.md");
+  });
+});
+
+// --- shouldProcessFile ---
+
+describe("shouldProcessFile", () => {
+  it("returns true for a new .md file", () => {
+    expect(shouldProcessFile("/jobs/auth-login.md", new Set())).toBe(true);
+  });
+
+  it("returns false for non-.md files", () => {
+    expect(shouldProcessFile("/jobs/auth-login.txt", new Set())).toBe(false);
+    expect(shouldProcessFile("/jobs/auth-login", new Set())).toBe(false);
+  });
+
+  it("returns false for files inside done/", () => {
+    expect(shouldProcessFile("/jobs/done/auth-login.md", new Set())).toBe(false);
+  });
+
+  it("returns false for already-seen files", () => {
+    const seen = new Set(["/jobs/auth-login.md"]);
+    expect(shouldProcessFile("/jobs/auth-login.md", seen)).toBe(false);
+  });
+
+  it("does not mutate the seen set", () => {
+    const seen = new Set<string>();
+    shouldProcessFile("/jobs/auth-login.md", seen);
+    expect(seen.size).toBe(0);
+  });
+});
+
+// --- buildMenuArgs ---
+
+describe("buildMenuArgs", () => {
+  it("includes static status/queue/results entries", () => {
+    const args = buildMenuArgs("/plugin/cli.ts", []);
+    expect(args).toContain("Status");
+    expect(args).toContain("Queue");
+    expect(args).toContain("Results");
+  });
+
+  it("adds one entry per worker", () => {
+    const args = buildMenuArgs("/plugin/cli.ts", ["bob", "rex"]);
+    expect(args).toContain("Worker bob");
+    expect(args).toContain("Worker rex");
+  });
+
+  it("worker entries reference the correct result path", () => {
+    const args = buildMenuArgs("/plugin/cli.ts", ["bob"]);
+    expect(args.some(a => typeof a === "string" && a.includes("result/bob"))).toBe(true);
+  });
+
+  it("returns only static entries when no workers", () => {
+    const args = buildMenuArgs("/plugin/cli.ts", []);
+    expect(args.some(a => typeof a === "string" && a.startsWith("Worker"))).toBe(false);
   });
 });
