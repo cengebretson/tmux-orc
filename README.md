@@ -67,11 +67,7 @@ Add to your `tmux.conf`:
 set -g @plugin 'yourname/tmux-claude-agents'
 ```
 
-Press `prefix+I` (TPM install), then install the MCP server dependencies:
-
-```bash
-cd ~/.tmux/plugins/tmux-claude-agents/mcp && bun install
-```
+Press `prefix+I` (TPM install). Dependencies are installed automatically on first use.
 
 ### Manual
 

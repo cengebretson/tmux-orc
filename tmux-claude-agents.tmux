@@ -16,9 +16,11 @@ NOTIFY=$(tmux show-option -gqv "@claude-agents-notify")
 NOTIFY="${NOTIFY:-true}"
 export CLAUDE_AGENTS_NOTIFY="$NOTIFY"
 
-# Warn once at plugin load if bun dependencies haven't been installed
-if [ ! -d "$PLUGIN_DIR/mcp/node_modules" ]; then
-  tmux display-message "tmux-claude-agents: run 'cd $PLUGIN_DIR/mcp && $BUN install' to finish setup"
+# Auto-install dependencies on first use (bun install is fast with cache)
+if [ ! -d "$PLUGIN_DIR/node_modules" ] || [ ! -d "$PLUGIN_DIR/mcp/node_modules" ]; then
+  tmux display-message "tmux-claude-agents: installing dependencies..."
+  (cd "$PLUGIN_DIR" && "$BUN" install --silent 2>/dev/null)
+  (cd "$PLUGIN_DIR/mcp" && "$BUN" install --silent 2>/dev/null)
 fi
 
 # Wrap a string in single quotes, escaping any embedded single quotes.
