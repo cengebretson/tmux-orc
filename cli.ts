@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync, readdirSync, unlinkSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, mkdirSync, appendFileSync } from "fs";
 import { watch as fsWatch } from "fs";
 import { resolve, join, basename } from "path";
 import { fileURLToPath } from "url";
@@ -302,7 +302,21 @@ async function startMcp(args: string[]): Promise<void> {
 // --- start ---
 
 async function start(args: string[]): Promise<void> {
-  const { useCurrentPane, configPath, jobName } = parseStartArgs(args);
+  const parsed = parseStartArgs(args);
+  const { useCurrentPane, configPath } = parsed;
+  let { jobName } = parsed;
+
+  // Auto-detect job when exactly one job file exists and --job wasn't given
+  if (!jobName && existsSync(".claude/jobs")) {
+    const pending = readdirSync(".claude/jobs").filter(f => f.endsWith(".md"));
+    if (pending.length === 1) {
+      jobName = basename(pending[0], ".md");
+      console.log(`Auto-detected job: ${jobName}`);
+    } else if (pending.length > 1) {
+      console.log(`Multiple jobs found: ${pending.map(f => basename(f, ".md")).join(", ")}`);
+      console.log(`Use --job=<name> to pre-load a job and spawn workers automatically.\n`);
+    }
+  }
 
   const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
   const mcpUrl = `http://localhost:${port}`;
@@ -493,6 +507,10 @@ async function cleanup(): Promise<void> {
     if (kill.exitCode === 0) console.log(`MCP server stopped (pid ${pid})`);
     unlinkSync(PID_FILE);
   }
+  if (existsSync(".mcp.json")) {
+    unlinkSync(".mcp.json");
+    console.log("Removed .mcp.json");
+  }
 
   const gitCheck = Bun.spawn(["git", "rev-parse", "--git-dir"], { stdout: "pipe", stderr: "pipe" });
   await gitCheck.exited;
@@ -553,12 +571,23 @@ async function init(): Promise<void> {
   mkdirSync(".claude/skills", { recursive: true });
   await Bun.write(".claude/agents.json", readFileSync(join(PLUGIN_DIR, "examples/agents.json"), "utf8"));
   await Bun.write(".claude/jobs/example-feature.md", readFileSync(join(PLUGIN_DIR, "examples/jobs/auth-login.md"), "utf8"));
-  console.log("Created .claude/ with example config and a sample job file.\n");
-  console.log("  .claude/agents.json           ← edit to define your workers and pipelines");
+
+  const gitignoreBlock = "\n# tmux-claude-agents\n.mcp.json\n.worktrees/\n";
+  if (existsSync(".gitignore")) {
+    if (!readFileSync(".gitignore", "utf8").includes(".mcp.json")) {
+      appendFileSync(".gitignore", gitignoreBlock);
+      console.log("Updated .gitignore");
+    }
+  } else {
+    await Bun.write(".gitignore", gitignoreBlock.trimStart());
+    console.log("Created .gitignore");
+  }
+
+  console.log("\nCreated .claude/ with example config and a sample job file.");
+  console.log("  .claude/agents.json              ← edit to define your workers and pipelines");
   console.log("  .claude/jobs/example-feature.md  ← sample job file to adapt");
-  console.log("  .claude/roles/                ← project-level role overrides (optional)");
-  console.log("  .claude/skills/               ← project-level skill overrides (optional)\n");
-  console.log("Add to .gitignore:\n  .mcp.json\n  .worktrees/\n");
+  console.log("  .claude/roles/                   ← project-level role overrides (optional)");
+  console.log("  .claude/skills/                  ← project-level skill overrides (optional)\n");
   console.log("Next: bun run cli.ts validate");
 }
 

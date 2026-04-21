@@ -34,6 +34,26 @@ A tmux plugin for running multiple Claude Code agents in parallel. An orchestrat
 
 Workers are **pull-based** — they call `get_task` themselves when ready, making the system self-scheduling. All inter-agent communication routes through the orchestrator (hub-and-spoke), never directly between workers.
 
+## Quickstart
+
+```bash
+# 1. Install (see Installation below), then from inside your project:
+prefix+I          # scaffold .claude/ — agents.json, example job, .gitignore entries
+
+# 2. Edit .claude/agents.json to match your project, then write a job file:
+#    .claude/jobs/my-feature.md
+
+# 3. Validate your setup:
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate --job=my-feature
+
+# 4. Start a session — workers spawn automatically when one job file exists:
+prefix+M
+
+# 5. Watch the orchestrator load tasks and workers pick them up.
+#    Press prefix+S at any time to check status.
+#    Press prefix+Ctrl+M to clean up when done.
+```
+
 ## Requirements
 
 - [tmux](https://github.com/tmux/tmux) 3.2+
@@ -50,7 +70,11 @@ Add to your `tmux.conf`:
 set -g @plugin 'yourname/tmux-claude-agents'
 ```
 
-Then press `prefix+I` to install.
+Press `prefix+I` to install, then install the MCP server dependencies:
+
+```bash
+cd ~/.tmux/plugins/tmux-claude-agents/mcp && bun install
+```
 
 ### Manual
 
@@ -82,20 +106,13 @@ When `@claude-agents-notify` is enabled, the MCP server fires a notification whe
 
 ## Project Setup
 
-Run `init` from inside your project repo to scaffold the `.claude/` directory:
+Press `prefix+I` from inside your project to scaffold the `.claude/` directory. Or run it directly:
 
 ```bash
 bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts init
 ```
 
-This creates `.claude/agents.json`, a sample job file, and empty `roles/` and `skills/` override directories. Then edit `agents.json` to match your project.
-
-Also add to `.gitignore`:
-
-```
-.mcp.json
-.worktrees/
-```
+This creates `.claude/agents.json`, a sample job file, empty `roles/` and `skills/` override directories, and adds `.mcp.json` and `.worktrees/` to `.gitignore` automatically.
 
 ### Manual setup
 
@@ -220,16 +237,11 @@ Plugins listed in role files (`## Plugins`) produce warnings — they can't be v
 
 `cli.ts start` runs validation automatically before starting. If validation fails the session won't start.
 
-Add to `.gitignore`:
-
-```
-.worktrees/
-```
-
 ## Usage
 
 | Keybind | Action |
 |---|---|
+| `prefix+I` | Scaffold `.claude/` in the current project (run once per repo) |
 | `prefix+M` | Start a multi-agent session (new window) |
 | `prefix+Alt+M` | Start in the current pane |
 | `prefix+S` | Open status menu |
