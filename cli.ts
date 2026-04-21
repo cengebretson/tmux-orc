@@ -293,6 +293,9 @@ async function startMcp(args: string[]): Promise<void> {
     { stdout: "inherit", stderr: "inherit", detached: true }
   );
   await Bun.write(PID_FILE, String(server.pid));
+  await Bun.write(".mcp.json", JSON.stringify({
+    mcpServers: { agents: { type: "sse", url: `http://localhost:${port}/sse` } }
+  }, null, 2) + "\n");
   console.log(`MCP server started on port ${port} (pid ${server.pid})`);
 }
 
@@ -326,7 +329,60 @@ async function start(args: string[]): Promise<void> {
     orchPane = await tmuxOut("new-window", "-P", "-F", "#{pane_id}", "-n", "agents", ...envArgs);
   }
 
-  const prompt = applyTemplate(
+  // Spawn workers when a job is given — CLI handles worktree + pane creation
+  let workersSpawned = false;
+  if (jobName) {
+    const config: AgentsConfig = JSON.parse(readFileSync(configPath, "utf8"));
+    const fm = parseFrontmatter(readFileSync(jobFile, "utf8"));
+    const worktreePath = `.worktrees/${jobName}`;
+
+    const wt = Bun.spawn(["git", "worktree", "add", worktreePath, "-b", `agent/${jobName}`], {
+      stdout: "inherit", stderr: "inherit",
+    });
+    await wt.exited;
+
+    if (wt.exitCode === 0) {
+      mkdirSync(`${worktreePath}/.claude/commands`, { recursive: true });
+      for (const src of [join(PLUGIN_DIR, "skills"), ".claude/skills"]) {
+        if (existsSync(src)) {
+          for (const f of readdirSync(src).filter(f => f.endsWith(".md"))) {
+            await Bun.write(`${worktreePath}/.claude/commands/${f}`, readFileSync(join(src, f)));
+          }
+        }
+      }
+
+      const workerTemplate = readFileSync(join(PLUGIN_DIR, "templates/worker.md"), "utf8");
+      let prevPane = orchPane;
+      for (const worker of config.workers) {
+        const roleFile = findRoleFile(worker.role);
+        if (!roleFile) { console.warn(`Skipping worker '${worker.id}': role '${worker.role}' not found`); continue; }
+        const workerPrompt = applyTemplate(workerTemplate, {
+          id: worker.id, role: worker.role, mcp_url: mcpUrl,
+          worktree: worktreePath, domain: fm.domain ?? worktreePath,
+          role_content: readFileSync(roleFile, "utf8"),
+        });
+        const pane = await tmuxOut("split-window", "-v", "-t", prevPane, "-P", "-F", "#{pane_id}",
+          "-e", `MCP_URL=${mcpUrl}`);
+        prevPane = pane;
+        await tmux("send-keys", "-t", pane, "claude", "Enter");
+        await Bun.sleep(2000);
+        const tmpFile = join(tmpdir(), `worker-${worker.id}-${Date.now()}.md`);
+        await Bun.write(tmpFile, workerPrompt);
+        await tmux("load-buffer", "-b", `w-${worker.id}`, tmpFile);
+        unlinkSync(tmpFile);
+        await tmux("paste-buffer", "-b", `w-${worker.id}`, "-t", pane);
+        await tmux("send-keys", "-t", pane, "", "Enter");
+        try { await tmux("delete-buffer", "-b", `w-${worker.id}`); } catch {}
+      }
+      workersSpawned = true;
+      console.log(`Spawned ${config.workers.length} worker(s) for job '${jobName}'`);
+    }
+  }
+
+  const workerNote = workersSpawned
+    ? "**Workers and worktrees are already set up by the CLI — skip Steps 1 and 2 and proceed directly to Step 3 (Load tasks).**\n\n"
+    : "";
+  const prompt = workerNote + applyTemplate(
     readFileSync(join(PLUGIN_DIR, "templates/orchestrator.md"), "utf8"),
     { mcp_url: mcpUrl, agents_config: configPath, job_file: jobFile }
   );
@@ -485,6 +541,27 @@ async function notify(args: string[]): Promise<void> {
   await notifyFn(args[0] ?? "?", args[1] ?? "done");
 }
 
+// --- init ---
+
+async function init(): Promise<void> {
+  if (existsSync(".claude")) {
+    console.error("  ✗ .claude/ already exists — run 'bun run cli.ts validate' to check your current setup");
+    process.exit(1);
+  }
+  mkdirSync(".claude/jobs", { recursive: true });
+  mkdirSync(".claude/roles", { recursive: true });
+  mkdirSync(".claude/skills", { recursive: true });
+  await Bun.write(".claude/agents.json", readFileSync(join(PLUGIN_DIR, "examples/agents.json"), "utf8"));
+  await Bun.write(".claude/jobs/example-feature.md", readFileSync(join(PLUGIN_DIR, "examples/jobs/auth-login.md"), "utf8"));
+  console.log("Created .claude/ with example config and a sample job file.\n");
+  console.log("  .claude/agents.json           ← edit to define your workers and pipelines");
+  console.log("  .claude/jobs/example-feature.md  ← sample job file to adapt");
+  console.log("  .claude/roles/                ← project-level role overrides (optional)");
+  console.log("  .claude/skills/               ← project-level skill overrides (optional)\n");
+  console.log("Add to .gitignore:\n  .mcp.json\n  .worktrees/\n");
+  console.log("Next: bun run cli.ts validate");
+}
+
 // --- dispatch ---
 
 if (!import.meta.main) { /* imported as module — skip dispatch */ }
@@ -493,6 +570,7 @@ else {
 const [,, subcmd, ...rest] = process.argv;
 
 switch (subcmd) {
+  case "init":      await init(); break;
   case "validate":  process.exit((await validate(rest)) ? 0 : 1);
   case "start":     await start(rest); break;
   case "start-mcp": await startMcp(rest); break;
@@ -501,7 +579,7 @@ switch (subcmd) {
   case "cleanup":   await cleanup(); break;
   case "notify":    await notify(rest); break;
   default:
-    console.error("Usage: cli.ts <validate|start|start-mcp|watch|menu|cleanup|notify> [args...]");
+    console.error("Usage: cli.ts <init|validate|start|start-mcp|watch|menu|cleanup|notify> [args...]");
     process.exit(1);
 }
 

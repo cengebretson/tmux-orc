@@ -89,14 +89,17 @@ All workers in the same job share this worktree. After the final stage the orche
 `cli.ts` at the project root is the primary entry point (called by all tmux keybinds):
 
 ```
+bun run cli.ts init       # scaffold .claude/ in a new project (agents.json, sample job, dirs)
 bun run cli.ts validate   # pre-flight checks: roles, skills, plugins, job frontmatter
-bun run cli.ts start      # starts MCP server, creates orchestrator pane; --job=<name> to preload
+bun run cli.ts start      # starts MCP server + orchestrator; --job=<name> spawns workers too
 bun run cli.ts start-mcp  # launches bun server, guards double-start via PID file
 bun run cli.ts watch      # watches .claude/jobs/ and auto-starts new jobs
 bun run cli.ts menu       # tmux display-menu for status inspection
 bun run cli.ts cleanup    # kills MCP server, removes worktrees + branches
 bun run cli.ts notify     # macOS notifications (Glass = done, Basso = blocked)
 ```
+
+`start --job=<name>` creates the worktree, installs skills, spawns one pane per worker (with role content injected into the bootstrap prompt), then starts the orchestrator. Without `--job=`, only the orchestrator pane is created and it handles worker setup manually.
 
 The bash scripts in `scripts/` are kept as backup and are not invoked directly.
 

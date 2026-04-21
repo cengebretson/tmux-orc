@@ -10,6 +10,6 @@ WATCH_JOBS="${WATCH_JOBS:-false}"
 export CLAUDE_AGENTS_WATCH_JOBS="$WATCH_JOBS"
 
 tmux bind-key M run-shell "bun run \"$PLUGIN_DIR/cli.ts\" start"
-tmux bind-key M-m run-shell "bun run \"$PLUGIN_DIR/cli.ts\" start --here"
+tmux bind-key M-M run-shell "bun run \"$PLUGIN_DIR/cli.ts\" start --here"
 tmux bind-key S run-shell "bun run \"$PLUGIN_DIR/cli.ts\" menu"
 tmux bind-key C-m run-shell "bun run \"$PLUGIN_DIR/cli.ts\" cleanup"

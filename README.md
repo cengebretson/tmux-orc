@@ -39,8 +39,6 @@ Workers are **pull-based** — they call `get_task` themselves when ready, makin
 - [tmux](https://github.com/tmux/tmux) 3.2+
 - [Claude Code](https://claude.ai/code) CLI (`claude`)
 - [Bun](https://bun.sh) (`brew install bun`)
-- [jq](https://jqlang.github.io/jq/) (`brew install jq`)
-- [fswatch](https://github.com/emcrisostomo/fswatch) (`brew install fswatch`) — optional, for the job watcher; falls back to polling without it
 
 ## Installation
 
@@ -83,7 +81,24 @@ When `@claude-agents-notify` is enabled, the MCP server fires a notification whe
 
 ## Project Setup
 
-Create `.claude/agents.json` in your project repo:
+Run `init` from inside your project repo to scaffold the `.claude/` directory:
+
+```bash
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts init
+```
+
+This creates `.claude/agents.json`, a sample job file, and empty `roles/` and `skills/` override directories. Then edit `agents.json` to match your project.
+
+Also add to `.gitignore`:
+
+```
+.mcp.json
+.worktrees/
+```
+
+### Manual setup
+
+Alternatively, create `.claude/agents.json` by hand:
 
 ```json
 {
@@ -174,7 +189,7 @@ With `@claude-agents-watch-jobs true` in your `tmux.conf`, a watcher runs alongs
 cp my-feature.md .claude/jobs/   # orchestrator starts it automatically
 ```
 
-Uses `fswatch` if installed (`brew install fswatch`), falls back to 5-second polling. Invalid job files (failed validation) are skipped with a notification rather than starting a broken session.
+Invalid job files (failed validation) are skipped with a notification rather than starting a broken session.
 
 Once the orchestrator is running, start a job by just telling it:
 
@@ -475,12 +490,15 @@ The MCP server runs as a local HTTP/SSE server (Bun/TypeScript) bundled inside t
 | `get_task(worker_id, role)` | Worker | Pulls next role-matched task |
 | `submit_result(worker_id, result)` | Worker | Posts completed output |
 | `get_result(worker_id)` | Orchestrator | Reads a worker's result |
-| `get_status()` | Orchestrator | Queue depth + all worker states (idle / working / submitted) |
-| `all_done()` | Orchestrator | True when queue is empty and all registered workers have submitted |
+| `get_status()` | Orchestrator | Queue depth + all worker states (idle / working / submitted / blocked) |
+| `all_done()` | Orchestrator | True when queue is empty and all registered workers are submitted or idle |
 | `stage_done(job, stage)` | Orchestrator | True when all tasks in a job stage are submitted |
 | `get_stage_results(job, stage)` | Orchestrator | All results from a completed job stage |
 | `get_jobs_status(job?)` | Orchestrator | Stage breakdown for one job or all active jobs |
 | `reset_job(job)` | Orchestrator | Clears job state so the same pipeline can rerun for a new feature |
+| `get_hung_workers(threshold_ms)` | Orchestrator | Workers in working state with no activity for longer than threshold |
+| `report_blocked(worker_id, reason)` | Worker | Signals stuck state — fires a Basso notification |
+| `resolve_block(worker_id, resolution)` | Worker | Unblocks worker and appends resolution to `## Lessons Learned` in the role file |
 
 ### Tasks
 
@@ -650,5 +668,5 @@ git worktree add .worktrees/bob -b agent/bob
 ## Running tests
 
 ```bash
-cd mcp && bun test
+bun test
 ```
