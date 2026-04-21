@@ -290,7 +290,7 @@ async function startMcp(args: string[]): Promise<void> {
 
   const server = Bun.spawn(
     ["bun", "run", join(PLUGIN_DIR, "mcp/server.ts"), "--port", String(port)],
-    { stdout: "inherit", stderr: "inherit", detached: true, env: { ...process.env, PROJECT_DIR: process.cwd() } }
+    { stdout: "inherit", stderr: "inherit", detached: true }
   );
   await Bun.write(PID_FILE, String(server.pid));
   console.log(`MCP server started on port ${port} (pid ${server.pid})`);

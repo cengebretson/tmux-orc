@@ -1,6 +1,20 @@
-import { appendFileSync, mkdirSync } from "fs";
+import { existsSync, appendFileSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
 import type { Task, StageStatus, StageInfo, JobStatus, Status } from "./types.js";
 export type { Task, StageStatus, StageInfo, JobStatus, Status };
+
+function findProjectRoot(): string {
+  let dir = process.cwd();
+  while (true) {
+    if (existsSync(join(dir, ".git"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  console.warn("WARNING: no .git directory found — knowledge files written relative to cwd");
+  return process.cwd();
+}
+
 
 interface WorkerState {
   status: "idle" | "working" | "submitted" | "blocked";
@@ -152,8 +166,7 @@ export function resolveBlock(workerId: string, resolution: string): void {
 
   const task = existing.currentTask;
   if (task) {
-    const base = process.env.PROJECT_DIR ?? ".";
-    const dir = `${base}/.claude/knowledge`;
+    const dir = join(findProjectRoot(), ".claude/knowledge");
     const date = new Date().toISOString().slice(0, 10);
     const entry = [
       ``,

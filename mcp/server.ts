@@ -8,10 +8,6 @@ const transports = new Map<string, SSEServerTransport>();
 const portArg = process.argv.indexOf("--port");
 const port = portArg !== -1 ? parseInt(process.argv[portArg + 1]) : 7777;
 
-if (!process.env.PROJECT_DIR) {
-  console.warn("WARNING: PROJECT_DIR is not set — knowledge files will be written relative to cwd. Start the server via 'cli.ts start-mcp' to fix this.");
-}
-
 const httpServer = createServer(
   async (req: IncomingMessage, res: ServerResponse) => {
     if (handleInspection(req, res)) return;
