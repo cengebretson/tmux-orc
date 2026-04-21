@@ -114,6 +114,8 @@ export function buildMenuArgs(cliPath: string, workers: string[]): string[] {
   for (const w of workers) {
     args.push(`Worker ${w}`, "", `run-shell 'bun run "${cliPath}" menu show result/${w}'`);
   }
+  const cleanup = `run-shell 'tmux display-popup -E -w 60 -h 6 "echo Cleanup: kill MCP server and remove worktrees.; echo Press Enter to confirm, Ctrl+C to cancel.; read -r; bun run \\"${cliPath}\\" cleanup; echo; read -r -s -n1"'`;
+  args.push("", "", "", "Cleanup…", "x", cleanup);
   return args;
 }
 
@@ -598,6 +600,14 @@ async function init(): Promise<void> {
 async function launch(args: string[]): Promise<void> {
   const useCurrentPane = args.includes("--here");
   const hereFlag = useCurrentPane ? " --here" : "";
+
+  if (!existsSync(".claude/agents.json")) {
+    const self = `${process.execPath} run ${import.meta.path}`;
+    const pause = "; echo; read -r -s -n1";
+    await tmux("display-popup", "-E", "-w", "100", "-h", "20",
+      `${self} init${pause}`);
+    return;
+  }
 
   const jobs = existsSync(".claude/jobs")
     ? readdirSync(".claude/jobs").filter(f => f.endsWith(".md")).map(f => basename(f, ".md"))

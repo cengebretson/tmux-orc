@@ -38,9 +38,7 @@ Workers are **pull-based** — they call `get_task` themselves when ready, makin
 
 ```bash
 # 1. Install (see Installation below), then from inside your project:
-prefix+I          # scaffold .claude/ — agents.json, example job, .gitignore entries
-
-# 2. Edit .claude/agents.json to match your project, then write a job file:
+# 1. Edit .claude/agents.json to match your project, then write a job file:
 #    .claude/jobs/my-feature.md
 
 # 3. Validate your setup:
@@ -50,8 +48,7 @@ bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate --job=my-feature
 prefix+M
 
 # 5. Watch the orchestrator load tasks and workers pick them up.
-#    Press prefix+S at any time to check status.
-#    Press prefix+Ctrl+M to clean up when done.
+#    Press prefix+S at any time to check status or clean up.
 ```
 
 ## Requirements
@@ -70,7 +67,7 @@ Add to your `tmux.conf`:
 set -g @plugin 'yourname/tmux-claude-agents'
 ```
 
-Press `prefix+I` to install, then install the MCP server dependencies:
+Press `prefix+I` (TPM install), then install the MCP server dependencies:
 
 ```bash
 cd ~/.tmux/plugins/tmux-claude-agents/mcp && bun install
@@ -106,7 +103,7 @@ When `@claude-agents-notify` is enabled, the MCP server fires a notification whe
 
 ## Project Setup
 
-Press `prefix+I` from inside your project to scaffold the `.claude/` directory. Or run it directly:
+Press `prefix+M` from inside your project. If `.claude/` hasn't been initialized yet, it will run `init` automatically. Or run it directly:
 
 ```bash
 bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts init
@@ -241,11 +238,9 @@ Plugins listed in role files (`## Plugins`) produce warnings — they can't be v
 
 | Keybind | Action |
 |---|---|
-| `prefix+I` | Scaffold `.claude/` in the current project (run once per repo) |
-| `prefix+M` | Start a multi-agent session (new window) |
+| `prefix+M` | Start a multi-agent session (scaffolds if needed, new window) |
 | `prefix+Alt+M` | Start in the current pane |
-| `prefix+S` | Open status menu |
-| `prefix+Ctrl+M` | Clean up — kill MCP server, remove worktrees |
+| `prefix+S` | Open control panel — status, queue, results, cleanup |
 
 ### Starting a session
 
@@ -462,11 +457,9 @@ git worktree remove .worktrees/auth-login
 # after PR is merged: git branch -d agent/auth-login
 ```
 
-Press `prefix+Ctrl+M` to kill the MCP server. If any worktrees are still around (e.g. session was aborted), cleanup will force-remove them and warn about any open branches.
+### Inspect and clean up
 
-### Inspect anytime
-
-While the session runs, press `prefix+S` for the status menu or query the API directly:
+Press `prefix+S` to open the control panel. Select **Cleanup…** (`x`) to kill the MCP server and remove worktrees — a confirmation prompt prevents accidental runs. Query the API directly too:
 
 ```bash
 curl localhost:7777/status                             # all worker states
