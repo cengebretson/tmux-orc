@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync, readdirSync, unlinkSync, mkdirSync, appendFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync, mkdirSync, appendFileSync } from "fs";
 import { watch as fsWatch } from "fs";
 import { resolve, join, basename } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
+import { createInterface } from "readline";
 
 const PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)));
 const PID_FILE = "/tmp/claude-agents-mcp.pid";
@@ -125,6 +126,7 @@ export function buildMenuArgs(bunPath: string, cliPath: string, state: MenuState
       "Start session", "s", `run-shell '${bun} launch'`,
       "Start here",    "h", `run-shell '${bun} launch --here'`,
       "", "", "",
+      "New job…",      "n", popup(100, 20, `${bun} new-job${pause}`),
       "Validate",      "v", popup(100, 30, `${bun} validate${pause}`),
     ];
   }
@@ -134,6 +136,8 @@ export function buildMenuArgs(bunPath: string, cliPath: string, state: MenuState
     "Queue",   "2", `run-shell '${bun} menu show queue'`,
     "Results", "3", `run-shell '${bun} menu show results'`,
     "Jobs",    "j", `run-shell '${bun} menu show jobs'`,
+    "", "", "",
+    "New job…","n",  popup(100, 20, `${bun} new-job${pause}`),
     "", "", "",
   ];
   for (const w of state.workers) {
@@ -624,6 +628,90 @@ async function init(): Promise<void> {
 }
 
 // --- launch ---
+// --- new-job ---
+
+async function newJob(): Promise<void> {
+  if (!existsSync(".claude/agents.json")) {
+    console.error("No agents.json found — run init first.");
+    process.exit(1);
+  }
+
+  const config = JSON.parse(readFileSync(".claude/agents.json", "utf8")) as AgentsConfig;
+  const pipelines = config.pipelines.map(p => p.name);
+  if (pipelines.length === 0) {
+    console.error("No pipelines defined in agents.json.");
+    process.exit(1);
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string) => new Promise<string>(res => rl.question(q, res));
+
+  try {
+    console.log("\nAvailable pipelines:");
+    pipelines.forEach((p, i) => console.log(`  ${i + 1}. ${p}`));
+
+    let pipeline = "";
+    while (!pipeline) {
+      const input = (await ask("\nPipeline (name or number): ")).trim();
+      pipeline = pipelines.find(p => p === input) ?? pipelines[parseInt(input) - 1] ?? "";
+      if (!pipeline) console.log(`  Invalid — choose 1–${pipelines.length} or type a name.`);
+    }
+
+    const domain = (await ask("Domain (e.g. src/components): ")).trim();
+
+    const spec = (await ask("Spec (one line description): ")).trim();
+    if (!spec) { console.error("Spec is required."); process.exit(1); }
+
+    const suggested = spec.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 35);
+    const nameInput = (await ask(`Job name [${suggested}]: `)).trim();
+    const baseName = nameInput || suggested;
+
+    // Check uniqueness across jobs/ and jobs/done/
+    const taken = new Set<string>();
+    for (const dir of [".claude/jobs", ".claude/jobs/done"]) {
+      if (existsSync(dir)) {
+        for (const f of readdirSync(dir).filter(f => f.endsWith(".md")))
+          taken.add(basename(f, ".md"));
+      }
+    }
+    let jobName = baseName;
+    let counter = 2;
+    while (taken.has(jobName)) jobName = `${baseName}-${counter++}`;
+    if (jobName !== baseName) console.log(`  "${baseName}" already exists — using "${jobName}".`);
+
+    mkdirSync(".claude/jobs", { recursive: true });
+    writeFileSync(`.claude/jobs/${jobName}.md`, `---\npipeline: ${pipeline}\ndomain: ${domain}\n---\n\n${spec}\n`);
+    console.log(`\nCreated .claude/jobs/${jobName}.md`);
+
+    // Only offer to start if no session is running
+    const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
+    let sessionRunning = false;
+    try {
+      const res = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(500) });
+      sessionRunning = res.ok;
+    } catch { /* not running */ }
+
+    if (sessionRunning) {
+      console.log("Session already running — load the job via the orchestrator or watch mode.");
+      rl.close();
+      return;
+    }
+
+    const start = (await ask("Start now? [Y/n] ")).trim().toLowerCase();
+    rl.close();
+    if (start !== "n") {
+      const proc = Bun.spawn(
+        [process.execPath, "run", import.meta.path, "start", `--job=${jobName}`],
+        { stdout: "inherit", stderr: "inherit", stdin: "inherit" }
+      );
+      await proc.exited;
+    }
+  } catch (e) {
+    rl.close();
+    throw e;
+  }
+}
+
 // Used by tmux keybinds. Reads available job files at runtime and either opens a
 // popup to start directly (0-1 jobs) or shows a menu to pick a job (2+ jobs).
 
@@ -676,6 +764,7 @@ const [,, subcmd, ...rest] = process.argv;
 switch (subcmd) {
   case "init":      await init(); break;
   case "validate":  process.exit((await validate(rest)) ? 0 : 1);
+  case "new-job":   await newJob(); break;
   case "launch":    await launch(rest); break;
   case "start":     await start(rest); break;
   case "start-mcp": await startMcp(rest); break;

@@ -322,20 +322,22 @@ describe("buildMenuArgs", () => {
     expect(args).not.toContain("Status");
   });
 
-  it("shows Start and Validate when initialized but not running", () => {
+  it("shows Start, New job, Validate when initialized but not running", () => {
     const args = buildMenuArgs("/bun", "/plugin/cli.ts", { initialized: true, running: false, workers: [] });
     expect(args).toContain("Start session");
     expect(args).toContain("Start here");
+    expect(args).toContain("New job…");
     expect(args).toContain("Validate");
     expect(args).not.toContain("Status");
   });
 
-  it("shows status/queue/results/jobs when running", () => {
+  it("shows status/queue/results/jobs/new-job when running", () => {
     const args = buildMenuArgs("/bun", "/plugin/cli.ts", running);
     expect(args).toContain("Status");
     expect(args).toContain("Queue");
     expect(args).toContain("Results");
     expect(args).toContain("Jobs");
+    expect(args).toContain("New job…");
   });
 
   it("adds one entry per worker when running", () => {
