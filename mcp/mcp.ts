@@ -143,10 +143,13 @@ mcp.tool(
   { worker_id: z.string(), reason: z.string() },
   async ({ worker_id, reason }) => {
     reportBlocked(worker_id, reason);
-    Bun.spawn([
-      "osascript", "-e",
-      `display notification "Worker ${worker_id} is blocked: ${reason}" with title "Claude Agent" sound name "Basso"`,
-    ]);
+    if (process.platform === "darwin" && process.env.CLAUDE_AGENTS_NOTIFY !== "false") {
+      const proc = Bun.spawn(
+        ["osascript", "-e", `display notification "Worker ${worker_id} is blocked: ${reason}" with title "Claude Agent" sound name "Basso"`],
+        { stdout: "pipe", stderr: "pipe" }
+      );
+      await proc.exited;
+    }
     return { content: [{ type: "text", text: "Blocked state recorded. Orchestrator notified." }] };
   }
 );

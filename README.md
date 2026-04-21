@@ -45,10 +45,10 @@ Workers are **pull-based** — they call `get_task` themselves when ready, makin
 bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate --job=my-feature
 
 # 4. Start a session — workers spawn automatically when one job file exists:
-prefix+M
+prefix+O  # opens the control menu → Start session
 
 # 5. Watch the orchestrator load tasks and workers pick them up.
-#    Press prefix+S at any time to check status or clean up.
+#    Press prefix+O at any time to check status, inspect results, or clean up.
 ```
 
 ## Requirements
@@ -93,17 +93,17 @@ Add to `tmux.conf`:
 ```tmux
 set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if bun is elsewhere
 set -g @claude-agents-mcp-port   7777                    # default
-set -g @claude-agents-notify     true                    # macOS notifications (Glass = done, Basso = blocked)
+set -g @claude-agents-notify     true                    # macOS notifications (default: true)
 set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/
 ```
 
-When `@claude-agents-notify` is enabled, the MCP server fires a notification when a worker finishes or calls `report_blocked`. Two distinct sounds let you know what needs attention without looking at the screen:
-- **Glass** — worker finished all tasks
+On macOS, system notifications fire automatically (set `@claude-agents-notify false` to disable). Two distinct sounds:
+- **Glass** — worker finished (triggered via `notify` CLI command)
 - **Basso** — worker is blocked and needs intervention
 
 ## Project Setup
 
-Press `prefix+M` from inside your project. If `.claude/` hasn't been initialized yet, it will run `init` automatically. Or run it directly:
+Press `prefix+O` from inside your project. If `.claude/` hasn't been initialized yet, the menu shows **Init project** automatically. Or run it directly:
 
 ```bash
 bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts init
@@ -238,13 +238,11 @@ Plugins listed in role files (`## Plugins`) produce warnings — they can't be v
 
 | Keybind | Action |
 |---|---|
-| `prefix+M` | Start a multi-agent session (scaffolds if needed, new window) |
-| `prefix+Alt+M` | Start in the current pane |
-| `prefix+S` | Open control panel — status, queue, results, cleanup |
+| `prefix+O` | Open control panel (init / start / status / jobs / cleanup) |
 
 ### Starting a session
 
-Press `prefix+M` from inside your project directory. The plugin will:
+Press `prefix+O` from inside your project directory and select **Start session**. The plugin will:
 
 1. Start the MCP server in the background
 2. Open a new window and launch the orchestrator Claude agent
@@ -267,7 +265,7 @@ bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts start --job=auth-login
 
 1. Registers the MCP server, creates worktrees, spins up workers, and loads all tasks via `load_tasks`
 2. Workers register, then start pulling tasks via `get_task` — the server withholds tasks until their `depends_on` stages complete
-3. Monitor progress with `get_status` or `prefix+S`
+3. Monitor progress with `get_status` or `prefix+O` → Status
 4. Read stage output with `get_stage_results(job, stage)` as each stage completes
 
 ## Example: Auth feature pipeline
@@ -302,7 +300,7 @@ This walkthrough shows a full pipeline session: four workers, four stages, resul
 
 ### Step 1 — Start the session
 
-Press `prefix+M` from your project directory. The plugin starts the MCP server and opens a new `agents` window with the orchestrator:
+Press `prefix+O` → **Start session** from your project directory. The plugin starts the MCP server and opens a new `agents` window with the orchestrator:
 
 ```
 ┌──────────────────────────────────────────┐
@@ -459,7 +457,7 @@ git worktree remove .worktrees/auth-login
 
 ### Inspect and clean up
 
-Press `prefix+S` to open the control panel. Select **Cleanup…** (`x`) to kill the MCP server and remove worktrees — a confirmation prompt prevents accidental runs. Query the API directly too:
+Press `prefix+O` to open the control panel. Select **Cleanup…** (`x`) to kill the MCP server and remove worktrees — a confirmation prompt prevents accidental runs. Query the API directly too:
 
 ```bash
 curl localhost:7777/status                             # all worker states
@@ -469,7 +467,7 @@ curl localhost:7777/job/auth-login/build/results       # bob's build output
 
 ## Status Menu
 
-Press `prefix+S` to open the status menu. Worker entries are populated dynamically from the current session:
+Press `prefix+O` to open the control panel. Worker entries are populated dynamically from the current session:
 
 ```
  Claude Agents 

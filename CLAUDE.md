@@ -122,7 +122,7 @@ bun test
 ```tmux
 set -g @plugin 'yourname/tmux-claude-agents'
 set -g @claude-agents-mcp-port   7777   # default
-set -g @claude-agents-notify     true   # macOS notifications
+set -g @claude-agents-notify     true   # macOS notifications (set false to disable)
 set -g @claude-agents-watch-jobs true   # auto-start jobs dropped into .claude/jobs/
 
 set -g bell-action any

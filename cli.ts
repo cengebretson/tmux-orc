@@ -1,17 +1,13 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync, mkdirSync, appendFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, mkdirSync, appendFileSync } from "fs";
 import { watch as fsWatch } from "fs";
-import { resolve, join, basename } from "path";
+import { resolve, join, basename, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
 import { createInterface } from "readline";
 
 const PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)));
 const PID_FILE = "/tmp/claude-agents-mcp.pid";
-
-function dirname(path: string): string {
-  return path.slice(0, path.lastIndexOf("/")) || ".";
-}
 
 // --- helpers ---
 
@@ -92,10 +88,7 @@ export function parseStartArgs(args: string[]): StartArgs {
 }
 
 export function applyTemplate(template: string, vars: Record<string, string>): string {
-  return Object.entries(vars).reduce(
-    (t, [k, v]) => t.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v),
-    template
-  );
+  return template.replace(/\{\{([^}]+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 }
 
 export function shouldProcessFile(filePath: string, seen: Set<string>): boolean {
@@ -581,6 +574,7 @@ async function cleanup(): Promise<void> {
 // --- notify ---
 
 async function notifyFn(workerId: string, state: string): Promise<void> {
+  if (process.platform !== "darwin" || process.env.CLAUDE_AGENTS_NOTIFY === "false") return;
   const isBlocked = state === "blocked";
   const sound = isBlocked ? "Basso" : "Glass";
   const msg = isBlocked ? `Worker ${workerId} is blocked` : `Worker ${workerId} finished`;
@@ -662,7 +656,7 @@ async function newJob(): Promise<void> {
     const spec = (await ask("Spec (one line description): ")).trim();
     if (!spec) { console.error("Spec is required."); process.exit(1); }
 
-    const suggested = spec.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 35);
+    const suggested = (spec.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 35)) || "job";
     const nameInput = (await ask(`Job name [${suggested}]: `)).trim();
     const baseName = nameInput || suggested;
 
@@ -680,7 +674,7 @@ async function newJob(): Promise<void> {
     if (jobName !== baseName) console.log(`  "${baseName}" already exists — using "${jobName}".`);
 
     mkdirSync(".claude/jobs", { recursive: true });
-    writeFileSync(`.claude/jobs/${jobName}.md`, `---\npipeline: ${pipeline}\ndomain: ${domain}\n---\n\n${spec}\n`);
+    await Bun.write(`.claude/jobs/${jobName}.md`, `---\npipeline: ${pipeline}\ndomain: ${domain}\n---\n\n${spec}\n`);
     console.log(`\nCreated .claude/jobs/${jobName}.md`);
 
     // Only offer to start if no session is running

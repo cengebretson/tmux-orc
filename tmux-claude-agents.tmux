@@ -12,6 +12,10 @@ WATCH_JOBS=$(tmux show-option -gqv "@claude-agents-watch-jobs")
 WATCH_JOBS="${WATCH_JOBS:-false}"
 export CLAUDE_AGENTS_WATCH_JOBS="$WATCH_JOBS"
 
+NOTIFY=$(tmux show-option -gqv "@claude-agents-notify")
+NOTIFY="${NOTIFY:-true}"
+export CLAUDE_AGENTS_NOTIFY="$NOTIFY"
+
 # Warn once at plugin load if bun dependencies haven't been installed
 if [ ! -d "$PLUGIN_DIR/mcp/node_modules" ]; then
   tmux display-message "tmux-claude-agents: run 'cd $PLUGIN_DIR/mcp && $BUN install' to finish setup"
