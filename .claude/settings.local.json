@@ -9,7 +9,8 @@
       "Bash(bun run *)",
       "Bash(awk '{print $3}')",
       "Bash(cat)",
-      "Bash(bash /tmp/check_tools.sh)"
+      "Bash(bash /tmp/check_tools.sh)",
+      "Bash(bun add *)"
     ]
   }
 }

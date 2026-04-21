@@ -5,6 +5,7 @@ import { resolve, join, basename, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
 import { createInterface } from "readline";
+import notifier from "node-notifier";
 
 const PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)));
 const PID_FILE = "/tmp/claude-agents-mcp.pid";
@@ -481,7 +482,7 @@ async function watch(args: string[]): Promise<void> {
       await tmux("send-keys", "-t", orchPane, `start job ${job}`, "Enter");
     } else {
       console.error(`[watch] validation failed for '${job}' — not starting`);
-      await notifyFn("watcher", "blocked");
+      notifyFn("watcher", "blocked");
     }
   }
 
@@ -573,20 +574,18 @@ async function cleanup(): Promise<void> {
 
 // --- notify ---
 
-async function notifyFn(workerId: string, state: string): Promise<void> {
-  if (process.platform !== "darwin" || process.env.CLAUDE_AGENTS_NOTIFY === "false") return;
+function notifyFn(workerId: string, state: string): void {
+  if (process.env.CLAUDE_AGENTS_NOTIFY === "false") return;
   const isBlocked = state === "blocked";
-  const sound = isBlocked ? "Basso" : "Glass";
-  const msg = isBlocked ? `Worker ${workerId} is blocked` : `Worker ${workerId} finished`;
-  const proc = Bun.spawn(
-    ["osascript", "-e", `display notification "${msg}" with title "Claude Agent" sound name "${sound}"`],
-    { stdout: "pipe", stderr: "pipe" }
-  );
-  await proc.exited;
+  notifier.notify({
+    title: "Claude Agent",
+    message: isBlocked ? `Worker ${workerId} is blocked` : `Worker ${workerId} finished`,
+    sound: isBlocked ? "Basso" : "Glass",
+  });
 }
 
-async function notify(args: string[]): Promise<void> {
-  await notifyFn(args[0] ?? "?", args[1] ?? "done");
+function notify(args: string[]): void {
+  notifyFn(args[0] ?? "?", args[1] ?? "done");
 }
 
 // --- init ---
