@@ -164,14 +164,7 @@ Reason: <blockedReason>
 Switch to that pane: tmux select-pane -t <paneId>
 ```
 
-The human will switch to the pane, fix the issue directly, and tell you what they did.
-Once resolved, call:
-
-```
-resolve_block(worker_id="bob", resolution="<what was done to fix it>")
-```
-
-This saves the resolution to `.claude/knowledge/<role>.md` so future runs avoid the same block, and sets the worker back to `"working"` so they continue their task.
+The human will switch to the pane, fix the issue, and tell the worker what they did. The worker will call `resolve_block` itself and then resume. You just need to monitor `get_status` until the worker returns to `"working"`.
 
 ## Communication rules
 

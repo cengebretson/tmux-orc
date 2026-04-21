@@ -39,4 +39,12 @@ If you cannot proceed — missing information, unclear requirements, a dependenc
 report_blocked(worker_id="{{id}}", reason="<clear description of what you need or what is wrong>")
 ```
 
-Then stop and wait. The orchestrator will coordinate a resolution and call `resolve_block` when you can continue. Your task is still assigned to you — resume it once unblocked.
+Then stop and wait. A human will come to this pane to fix the issue and tell you what they did.
+
+Once the issue is resolved, call:
+
+```
+resolve_block(worker_id="{{id}}", resolution="<description of what was done to fix it>")
+```
+
+Then resume your task. This saves the resolution to the project knowledge base so future runs avoid the same block.

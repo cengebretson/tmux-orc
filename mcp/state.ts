@@ -1,4 +1,4 @@
-import { existsSync, appendFileSync, mkdirSync } from "fs";
+import { existsSync, statSync, appendFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import type { Task, StageStatus, StageInfo, JobStatus, Status } from "./types.js";
 export type { Task, StageStatus, StageInfo, JobStatus, Status };
@@ -6,7 +6,8 @@ export type { Task, StageStatus, StageInfo, JobStatus, Status };
 function findProjectRoot(): string {
   let dir = process.cwd();
   while (true) {
-    if (existsSync(join(dir, ".git"))) return dir;
+    const git = join(dir, ".git");
+    if (existsSync(git) && statSync(git).isDirectory()) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
