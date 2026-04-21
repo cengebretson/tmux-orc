@@ -28,7 +28,7 @@ async function tmuxOut(...args: string[]): Promise<string> {
 
 function findRoleFile(role: string): string | null {
   const project = `.claude/roles/${role}.md`;
-  const builtin = join(PLUGIN_DIR, `roles/${role}.md`);
+  const builtin = join(PLUGIN_DIR, `assets/roles/${role}.md`);
   if (existsSync(project)) return project;
   if (existsSync(builtin)) return builtin;
   return null;
@@ -36,7 +36,7 @@ function findRoleFile(role: string): string | null {
 
 function findSkillFile(skill: string): string | null {
   const project = `.claude/skills/${skill}.md`;
-  const builtin = join(PLUGIN_DIR, `skills/${skill}.md`);
+  const builtin = join(PLUGIN_DIR, `assets/skills/${skill}.md`);
   if (existsSync(project)) return project;
   if (existsSync(builtin)) return builtin;
   return null;
@@ -384,7 +384,7 @@ async function start(args: string[]): Promise<void> {
 
     if (wt.exitCode === 0) {
       mkdirSync(`${worktreePath}/.claude/commands`, { recursive: true });
-      for (const src of [join(PLUGIN_DIR, "skills"), ".claude/skills"]) {
+      for (const src of [join(PLUGIN_DIR, "assets/skills"), ".claude/skills"]) {
         if (existsSync(src)) {
           for (const f of readdirSync(src).filter(f => f.endsWith(".md"))) {
             await Bun.write(`${worktreePath}/.claude/commands/${f}`, readFileSync(join(src, f)));
@@ -392,7 +392,7 @@ async function start(args: string[]): Promise<void> {
         }
       }
 
-      const workerTemplate = readFileSync(join(PLUGIN_DIR, "templates/worker.md"), "utf8");
+      const workerTemplate = readFileSync(join(PLUGIN_DIR, "assets/templates/worker.md"), "utf8");
       let prevPane = orchPane;
       for (const worker of config.workers) {
         const roleFile = findRoleFile(worker.role);
@@ -424,7 +424,7 @@ async function start(args: string[]): Promise<void> {
     ? "**Workers and worktrees are already set up by the CLI — skip Steps 1 and 2 and proceed directly to Step 3 (Load tasks).**\n\n"
     : "";
   const prompt = workerNote + applyTemplate(
-    readFileSync(join(PLUGIN_DIR, "templates/orchestrator.md"), "utf8"),
+    readFileSync(join(PLUGIN_DIR, "assets/templates/orchestrator.md"), "utf8"),
     { mcp_url: mcpUrl, agents_config: configPath, job_file: jobFile }
   );
 
@@ -598,8 +598,8 @@ async function init(): Promise<void> {
   mkdirSync(".claude/jobs", { recursive: true });
   mkdirSync(".claude/roles", { recursive: true });
   mkdirSync(".claude/skills", { recursive: true });
-  await Bun.write(".claude/agents.json", readFileSync(join(PLUGIN_DIR, "examples/agents.json"), "utf8"));
-  await Bun.write(".claude/jobs/example-feature.md", readFileSync(join(PLUGIN_DIR, "examples/jobs/auth-login.md"), "utf8"));
+  await Bun.write(".claude/agents.json", readFileSync(join(PLUGIN_DIR, "assets/examples/agents.json"), "utf8"));
+  await Bun.write(".claude/jobs/example-feature.md", readFileSync(join(PLUGIN_DIR, "assets/examples/jobs/auth-login.md"), "utf8"));
 
   const gitignoreBlock = "\n# tmux-claude-agents\n.mcp.json\n.worktrees/\n";
   if (existsSync(".gitignore")) {

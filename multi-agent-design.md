@@ -233,11 +233,12 @@ tmux-claude-agents/
     state.test.ts            # bun test
     package.json
   scripts/                   # bash backups (not invoked directly)
-  templates/
-    orchestrator.md          # bootstrap prompt for the orchestrator
-    worker.md                # bootstrap prompt for each worker
-  roles/                     # built-in role files (frontend, backend, review, etc.)
-  skills/                    # built-in skill files (/pr-description, /security-review, etc.)
+  assets/
+    templates/
+      orchestrator.md        # bootstrap prompt for the orchestrator
+      worker.md              # bootstrap prompt for each worker
+    roles/                   # built-in role files (frontend, backend, review, etc.)
+    skills/                  # built-in skill files (/pr-description, /security-review, etc.)
 ```
 
 Install via TPM:
@@ -273,7 +274,7 @@ The orchestrator copies skill files into each job's worktree at `.worktrees/<job
 during bootstrap, making them available as slash commands. Lookup order:
 
 1. `.claude/skills/<skill>.md` — project-level, takes precedence
-2. `~/.tmux/plugins/tmux-claude-agents/skills/<skill>.md` — plugin built-ins, fallback
+2. `~/.tmux/plugins/tmux-claude-agents/assets/skills/<skill>.md` — plugin built-ins, fallback
 
 Workers have access to all skills — no per-worker filtering. Each role file's
 `## Skills` and `## Plugins` sections document what's relevant for that role.

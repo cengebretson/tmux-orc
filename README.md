@@ -560,9 +560,9 @@ Workers have access to all skills (`.claude/commands/`) and MCP plugins configur
 During bootstrap the orchestrator copies skill files into each worker's worktree at `.worktrees/<id>/.claude/commands/`, making them available as slash commands. The lookup order mirrors roles:
 
 1. `.claude/skills/<skill>.md` — project-level, takes precedence
-2. `~/.tmux/plugins/tmux-claude-agents/skills/<skill>.md` — plugin built-ins, fallback
+2. `~/.tmux/plugins/tmux-claude-agents/assets/skills/<skill>.md` — plugin built-ins, fallback
 
-Built-in skills (shipped in `skills/`):
+Built-in skills (shipped in `assets/skills/`):
 
 | Skill | Description |
 |---|---|
@@ -581,8 +581,8 @@ Roles and skills follow the same two-level lookup — project-level takes preced
 
 | | Project-level | Plugin built-in |
 |---|---|---|
-| Roles | `.claude/roles/<role>.md` | `~/.tmux/plugins/tmux-claude-agents/roles/<role>.md` |
-| Skills | `.claude/skills/<skill>.md` | `~/.tmux/plugins/tmux-claude-agents/skills/<skill>.md` |
+| Roles | `.claude/roles/<role>.md` | `~/.tmux/plugins/tmux-claude-agents/assets/roles/<role>.md` |
+| Skills | `.claude/skills/<skill>.md` | `~/.tmux/plugins/tmux-claude-agents/assets/skills/<skill>.md` |
 
 You never need to touch the plugin folder. Put files in `.claude/` and they automatically override or extend what ships with the plugin.
 
@@ -639,11 +639,13 @@ tmux-claude-agents/
     state.ts                 # task queue, worker state, results (in-memory)
     state.test.ts            # unit tests (bun test)
     package.json
-  cli.ts                     # primary CLI: validate, start, start-mcp, watch, menu, cleanup, notify
-  scripts/                   # bash backups (not invoked directly)
-  templates/
-    orchestrator.md          # bootstrap prompt for the orchestrator agent
-    worker.md                # bootstrap prompt for each worker agent
+  cli.ts                     # primary CLI: init, validate, launch, new-job, start, start-mcp, watch, menu, cleanup, notify
+  assets/
+    templates/
+      orchestrator.md        # bootstrap prompt for the orchestrator agent
+      worker.md              # bootstrap prompt for each worker agent
+    roles/                   # built-in role files
+    skills/                  # built-in skill files
 ```
 
 ### Worker isolation

@@ -27,14 +27,14 @@ Read `{{agents_config}}` to get worker definitions. For each worker:
    ```
 3. Find the role file for each worker using this lookup order:
    - `.claude/roles/<role>.md` — project-level (takes precedence)
-   - `~/.tmux/plugins/tmux-claude-agents/roles/<role>.md` — plugin built-in (fallback)
+   - `~/.tmux/plugins/tmux-claude-agents/assets/roles/<role>.md` — plugin built-in (fallback)
 
 4. Install skills into the worktree so they are available as slash commands:
    ```bash
    mkdir -p .worktrees/<worktree>/.claude/commands
 
    # plugin built-ins first
-   cp ~/.tmux/plugins/tmux-claude-agents/skills/*.md .worktrees/<worktree>/.claude/commands/
+   cp ~/.tmux/plugins/tmux-claude-agents/assets/skills/*.md .worktrees/<worktree>/.claude/commands/
 
    # project-level skills override built-ins
    [ -d .claude/skills ] && cp .claude/skills/*.md .worktrees/<worktree>/.claude/commands/
