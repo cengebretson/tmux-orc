@@ -87,6 +87,7 @@ set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if 
 set -g @claude-agents-mcp-port   7777                    # default
 set -g @claude-agents-notify     true                    # macOS notifications (default: true)
 set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-layout     windows                 # windows | sessions | panes (default: windows)
 ```
 
 On macOS, system notifications fire automatically (set `@claude-agents-notify false` to disable). Two distinct sounds:
@@ -237,15 +238,15 @@ Plugins listed in role files (`## Plugins`) produce warnings — they can't be v
 Press `prefix+O` from inside your project directory and select **Start session**. The plugin will:
 
 1. Start the MCP server in the background
-2. Open a new window and launch the orchestrator Claude agent
-3. Opens a window per job containing the worker panes, orchestrator stays in `agents`
+2. Open a new `agents` window and launch the orchestrator Claude agent
+3. Spawn workers according to `@claude-agents-layout` (default: one window per job, workers as panes inside it)
 
 Once the orchestrator is running, **just tell it what to do**:
 
 > "start job auth-login"
 > "start jobs auth-login and auth-signup in parallel"
 
-The orchestrator reads the job file, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks`. You can start additional jobs at any point mid-session the same way — workers pick them up automatically.
+The orchestrator reads the job file, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks`. You can also start a pending job via `prefix+O` → **Start \<job-name\>** — it appears automatically for any job file not yet loaded into the running session.
 
 To pre-load a job at cold-start, pass `--job`:
 
@@ -316,7 +317,7 @@ All pipeline workers (`bob`, `rex`, `sam`, `git`) will work inside `.worktrees/a
 
 ### Step 3 — CLI spawns workers
 
-The CLI creates a dedicated tmux window named after the job and splits worker panes inside it. The orchestrator stays in the `agents` window:
+The CLI spawns workers according to `@claude-agents-layout`. With the default `windows` layout, each job gets a dedicated tmux window with worker panes split inside it. The orchestrator stays in the `agents` window:
 
 ```
 ┌─────────────────────────────────┐
@@ -461,21 +462,39 @@ curl localhost:7777/job/auth-login                     # stage breakdown
 curl localhost:7777/job/auth-login/build/results       # bob's build output
 ```
 
-## Status Menu
+## Control Panel
 
-Press `prefix+O` to open the control panel. Worker entries are populated dynamically from the current session:
+Press `prefix+O` to open the context-aware control panel. Items shown depend on current state:
 
+**No session running:**
 ```
- Claude Agents 
-  Status  s    ← queue depth + all worker states
-  Queue   q    ← pending tasks
-  Results r    ← all submitted results
+ Claude Orc 
+  Start session    ← start MCP + orchestrator
+  Start here       ← start in current pane
   ──────────
-  Worker 2     ← result for worker 2
-  Worker 3     ← result for worker 3
+  New job…         ← wizard to create a job file
+  Validate         ← pre-flight config check
 ```
 
-Each option opens a tmux popup with formatted JSON output.
+**Session running:**
+```
+ Claude Orc 
+  Status           ← queue depth + all worker states
+  Queue            ← pending tasks
+  Results          ← all submitted results
+  Jobs             ← per-job stage breakdown
+  ──────────
+  New job…         ← create and optionally start a new job
+  ──────────
+  Start auth-login ← start a pending job (one entry per unloaded job file)
+  ──────────
+  Worker bob       ← result for worker bob
+  Worker rex       ← result for worker rex
+  ──────────
+  Cleanup…         ← kill MCP server + remove worktrees (with confirmation)
+```
+
+Pending job entries (`Start <name>`) appear automatically — the menu cross-references active jobs in the MCP server against `.claude/jobs/*.md` and shows only unloaded ones. Each option opens a tmux popup with formatted JSON output.
 
 ## MCP Server
 

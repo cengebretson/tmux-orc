@@ -278,7 +278,7 @@ Keybinds (single entry point):
 prefix+O    open control panel — context-aware menu:
               uninitialized → Init project
               initialized, no session → Start session / Start here / New job… / Validate
-              session running → Status / Queue / Results / Jobs / New job… / Workers / Cleanup…
+              session running → Status / Queue / Results / Jobs / New job… / Start <pending-job>… / Workers / Cleanup…
 ```
 
 ## MCP Transport: HTTP/SSE

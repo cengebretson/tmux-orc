@@ -313,17 +313,17 @@ describe("shouldProcessFile", () => {
 // --- buildMenuArgs ---
 
 describe("buildMenuArgs", () => {
-  const running = { initialized: true, running: true, workers: [] };
+  const running = { initialized: true, running: true, workers: [], pendingJobs: [] };
 
   it("shows Init when uninitialized", () => {
-    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { initialized: false, running: false, workers: [] });
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { initialized: false, running: false, workers: [], pendingJobs: [] });
     expect(args).toContain("Init project");
     expect(args).not.toContain("Start session");
     expect(args).not.toContain("Status");
   });
 
   it("shows Start, New job, Validate when initialized but not running", () => {
-    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { initialized: true, running: false, workers: [] });
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { initialized: true, running: false, workers: [], pendingJobs: [] });
     expect(args).toContain("Start session");
     expect(args).toContain("Start here");
     expect(args).toContain("New job…");
@@ -359,5 +359,21 @@ describe("buildMenuArgs", () => {
   it("no Worker entries when no workers", () => {
     const args = buildMenuArgs("/bun", "/plugin/cli.ts", running);
     expect(args.some(a => typeof a === "string" && a.startsWith("Worker"))).toBe(false);
+  });
+
+  it("lists pending jobs as Start entries when running", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { ...running, pendingJobs: ["auth-login", "add-nav"] });
+    expect(args).toContain("Start auth-login");
+    expect(args).toContain("Start add-nav");
+  });
+
+  it("pending job entries include --job= flag", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { ...running, pendingJobs: ["my-job"] });
+    expect(args.some(a => typeof a === "string" && a.includes("--job=my-job"))).toBe(true);
+  });
+
+  it("no Start job entries when no pending jobs", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", running);
+    expect(args.some(a => typeof a === "string" && a.startsWith("Start "))).toBe(false);
   });
 });

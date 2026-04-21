@@ -118,6 +118,7 @@ export interface MenuState {
   initialized: boolean;
   running: boolean;
   workers: string[];
+  pendingJobs: string[];
 }
 
 export function buildMenuArgs(bunPath: string, cliPath: string, state: MenuState): string[] {
@@ -147,10 +148,18 @@ export function buildMenuArgs(bunPath: string, cliPath: string, state: MenuState
     "Jobs",    "j", `run-shell '${bun} menu show jobs'`,
     "", "", "",
     "New job…","n",  popup(100, 20, `${bun} new-job${pause}`),
-    "", "", "",
   ];
-  for (const w of state.workers) {
-    args.push(`Worker ${w}`, "", `run-shell '${bun} menu show result/${w}'`);
+  if (state.pendingJobs.length > 0) {
+    args.push("", "", "");
+    for (const job of state.pendingJobs) {
+      args.push(`Start ${job}`, "", popup(120, 30, `${bun} start --job=${job}${pause}`));
+    }
+  }
+  if (state.workers.length > 0) {
+    args.push("", "", "");
+    for (const w of state.workers) {
+      args.push(`Worker ${w}`, "", `run-shell '${bun} menu show result/${w}'`);
+    }
   }
   const cleanup = popup(60, 6,
     `echo Cleanup: kill MCP server and remove worktrees.; echo Press Enter to confirm, Ctrl+C to cancel.; read -r; ${bun} cleanup${pause}`
@@ -608,6 +617,7 @@ async function menu(args: string[]): Promise<void> {
   const initialized = existsSync(".claude/agents.json");
   let running = false;
   let workers: string[] = [];
+  let pendingJobs: string[] = [];
   try {
     const res = await fetch(`${baseUrl}/status`, { signal: AbortSignal.timeout(1000) });
     if (res.ok) {
@@ -617,7 +627,25 @@ async function menu(args: string[]): Promise<void> {
     }
   } catch { /* server not running */ }
 
-  await tmux("display-menu", "-T", " Claude Orc ", ...buildMenuArgs(process.execPath, cliPath, { initialized, running, workers }));
+  if (running && existsSync(".claude/jobs")) {
+    try {
+      const jobsRes = await fetch(`${baseUrl}/jobs`, { signal: AbortSignal.timeout(1000) });
+      if (jobsRes.ok) {
+        const activeJobs = new Set(Object.keys(await jobsRes.json() as Record<string, unknown>));
+        const doneJobs = new Set(
+          existsSync(".claude/jobs/done")
+            ? readdirSync(".claude/jobs/done").filter(f => f.endsWith(".md")).map(f => basename(f, ".md"))
+            : []
+        );
+        pendingJobs = readdirSync(".claude/jobs")
+          .filter(f => f.endsWith(".md"))
+          .map(f => basename(f, ".md"))
+          .filter(j => !activeJobs.has(j) && !doneJobs.has(j));
+      }
+    } catch { /* best effort */ }
+  }
+
+  await tmux("display-menu", "-T", " Claude Orc ", ...buildMenuArgs(process.execPath, cliPath, { initialized, running, workers, pendingJobs }));
 }
 
 // --- cleanup ---
