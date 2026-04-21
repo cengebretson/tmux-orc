@@ -35,10 +35,11 @@ A small local Bun/TypeScript server. Exposes tools to all agents:
 - `load_tasks(tasks[])` — seed the task queue
 - `get_result(worker_id)` — read a worker's submitted result
 - `get_status()` — queue depth + all worker states
-- `all_done()` — true when queue is empty and all registered workers have submitted
+- `all_done()` — true when queue is empty and all registered workers are submitted or idle
 - `stage_done(job, stage)` / `get_stage_results(job, stage)` — pipeline sequencing
 - `get_jobs_status(job?)` — stage breakdown for one job or all active jobs
 - `reset_job(job)` — clear stage state to rerun a pipeline for a new feature
+- `get_hung_workers(threshold_ms)` — workers stuck in working state longer than the threshold; use to detect agents that silently stopped without calling `report_blocked`
 
 Workers are pull-based — they call `get_task()` themselves when ready,
 making the system self-scheduling.

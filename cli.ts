@@ -377,7 +377,7 @@ async function watch(args: string[]): Promise<void> {
     if (!existsSync(filePath)) return;
     seen.add(filePath);
 
-    const job = file.slice(0, -3);
+    const job = basename(filePath).slice(0, -3);
     console.log(`[watch] detected: ${job}`);
 
     if (await validate([`--config=${configPath}`, `--job=${job}`])) {

@@ -40,11 +40,12 @@ Tools exposed to agents:
 | `load_tasks(tasks[])` | Orchestrator | Seed the task queue |
 | `get_result(worker_id)` | Orchestrator | Read a worker's result |
 | `get_status()` | Orchestrator | Queue depth + worker states |
-| `all_done()` | Orchestrator | True when queue empty and all workers submitted |
+| `all_done()` | Orchestrator | True when queue empty and all workers are submitted or idle |
 | `stage_done(job, stage)` | Orchestrator | True when all stage tasks submitted |
 | `get_stage_results(job, stage)` | Orchestrator | All results from a stage |
 | `get_jobs_status(job?)` | Orchestrator | Stage breakdown for one or all jobs |
 | `reset_job(job)` | Orchestrator | Clear stage state to rerun a job |
+| `get_hung_workers(threshold_ms)` | Orchestrator | Workers in working state with no activity for longer than threshold_ms |
 | `report_blocked(worker_id, reason)` | Worker | Signal stuck state — fires Basso notification |
 | `resolve_block(worker_id, resolution)` | Worker | Unblock self and append resolution to `## Lessons Learned` in `.claude/roles/<role>.md` |
 

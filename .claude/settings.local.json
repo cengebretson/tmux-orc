@@ -6,7 +6,10 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(bun test *)",
       "Bash(chmod +x /Users/chris/Desktop/projects/tmux/tmux-orc/cli.ts)",
-      "Bash(bun run *)"
+      "Bash(bun run *)",
+      "Bash(awk '{print $3}')",
+      "Bash(cat)",
+      "Bash(bash /tmp/check_tools.sh)"
     ]
   }
 }
