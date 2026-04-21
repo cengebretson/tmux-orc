@@ -228,7 +228,6 @@ tmux-claude-agents/
     state.ts                 # in-memory task/worker/job state
     state.test.ts            # bun test
     package.json
-  scripts/                   # bash backups (not invoked directly)
   assets/
     templates/
       orchestrator.md        # bootstrap prompt for the orchestrator

@@ -42,8 +42,7 @@ load_tasks([
 ])
 ```
 
-To start an additional job mid-session, read its job file, create its worktree, and
-call `load_tasks` again. Workers pick up the new tasks automatically.
+To start an additional job mid-session, use `prefix+O` → **New job…** to create the job file — the CLI will handle worktree creation and worker spawning automatically. Workers pick up the new tasks as soon as `load_tasks` is called.
 
 ### Tasks
 
@@ -110,12 +109,14 @@ The recap should draw from the stage results you've already read — build summa
 When `get_status` shows a worker with `status: "blocked"`, tell the human immediately:
 
 ```
-Worker bob is blocked in pane <paneId>.
+Worker bob is blocked.
 Reason: <blockedReason>
-Switch to that pane: tmux select-pane -t <paneId>
+Switch to the job window, then to the worker pane:
+  tmux select-window -t <job-name>
+  tmux select-pane -t <paneId>
 ```
 
-The human will switch to the pane, fix the issue, and tell the worker what they did. The worker will call `resolve_block` itself and then resume. You just need to monitor `get_status` until the worker returns to `"working"`.
+The human will fix the issue and tell the worker what they did. The worker will call `resolve_block` itself and then resume. You just need to monitor `get_status` until the worker returns to `"working"`.
 
 ## Communication rules
 
