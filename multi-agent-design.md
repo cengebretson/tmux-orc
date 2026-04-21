@@ -286,9 +286,26 @@ Workers have access to all skills — no per-worker filtering. Each role file's
 - MCP server gives structured coordination vs file polling
 
 ## Open Questions / Next Steps
+
+### Observability
 - [ ] Add tmux-logging plugin for full output capture
-- [ ] Test with a small real task (e.g. auth feature with React + FastAPI)
 - [ ] **Web dashboard** — serve a single zero-dependency HTML file from the existing Bun HTTP server (new `/` route in `routes.ts`) with vanilla JS polling the existing `/status`, `/jobs`, `/queue`, and `/results` endpoints. Auto-refreshes every few seconds. No new npm deps — the MCP server already runs an HTTP server on port 7777, so the dashboard is just a new route returning a self-contained HTML string. Would give a real-time browser view of all workers, stages, and results without requiring the tmux panes to be visible.
+- [ ] **Worker pane health-check** — auto-detect when a Claude session has crashed or exited unexpectedly, beyond `get_hung_workers` which requires the worker process to still be running. Could poll tmux pane state and cross-reference with worker status.
+- [ ] **Structured task logs** — append each task result to `.claude/jobs/<name>.log` so there is a full audit trail after the session ends, independent of tmux scrollback.
+
+### UX / Workflow
+- [ ] Test with a small real task (e.g. auth feature with React + FastAPI)
+- [ ] **Retry worker from menu** — add a menu item under `prefix+O` to kill and respawn a specific hung worker pane without tearing down the whole session.
+- [ ] **Watch mode + new-job integration** — when a session is already running with watch mode enabled, `new-job` could signal the orchestrator directly instead of just dropping a file and waiting for the watcher to pick it up.
+- [ ] **Job templates** — saved pipeline+domain combinations so `new-job` can offer common presets (e.g. "React component", "API endpoint") instead of requiring the user to type pipeline and domain every time.
+
+### State / Reliability
+- [ ] **State persistence** — snapshot MCP server state to `.claude/state.json` on each mutation and reload on server restart. Currently a crash mid-job loses all task assignments and stage results; job files are the source of truth so nothing is permanently lost, but in-progress work may need to be re-done.
+- [ ] **Graceful shutdown** — on `cleanup`, signal workers to finish their current task and call `submit_result` before killing panes, so in-progress work is not lost.
+
+### Distribution
+- [ ] **Publish `claude-agents-mcp` to npm** — decouple the MCP server from the tmux plugin so it can be used in CI pipelines or other agent frameworks without requiring tmux.
+- [ ] **Auto-update check** — notify on `prefix+O` if a newer plugin version is available via TPM.
 
 ## Known Issues / Follow-up
 
