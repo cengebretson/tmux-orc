@@ -19,16 +19,12 @@
 A tmux plugin for running multiple Claude Code agents in parallel. An orchestrator agent coordinates workers via a local MCP server acting as a message bus, with git worktrees providing per-job repo isolation.
 
 ```
-┌──────────────────┬──────────────────┐
-│  pane 1          │  pane 2          │
-│  orchestrator    │  worker 1        │
-│  (claude)        │  (claude)        │
-│                  ├──────────────────┤
-│                  │  pane 3          │
-│                  │  worker 2        │
-│                  │  (claude)        │
-└──────────────────┴──────────────────┘
-         ↕                  ↕
+┌─────────────────────────────────┐   ┌──────────────────────────────────┐
+│  agents window                  │   │  auth-login window               │
+│  orchestrator (claude)          │   │  worker-bob     │  worker-rex    │
+│                                 │   │  (claude)       │  (claude)      │
+└─────────────────────────────────┘   └──────────────────────────────────┘
+         ↕                                       ↕
     MCP Server (localhost:7777)
 ```
 
@@ -242,7 +238,7 @@ Press `prefix+O` from inside your project directory and select **Start session**
 
 1. Start the MCP server in the background
 2. Open a new window and launch the orchestrator Claude agent
-3. The orchestrator spins up worker panes and waits for instructions
+3. Opens a window per job containing the worker panes, orchestrator stays in `agents`
 
 Once the orchestrator is running, **just tell it what to do**:
 
@@ -318,21 +314,25 @@ git worktree add .worktrees/auth-login -b agent/auth-login
 
 All pipeline workers (`bob`, `rex`, `sam`, `git`) will work inside `.worktrees/auth-login` on branch `agent/auth-login`. This means the review worker sees bob's commits immediately, and the git worker opens one PR from `agent/auth-login` → `main`.
 
-### Step 3 — Orchestrator spins up workers
+### Step 3 — CLI spawns workers
 
-The orchestrator creates a pane per worker, writes the role file as `CLAUDE.md` into `.worktrees/auth-login`, installs skills there, and pastes each worker's bootstrap prompt:
+The CLI creates a dedicated tmux window named after the job and splits worker panes inside it. The orchestrator stays in the `agents` window:
 
 ```
-┌─────────────────────┬────────────────────┐
-│  orchestrator       │  bob (frontend)    │
-│                     │  > claude          │
-│  "Spinning up       ├────────────────────┤
-│   workers..."       │  rex (review)      │
-│                     │  > claude          │
-│                     ├────────────────────┤
-│                     │  sam (security)    │
-│                     │  > claude          │
-└─────────────────────┴────────────────────┘
+┌─────────────────────────────────┐
+│  agents window                  │
+│  orchestrator                   │
+│  > claude                       │
+└─────────────────────────────────┘
+
+┌─────────────────────────────────┐
+│  auth-login window              │
+│  bob (frontend)  │ rex (review) │
+│  > claude        │ > claude     │
+│                  ├──────────────┤
+│                  │ sam (security│
+│                  │ > claude     │
+└─────────────────────────────────┘
 ```
 
 ### Step 4 — Orchestrator loads all tasks

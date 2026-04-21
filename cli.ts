@@ -15,6 +15,9 @@ const PID_FILE = "/tmp/claude-agents-mcp.pid";
 function printErr(msg: string)  { console.error(`  ✗ ${msg}`); }
 function printWarn(msg: string) { console.log(`  ⚠ ${msg}`); }
 function printOk(msg: string)   { console.log(`  ✓ ${msg}`); }
+function windowName(name: string): string {
+  return name.length <= 20 ? name : name.slice(0, 19) + "…";
+}
 
 async function tmux(...args: string[]): Promise<void> {
   const proc = Bun.spawn(["tmux", ...args], { stdout: "inherit", stderr: "inherit" });
@@ -403,7 +406,12 @@ async function start(args: string[]): Promise<void> {
       }
 
       const workerTemplate = readFileSync(join(PLUGIN_DIR, "assets/templates/worker.md"), "utf8");
-      let prevPane = orchPane;
+
+      // Create a dedicated window for this job's workers
+      const jobWindow = await tmuxOut("new-window", "-P", "-F", "#{pane_id}",
+        "-n", windowName(jobName), "-e", `MCP_URL=${mcpUrl}`);
+      let prevPane = jobWindow;
+
       for (const worker of config.workers) {
         const roleFile = findRoleFile(worker.role);
         if (!roleFile) { console.warn(`Skipping worker '${worker.id}': role '${worker.role}' not found`); continue; }
@@ -412,8 +420,11 @@ async function start(args: string[]): Promise<void> {
           worktree: worktreePath, domain: fm.domain ?? worktreePath,
           role_content: readFileSync(roleFile, "utf8"),
         });
-        const pane = await tmuxOut("split-window", "-v", "-t", prevPane, "-P", "-F", "#{pane_id}",
-          "-e", `MCP_URL=${mcpUrl}`);
+        // First worker reuses the window's initial pane; subsequent workers split within it
+        const pane = prevPane === jobWindow
+          ? jobWindow
+          : await tmuxOut("split-window", "-v", "-t", prevPane, "-P", "-F", "#{pane_id}",
+              "-e", `MCP_URL=${mcpUrl}`);
         await tmux("select-pane", "-t", pane, "-T", `worker-${worker.id}`);
         prevPane = pane;
         await tmux("send-keys", "-t", pane, "claude", "Enter");
@@ -426,8 +437,11 @@ async function start(args: string[]): Promise<void> {
         await tmux("send-keys", "-t", pane, "", "Enter");
         try { await tmux("delete-buffer", "-b", `w-${worker.id}`); } catch {}
       }
+
+      // Return focus to the orchestrator
+      await tmux("select-window", "-t", orchPane);
       workersSpawned = true;
-      console.log(`Spawned ${config.workers.length} worker(s) for job '${jobName}'`);
+      console.log(`Spawned ${config.workers.length} worker(s) for job '${jobName}' in window '${windowName(jobName)}'`);
     }
   }
 

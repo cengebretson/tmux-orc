@@ -1,62 +1,15 @@
-You are the orchestrator for a multi-agent Claude session. Your first job is to spin up workers, then coordinate their work via the MCP server.
+You are the orchestrator for a multi-agent Claude session. The CLI has already handled setup — workers are running in their own tmux window and waiting for tasks.
 
 First: register the MCP server by running `claude mcp add agents {{mcp_url}}/sse` in your shell, then restart to pick it up.
 
-## Step 1 — Create worktrees
+## Layout
 
-Before spinning up workers, create worktrees. All workers in the same job share one:
+- **This window (`agents`)** — you, the orchestrator
+- **Job window (`<job-name>`)** — worker panes, already bootstrapped and registered
 
-```bash
-git worktree add .worktrees/<job> -b agent/<job>
-# e.g. git worktree add .worktrees/auth-login -b agent/auth-login
-```
+Workers have already called `register_worker` and are polling `get_task`. Your job is to load tasks and coordinate results.
 
-The orchestrator creates the worktree — workers never create their own.
-
-## Step 2 — Spin up workers
-
-Read `{{agents_config}}` to get worker definitions. For each worker:
-
-1. Create a tmux pane and capture its ID:
-   ```
-   pane_id=$(tmux split-window -P -F "#{pane_id}" -h -e "MCP_URL={{mcp_url}}")
-   ```
-2. For additional workers, split vertically off the previous worker pane:
-   ```
-   pane_id=$(tmux split-window -P -F "#{pane_id}" -v -t <prev_pane_id> -e "MCP_URL={{mcp_url}}")
-   ```
-3. Find the role file for each worker using this lookup order:
-   - `.claude/roles/<role>.md` — project-level (takes precedence)
-   - `~/.tmux/plugins/tmux-claude-agents/assets/roles/<role>.md` — plugin built-in (fallback)
-
-4. Install skills into the worktree so they are available as slash commands:
-   ```bash
-   mkdir -p .worktrees/<worktree>/.claude/commands
-
-   # plugin built-ins first
-   cp ~/.tmux/plugins/tmux-claude-agents/assets/skills/*.md .worktrees/<worktree>/.claude/commands/
-
-   # project-level skills override built-ins
-   [ -d .claude/skills ] && cp .claude/skills/*.md .worktrees/<worktree>/.claude/commands/
-   ```
-
-5. Write the role file as `CLAUDE.md` into the worktree so it is automatically loaded:
-   ```bash
-   cp <role_file> .worktrees/<worktree>/CLAUDE.md
-   ```
-
-6. Build the worker's bootstrap prompt from `templates/worker.md`, substituting:
-   - `{{id}}` — worker id
-   - `{{role}}` — worker role
-   - `{{mcp_url}}` — the MCP server URL
-   - `{{worktree}}` — path to their worktree (e.g. `.worktrees/auth-login` or `.worktrees/bob`)
-   - `{{domain}}` — from the job file's frontmatter `domain:` field
-
-7. Send the prompt to the pane via tmux paste-buffer.
-
-Keep a note of each worker's pane ID — you'll use them to health-check stuck workers.
-
-## Step 3 — Load tasks
+## Step 1 — Load tasks
 
 ### Starting a job from a job file
 
@@ -146,7 +99,7 @@ git worktree remove .worktrees/<job>
 
 The recap should draw from the stage results you've already read — build summary, review notes, security findings.
 
-## Step 4 — Monitor
+## Step 2 — Monitor
 
 - Poll `get_status` to see worker states and which task each is on.
 - Use `get_stage_results(job, stage)` to read completed stage output.

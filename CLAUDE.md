@@ -99,7 +99,7 @@ bun run cli.ts cleanup    # kills MCP server, removes worktrees + branches
 bun run cli.ts notify     # macOS notifications (Glass = done, Basso = blocked)
 ```
 
-`start --job=<name>` creates the worktree, installs skills, spawns one pane per worker (with role content injected into the bootstrap prompt), then starts the orchestrator. Without `--job=`, only the orchestrator pane is created and it handles worker setup manually.
+`start --job=<name>` creates the worktree, installs skills, opens a dedicated tmux window named after the job, spawns one pane per worker inside it (with role content injected into the bootstrap prompt), then starts the orchestrator in the `agents` window. Without `--job=`, only the orchestrator pane is created and it handles worker setup manually.
 
 The bash scripts in `scripts/` are kept as backup and are not invoked directly.
 

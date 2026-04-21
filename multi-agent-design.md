@@ -8,16 +8,12 @@ server acting as a message bus, with git worktrees providing isolation.
 ## Architecture
 
 ```
-┌──────────────────┬──────────────────┐
-│  pane 1          │  pane 2          │
-│  orchestrator    │  worker 1        │
-│  (claude)        │  (claude)        │
-│                  ├──────────────────┤
-│                  │  pane 3          │
-│                  │  worker 2        │
-│                  │  (claude)        │
-└──────────────────┴──────────────────┘
-         ↕                  ↕
+┌─────────────────────────────────┐   ┌──────────────────────────────────┐
+│  agents window                  │   │  <job-name> window               │
+│  orchestrator (claude)          │   │  worker 1       │  worker 2      │
+│                                 │   │  (claude)       │  (claude)      │
+└─────────────────────────────────┘   └──────────────────────────────────┘
+         ↕                                       ↕
     MCP Server (localhost:7777)
 ```
 
@@ -145,7 +141,7 @@ node_modules/
 1. Read `.claude/agents.json` for workers and pipelines
 2. Start MCP server as background process
 3. Create a worktree per job being started (`git worktree add .worktrees/<job> -b agent/<job>`)
-4. Spin up worker panes, copying the role file as CLAUDE.md and installing skills into the worktree
+4. Open a dedicated tmux window per job, spawn worker panes inside it, install skills into the worktree
 5. Read each job file, look up its pipeline's stages, generate one task per stage using the markdown body as context, and call `load_tasks`
 6. Workers self-bootstrap, register, and call `get_task()` when ready
 
