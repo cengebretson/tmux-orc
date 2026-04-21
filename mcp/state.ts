@@ -152,7 +152,8 @@ export function resolveBlock(workerId: string, resolution: string): void {
 
   const task = existing.currentTask;
   if (task) {
-    const dir = `.claude/knowledge`;
+    const base = process.env.PROJECT_DIR ?? ".";
+    const dir = `${base}/.claude/knowledge`;
     const date = new Date().toISOString().slice(0, 10);
     const entry = [
       ``,
