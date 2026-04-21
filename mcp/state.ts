@@ -22,6 +22,7 @@ interface WorkerState {
   paneId?: string;
   currentTask?: Task;
   blockedReason?: string;
+  lastActivityAt?: number;
 }
 
 interface StageState {
@@ -65,24 +66,25 @@ export function registerWorker(workerId: string, paneId: string): void {
 }
 
 export function getTask(workerId: string, role: string): Task | null {
+  const existing = workerState.get(workerId);
+  if (existing?.status === "working") return null;
   const idx = taskQueue.findIndex(
     (t) => t.role === role &&
       (t.depends_on ?? []).every((stage) => stageDone(t.job, stage))
   );
   if (idx === -1) return null;
   const [task] = taskQueue.splice(idx, 1);
-  const existing = workerState.get(workerId);
-  workerState.set(workerId, { ...existing, status: "working", currentTask: task });
+  workerState.set(workerId, { ...existing, status: "working", currentTask: task, lastActivityAt: Date.now() });
   return task;
 }
 
 export function submitResult(workerId: string, result: string): void {
   results.set(workerId, result);
   const existing = workerState.get(workerId);
-  workerState.set(workerId, { ...existing, status: "submitted" });
+  workerState.set(workerId, { ...existing, status: "submitted", lastActivityAt: Date.now() });
 
   const task = existing?.currentTask;
-  if (task) {
+  if (task && jobState.has(task.job)) {
     getOrCreateStage(task.job, task.stage).results.set(workerId, result);
   }
 }
@@ -150,14 +152,13 @@ export function getAllResults(): Record<string, string> {
 export function resetJob(job: string): boolean {
   if (!jobState.has(job)) return false;
   jobState.delete(job);
-  const before = taskQueue.length;
   taskQueue.splice(0, taskQueue.length, ...taskQueue.filter((t) => t.job !== job));
   return true;
 }
 
 export function reportBlocked(workerId: string, reason: string): void {
   const existing = workerState.get(workerId);
-  workerState.set(workerId, { ...existing, status: "blocked", blockedReason: reason });
+  workerState.set(workerId, { ...existing, status: "blocked", blockedReason: reason, lastActivityAt: Date.now() });
 }
 
 export function resolveBlock(workerId: string, resolution: string): { unblocked: boolean; saved: boolean } {
@@ -194,6 +195,19 @@ export function resolveBlock(workerId: string, resolution: string): { unblocked:
     }
     return { unblocked: true, saved: true };
   }
+}
+
+export function getHungWorkers(thresholdMs: number): Array<{ workerId: string; lastActivityAt: number; currentTask: Task }> {
+  const now = Date.now();
+  const hung: Array<{ workerId: string; lastActivityAt: number; currentTask: Task }> = [];
+  for (const [workerId, w] of workerState) {
+    if (w.status === "working" && w.lastActivityAt !== undefined && w.currentTask !== undefined) {
+      if (now - w.lastActivityAt > thresholdMs) {
+        hung.push({ workerId, lastActivityAt: w.lastActivityAt, currentTask: w.currentTask });
+      }
+    }
+  }
+  return hung;
 }
 
 export function reset(): void {

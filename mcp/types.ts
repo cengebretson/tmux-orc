@@ -27,5 +27,6 @@ export interface Status {
     paneId?: string;
     currentTask?: Task;
     blockedReason?: string;
+    lastActivityAt?: number;
   }>;
 }

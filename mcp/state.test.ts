@@ -17,6 +17,7 @@ import {
   resetJob,
   reportBlocked,
   resolveBlock,
+  getHungWorkers,
   reset,
   type Task,
 } from "./state.js";
@@ -456,5 +457,127 @@ describe("reportBlocked / resolveBlock", () => {
     registerWorker("bob", "%1");
     reportBlocked("bob", "stuck");
     expect(resolveBlock("bob", "fixed")).toEqual({ unblocked: true, saved: false });
+  });
+});
+
+describe("worker claiming multiple tasks", () => {
+  it("returns null if worker is already working", () => {
+    const t2: Task = { id: "2", role: "frontend", description: "Task 2", job: "auth-login", stage: "build" };
+    loadTasks([pFrontend, t2]);
+    expect(getTask("bob", "frontend")).toEqual(pFrontend);
+    expect(getTask("bob", "frontend")).toBeNull();
+  });
+
+  it("leaves the second task in the queue for another worker", () => {
+    const t2: Task = { id: "2", role: "frontend", description: "Task 2", job: "auth-login", stage: "build" };
+    loadTasks([pFrontend, t2]);
+    getTask("bob", "frontend");
+    getTask("bob", "frontend");
+    expect(getTask("alice", "frontend")).toEqual(t2);
+  });
+
+  it("worker can get a new task after submitting", () => {
+    const t2: Task = { id: "2", role: "frontend", description: "Task 2", job: "auth-login", stage: "build" };
+    loadTasks([pFrontend, t2]);
+    getTask("bob", "frontend");
+    submitResult("bob", "done");
+    expect(getTask("bob", "frontend")).toEqual(t2);
+  });
+});
+
+describe("resetJob stale worker bug", () => {
+  it("submit after reset does not recreate job state", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    resetJob("auth-login");
+
+    submitResult("bob", "late result");
+
+    expect(stageDone("auth-login", "build")).toBe(false);
+    expect(getJobStatus("auth-login")).toBeNull();
+  });
+
+  it("submit after reset does not corrupt depends_on chains for a reloaded job", () => {
+    const build:  Task = { id: "b1", role: "frontend", description: "Build",  job: "auth-login", stage: "build" };
+    const review: Task = { id: "r1", role: "review",   description: "Review", job: "auth-login", stage: "review", depends_on: ["build"] };
+    loadTasks([build, review]);
+    getTask("bob", "frontend");
+    resetJob("auth-login");
+    submitResult("bob", "late result");
+
+    loadTasks([{ ...build, id: "b2" }, { ...review, id: "r2" }]);
+    expect(getTask("rex", "review")).toBeNull();
+    getTask("alice", "frontend");
+    submitResult("alice", "fresh build");
+    expect(getTask("rex", "review")).toEqual({ ...review, id: "r2" });
+  });
+});
+
+describe("hung worker detection (lastActivityAt)", () => {
+  it("sets lastActivityAt when worker claims a task", () => {
+    const before = Date.now();
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    const w = getStatus().workers["bob"];
+    expect(w.lastActivityAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it("updates lastActivityAt when worker submits", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    const afterGet = getStatus().workers["bob"].lastActivityAt!;
+    submitResult("bob", "done");
+    const afterSubmit = getStatus().workers["bob"].lastActivityAt!;
+    expect(afterSubmit).toBeGreaterThanOrEqual(afterGet);
+  });
+
+  it("updates lastActivityAt when worker reports blocked", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    const afterGet = getStatus().workers["bob"].lastActivityAt!;
+    reportBlocked("bob", "stuck");
+    const afterBlocked = getStatus().workers["bob"].lastActivityAt!;
+    expect(afterBlocked).toBeGreaterThanOrEqual(afterGet);
+  });
+
+  it("lastActivityAt is undefined for idle registered workers", () => {
+    registerWorker("bob", "%1");
+    expect(getStatus().workers["bob"].lastActivityAt).toBeUndefined();
+  });
+});
+
+describe("getHungWorkers", () => {
+  it("returns empty array when no workers are working", () => {
+    expect(getHungWorkers(0)).toEqual([]);
+  });
+
+  it("returns empty array when working worker is within threshold", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    expect(getHungWorkers(60_000)).toEqual([]);
+  });
+
+  it("returns worker when lastActivityAt exceeds threshold", () => {
+    loadTasks([pFrontend]);
+    getTask("bob", "frontend");
+    const w = getStatus().workers["bob"];
+    w.lastActivityAt = Date.now() - 600_000;
+    const hung = getHungWorkers(60_000);
+    expect(hung).toHaveLength(1);
+    expect(hung[0].workerId).toBe("bob");
+    expect(hung[0].currentTask).toEqual(pFrontend);
+  });
+
+  it("does not return submitted or blocked workers", () => {
+    loadTasks([pFrontend, pReview]);
+    getTask("bob", "frontend");
+    getTask("rex", "review");
+    submitResult("bob", "done");
+    reportBlocked("rex", "stuck");
+    const w1 = getStatus().workers["bob"];
+    const w2 = getStatus().workers["rex"];
+    if (w1.lastActivityAt) w1.lastActivityAt = Date.now() - 600_000;
+    if (w2.lastActivityAt) w2.lastActivityAt = Date.now() - 600_000;
+    expect(getHungWorkers(60_000)).toEqual([]);
   });
 });

@@ -293,6 +293,6 @@ Workers have access to all skills — no per-worker filtering. Each role file's
 
 - [x] **Knowledge file loading is unenforced** — resolved by design change: resolutions are now appended to `## Lessons Learned` in `.claude/roles/<role>.md`. The orchestrator copies this file as `CLAUDE.md` into each worktree — Claude Code loads it automatically, so workers always have the lessons without any injection or LLM compliance needed.
 
-- [ ] **`resolveBlock` silently skips file write if `currentTask` is missing** — if a worker's task reference is lost (e.g. after a `reset`) the resolution is recorded in worker state but never written to the role file. Should log a warning or return an error.
+- [x] **`resolveBlock` silently skips file write if `currentTask` is missing** — if a worker's task reference is lost (e.g. after a `reset`) the resolution is recorded in worker state but never written to the role file. Should log a warning or return an error.
 
-- [ ] **No state persistence** — MCP server state is fully in-memory. A crash or restart mid-job loses all task assignments, worker states, and stage results. For long-running jobs this is a real failure mode. Options: periodic state snapshot to disk, or replay from a task log.
+- [ ] **No state persistence (known limitation)** — MCP server state is fully in-memory. A crash or restart mid-job loses all task assignments and stage results. Recovery: restart the server and re-run `cli.ts start --job=<name>` — job files are the source of truth so nothing is permanently lost, but in-progress work may need to be re-done. A state snapshot to `.claude/state.json` could be added if this becomes a real problem in practice.

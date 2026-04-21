@@ -15,6 +15,7 @@ import {
   resetJob,
   reportBlocked,
   resolveBlock,
+  getHungWorkers,
 } from "./state.js";
 
 export const taskSchema = z.object({
@@ -161,6 +162,16 @@ mcp.tool(
     }
     const saved = result.saved ? " Resolution saved to .claude/roles/." : " Warning: no current task found — resolution not saved.";
     return { content: [{ type: "text", text: `Worker '${worker_id}' unblocked.${saved}` }] };
+  }
+);
+
+mcp.tool(
+  "get_hung_workers",
+  "Returns workers that have been in 'working' status longer than threshold_ms without activity — useful for detecting stuck agents",
+  { threshold_ms: z.number() },
+  async ({ threshold_ms }) => {
+    const hung = getHungWorkers(threshold_ms);
+    return { content: [{ type: "text", text: JSON.stringify(hung, null, 2) }] };
   }
 );
 
