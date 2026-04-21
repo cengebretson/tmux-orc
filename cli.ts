@@ -104,17 +104,41 @@ export function shouldProcessFile(filePath: string, seen: Set<string>): boolean 
   return true;
 }
 
-export function buildMenuArgs(cliPath: string, workers: string[]): string[] {
+export interface MenuState {
+  initialized: boolean;
+  running: boolean;
+  workers: string[];
+}
+
+export function buildMenuArgs(bunPath: string, cliPath: string, state: MenuState): string[] {
+  const bun = `"${bunPath}" run "${cliPath}"`;
+  const pause = "; echo; read -r -s -n1";
+  const popup = (w: number, h: number, cmd: string) =>
+    `run-shell 'tmux display-popup -E -w ${w} -h ${h} "${cmd}"'`;
+
+  if (!state.initialized) {
+    return ["Init project", "i", popup(100, 20, `${bun} init${pause}`)];
+  }
+
+  if (!state.running) {
+    return [
+      "Start session", "s", `run-shell '${bun} launch'`,
+      "Start here",    "h", `run-shell '${bun} launch --here'`,
+    ];
+  }
+
   const args: string[] = [
-    "Status",  "s", `run-shell 'bun run "${cliPath}" menu show status'`,
-    "Queue",   "q", `run-shell 'bun run "${cliPath}" menu show queue'`,
-    "Results", "r", `run-shell 'bun run "${cliPath}" menu show results'`,
+    "Status",  "1", `run-shell '${bun} menu show status'`,
+    "Queue",   "2", `run-shell '${bun} menu show queue'`,
+    "Results", "3", `run-shell '${bun} menu show results'`,
     "", "", "",
   ];
-  for (const w of workers) {
-    args.push(`Worker ${w}`, "", `run-shell 'bun run "${cliPath}" menu show result/${w}'`);
+  for (const w of state.workers) {
+    args.push(`Worker ${w}`, "", `run-shell '${bun} menu show result/${w}'`);
   }
-  const cleanup = `run-shell 'tmux display-popup -E -w 60 -h 6 "echo Cleanup: kill MCP server and remove worktrees.; echo Press Enter to confirm, Ctrl+C to cancel.; read -r; bun run \\"${cliPath}\\" cleanup; echo; read -r -s -n1"'`;
+  const cleanup = popup(60, 6,
+    `echo Cleanup: kill MCP server and remove worktrees.; echo Press Enter to confirm, Ctrl+C to cancel.; read -r; ${bun} cleanup${pause}`
+  );
   args.push("", "", "", "Cleanup…", "x", cleanup);
   return args;
 }
@@ -487,16 +511,19 @@ async function menu(args: string[]): Promise<void> {
     return;
   }
 
+  const initialized = existsSync(".claude/agents.json");
+  let running = false;
   let workers: string[] = [];
   try {
     const res = await fetch(`${baseUrl}/status`, { signal: AbortSignal.timeout(1000) });
     if (res.ok) {
+      running = true;
       const data = await res.json() as { workers?: Record<string, unknown> };
       workers = Object.keys(data.workers ?? {});
     }
   } catch { /* server not running */ }
 
-  await tmux("display-menu", "-T", " Claude Agents ", ...buildMenuArgs(cliPath, workers));
+  await tmux("display-menu", "-T", " Claude Orc ", ...buildMenuArgs(process.execPath, cliPath, { initialized, running, workers }));
 }
 
 // --- cleanup ---

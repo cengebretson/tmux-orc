@@ -313,26 +313,47 @@ describe("shouldProcessFile", () => {
 // --- buildMenuArgs ---
 
 describe("buildMenuArgs", () => {
-  it("includes static status/queue/results entries", () => {
-    const args = buildMenuArgs("/plugin/cli.ts", []);
+  const running = { initialized: true, running: true, workers: [] };
+
+  it("shows Init when uninitialized", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { initialized: false, running: false, workers: [] });
+    expect(args).toContain("Init project");
+    expect(args).not.toContain("Start session");
+    expect(args).not.toContain("Status");
+  });
+
+  it("shows Start when initialized but not running", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { initialized: true, running: false, workers: [] });
+    expect(args).toContain("Start session");
+    expect(args).toContain("Start here");
+    expect(args).not.toContain("Status");
+  });
+
+  it("shows status/queue/results when running", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", running);
     expect(args).toContain("Status");
     expect(args).toContain("Queue");
     expect(args).toContain("Results");
   });
 
-  it("adds one entry per worker", () => {
-    const args = buildMenuArgs("/plugin/cli.ts", ["bob", "rex"]);
+  it("adds one entry per worker when running", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { ...running, workers: ["bob", "rex"] });
     expect(args).toContain("Worker bob");
     expect(args).toContain("Worker rex");
   });
 
   it("worker entries reference the correct result path", () => {
-    const args = buildMenuArgs("/plugin/cli.ts", ["bob"]);
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", { ...running, workers: ["bob"] });
     expect(args.some(a => typeof a === "string" && a.includes("result/bob"))).toBe(true);
   });
 
-  it("returns only static entries when no workers", () => {
-    const args = buildMenuArgs("/plugin/cli.ts", []);
+  it("includes Cleanup when running", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", running);
+    expect(args).toContain("Cleanup…");
+  });
+
+  it("no Worker entries when no workers", () => {
+    const args = buildMenuArgs("/bun", "/plugin/cli.ts", running);
     expect(args.some(a => typeof a === "string" && a.startsWith("Worker"))).toBe(false);
   });
 });

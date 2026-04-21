@@ -23,8 +23,5 @@ fi
 sq() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
 
 CMD="$(sq "$BUN") run $(sq "$PLUGIN_DIR")/cli.ts"
-PAUSE='; echo; read -r -s -n1'
 
-tmux bind-key M   run-shell "$CMD launch"
-tmux bind-key M-M run-shell "$CMD launch --here"
-tmux bind-key S   run-shell "$CMD menu"
+tmux bind-key O run-shell "$CMD menu"
