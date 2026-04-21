@@ -124,6 +124,8 @@ export function buildMenuArgs(bunPath: string, cliPath: string, state: MenuState
     return [
       "Start session", "s", `run-shell '${bun} launch'`,
       "Start here",    "h", `run-shell '${bun} launch --here'`,
+      "", "", "",
+      "Validate",      "v", popup(100, 30, `${bun} validate${pause}`),
     ];
   }
 
@@ -131,6 +133,7 @@ export function buildMenuArgs(bunPath: string, cliPath: string, state: MenuState
     "Status",  "1", `run-shell '${bun} menu show status'`,
     "Queue",   "2", `run-shell '${bun} menu show queue'`,
     "Results", "3", `run-shell '${bun} menu show results'`,
+    "Jobs",    "j", `run-shell '${bun} menu show jobs'`,
     "", "", "",
   ];
   for (const w of state.workers) {
