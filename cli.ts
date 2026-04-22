@@ -390,7 +390,7 @@ async function start(args: string[]): Promise<void> {
   const jobFile = jobName ? `.claude/jobs/${jobName}.md` : "";
   if (jobName) mkdirSync(".claude/jobs/done", { recursive: true });
 
-  await startMcp([port]);
+  await startMcp([]);
   await Bun.sleep(1000);
 
   let orchPane: string;
@@ -706,9 +706,6 @@ function notifyFn(workerId: string, state: string): void {
   });
 }
 
-function notify(args: string[]): void {
-  notifyFn(args[0] ?? "?", args[1] ?? "done");
-}
 
 // --- init ---
 
@@ -894,7 +891,7 @@ switch (subcmd) {
   case "watch":     await watch(rest); break;
   case "menu":      await menu(rest); break;
   case "cleanup":   await cleanup(); break;
-  case "notify":    await notify(rest); break;
+  case "notify":    notifyFn(rest[0] ?? "?", rest[1] ?? "done"); break;
   default:
     console.error("Usage: cli.ts <init|validate|launch|start|start-mcp|watch|menu|cleanup|notify> [args...]");
     process.exit(1);

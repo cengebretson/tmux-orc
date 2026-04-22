@@ -16,7 +16,6 @@ function findProjectRoot(): string {
   return process.cwd();
 }
 
-
 interface WorkerState {
   status: "idle" | "working" | "submitted" | "blocked";
   paneId?: string;
@@ -173,29 +172,28 @@ export function resolveBlock(workerId: string, resolution: string): { unblocked:
     return { unblocked: true, saved: false };
   }
 
-  {
-    const roleFile = join(findProjectRoot(), `.claude/roles/${task.role}.md`);
-    const date = new Date().toISOString().slice(0, 10);
-    const entry = [
-      ``,
-      `### ${date} | job: ${task.job} | stage: ${task.stage}`,
-      `**Blocked:** ${existing.blockedReason ?? "(no reason given)"}`,
-      `**Resolution:** ${resolution}`,
-      ``,
-    ].join("\n");
-    mkdirSync(join(findProjectRoot(), ".claude/roles"), { recursive: true });
-    if (existsSync(roleFile)) {
-      const content = readFileSync(roleFile, "utf8");
-      if (content.includes("## Lessons Learned")) {
-        appendFileSync(roleFile, entry);
-      } else {
-        appendFileSync(roleFile, `\n## Lessons Learned\n${entry}`);
-      }
+  const root = findProjectRoot();
+  const roleFile = join(root, `.claude/roles/${task.role}.md`);
+  const date = new Date().toISOString().slice(0, 10);
+  const entry = [
+    ``,
+    `### ${date} | job: ${task.job} | stage: ${task.stage}`,
+    `**Blocked:** ${existing.blockedReason ?? "(no reason given)"}`,
+    `**Resolution:** ${resolution}`,
+    ``,
+  ].join("\n");
+  mkdirSync(join(root, ".claude/roles"), { recursive: true });
+  if (existsSync(roleFile)) {
+    const content = readFileSync(roleFile, "utf8");
+    if (content.includes("## Lessons Learned")) {
+      appendFileSync(roleFile, entry);
     } else {
-      writeFileSync(roleFile, `# ${task.role}\n\n## Lessons Learned\n${entry}`);
+      appendFileSync(roleFile, `\n## Lessons Learned\n${entry}`);
     }
-    return { unblocked: true, saved: true };
+  } else {
+    writeFileSync(roleFile, `# ${task.role}\n\n## Lessons Learned\n${entry}`);
   }
+  return { unblocked: true, saved: true };
 }
 
 export function getHungWorkers(thresholdMs: number): Array<{ workerId: string; lastActivityAt: number; currentTask: Task }> {
