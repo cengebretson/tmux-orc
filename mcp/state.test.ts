@@ -78,6 +78,24 @@ describe("loadTasks", () => {
     expect(result.count).toBe(0);
   });
 
+  it("rejects tasks with a depends_on referencing an unknown stage", () => {
+    const result = loadTasks([
+      { id: "1", role: "frontend", description: "build",  job: "j", stage: "build" },
+      { id: "2", role: "review",   description: "review", job: "j", stage: "review", depends_on: ["typo"] },
+    ]);
+    expect(result.error).toMatch(/typo/);
+    expect(result.count).toBe(0);
+  });
+
+  it("accepts tasks with valid depends_on references", () => {
+    const result = loadTasks([
+      { id: "1", role: "frontend", description: "build",  job: "j", stage: "build" },
+      { id: "2", role: "review",   description: "review", job: "j", stage: "review", depends_on: ["build"] },
+    ]);
+    expect(result.error).toBeUndefined();
+    expect(result.count).toBe(2);
+  });
+
   it("does not partially load tasks when a job conflict is detected", () => {
     loadTasks([pFrontend]);
     const t2: Task = { id: "x1", role: "backend", description: "API", job: "dashboard", stage: "build" };

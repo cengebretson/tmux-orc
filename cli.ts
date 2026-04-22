@@ -183,6 +183,7 @@ interface WorkerConfig {
 interface StageConfig {
   name: string;
   role: string;
+  depends_on?: string[];
 }
 
 interface PipelineConfig {
@@ -276,10 +277,17 @@ export async function validate(args: string[]): Promise<boolean> {
   }
   for (const pipeline of pipelines) {
     let pipelineOk = true;
+    const stageNames = new Set(pipeline.stages.map(s => s.name));
     for (const stage of pipeline.stages) {
       if (!findRoleFile(stage.role)) {
         printErr(`pipeline '${pipeline.name}', stage '${stage.name}': role '${stage.role}' has no role file`);
         errors++; pipelineOk = false;
+      }
+      for (const dep of stage.depends_on ?? []) {
+        if (!stageNames.has(dep)) {
+          printErr(`pipeline '${pipeline.name}', stage '${stage.name}': depends_on '${dep}' is not a stage in this pipeline`);
+          errors++; pipelineOk = false;
+        }
       }
     }
     if (pipelineOk) printOk(`pipeline '${pipeline.name}': ${pipeline.stages.length} stages`);

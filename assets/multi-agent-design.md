@@ -100,10 +100,10 @@ git worktree remove .worktrees/auth-login
     {
       "name": "frontend",
       "stages": [
-        { "name": "build",    "role": "frontend" },
-        { "name": "review",   "role": "review"   },
-        { "name": "security", "role": "security" },
-        { "name": "ship",     "role": "git"      }
+        { "name": "build",    "role": "frontend"                                       },
+        { "name": "review",   "role": "review",   "depends_on": ["build"]              },
+        { "name": "security", "role": "security", "depends_on": ["build"]              },
+        { "name": "ship",     "role": "git",      "depends_on": ["review", "security"] }
       ]
     }
   ]

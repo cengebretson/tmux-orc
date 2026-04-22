@@ -18,14 +18,15 @@ If `{{job_file}}` is set, read it to generate tasks:
 1. Parse the frontmatter — extract `pipeline` and `domain`
 2. Look up the pipeline in `{{agents_config}}` to get the ordered stages and their roles
 3. Read the markdown body — this is the full job spec (goal, acceptance criteria, context)
-4. Generate one task per stage, using the job body as context for each description:
+4. Generate one task per stage, using the job body as context for each description. Copy `depends_on` directly from the stage definition if present:
    ```json
    {
      "id": "<job>-<stage>",
      "role": "<stage.role>",
      "description": "<stage-specific instruction derived from the job spec>",
      "job": "<job name>",
-     "stage": "<stage name>"
+     "stage": "<stage name>",
+     "depends_on": ["<stage.depends_on if defined>"]
    }
    ```
 5. Call `load_tasks` with all generated tasks.

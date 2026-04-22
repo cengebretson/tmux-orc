@@ -52,6 +52,21 @@ export function loadTasks(tasks: Task[]): { count: number; error?: string } {
       return { count: 0, error: `job '${job}' already exists — use reset_job to rerun it` };
     }
   }
+
+  // Validate depends_on references before touching any state
+  const stagesByJob = new Map<string, Set<string>>();
+  for (const task of tasks) {
+    if (!stagesByJob.has(task.job)) stagesByJob.set(task.job, new Set());
+    stagesByJob.get(task.job)!.add(task.stage);
+  }
+  for (const task of tasks) {
+    for (const dep of task.depends_on ?? []) {
+      if (!stagesByJob.get(task.job)?.has(dep)) {
+        return { count: 0, error: `task '${task.id}': depends_on '${dep}' is not a stage in job '${task.job}'` };
+      }
+    }
+  }
+
   for (const task of tasks) {
     taskQueue.push(task);
     getOrCreateStage(task.job, task.stage).taskCount++;
