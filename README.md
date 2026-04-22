@@ -86,13 +86,13 @@ Add to `tmux.conf`:
 ```tmux
 set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if bun is elsewhere
 set -g @claude-agents-mcp-port   7777                    # default
-set -g @claude-agents-notify     true                    # macOS notifications (default: true)
+set -g @claude-agents-notify     true                    # cross-platform notifications (default: true)
 set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/ (default: false)
 set -g @claude-agents-layout     windows                 # windows | sessions | panes (default: windows)
 ```
 
-On macOS, system notifications fire automatically (set `@claude-agents-notify false` to disable). Two distinct sounds:
-- **Glass** — worker finished (triggered via `notify` CLI command)
+Desktop notifications fire automatically via `node-notifier` (macOS, Linux, Windows). Set `@claude-agents-notify false` to disable. Two distinct sounds are used on macOS — other platforms show the notification without sound:
+- **Glass** — worker finished
 - **Basso** — worker is blocked and needs intervention
 
 ## Project Setup
@@ -409,7 +409,7 @@ The git worker reads the diff, runs `/pr-description`, and opens a PR from `agen
 stage_done("auth-login", "ship") → true
 ```
 
-macOS notification fires: **"Worker git finished"** (Glass sound).
+A desktop notification fires: **"Worker git finished"** (Glass sound on macOS).
 
 The orchestrator appends an `## Outcome` section to the job file, archives it, then removes the worktree:
 
