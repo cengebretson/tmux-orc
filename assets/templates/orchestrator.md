@@ -18,7 +18,10 @@ If `{{job_file}}` is set, read it to generate tasks:
 1. Parse the frontmatter — extract `pipeline` and `domain`
 2. Look up the pipeline in `{{agents_config}}` to get the ordered stages and their roles
 3. Read the markdown body — this is the full job spec (goal, acceptance criteria, context)
-4. Generate one task per stage, using the job body as context for each description. Copy `depends_on` directly from the stage definition if present:
+4. Generate one task per stage, using the job body as context for each description. Derive `depends_on` from stage position in the pipeline:
+   - Stages in the first entry have no dependencies
+   - Each subsequent entry depends on all stage names from the previous entry
+   - If an entry is an array, all stages in it share the same dependencies (they run in parallel)
    ```json
    {
      "id": "<job>-<stage>",
@@ -26,14 +29,14 @@ If `{{job_file}}` is set, read it to generate tasks:
      "description": "<stage-specific instruction derived from the job spec>",
      "job": "<job name>",
      "stage": "<stage name>",
-     "depends_on": ["<stage.depends_on if defined>"]
+     "depends_on": ["<names of all stages in the previous pipeline entry>"]
    }
    ```
 5. Call `load_tasks` with all generated tasks.
 
 The job name is the filename without extension (e.g. `auth-login` from `auth-login.md`).
 
-Example — job file `.claude/jobs/auth-login.md` with pipeline `frontend` (stages: build → review → security → ship):
+Example — job file `.claude/jobs/auth-login.md` with pipeline `frontend` (stages: build → [review, security] → ship):
 ```json
 load_tasks([
   { "id": "auth-login-build",    "role": "frontend", "job": "auth-login", "stage": "build",    "description": "Build login form per spec: JWT in httpOnly cookie, extend useAuth hook, mobile responsive"                 },

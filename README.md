@@ -36,7 +36,7 @@ Claude's native subagents are great for one-shot tasks. This is for work that's 
 
 - **Visibility** — every worker runs in its own tmux pane. You watch it work in real time, catch mistakes mid-task, and intervene directly. Native subagents are a black box until they return.
 - **Persistence** — workers stay alive for the whole session and pick up new jobs as they arrive. Subagents are spawned and destroyed per-task; if something goes wrong you lose context.
-- **Parallel stages** — the MCP server enforces `depends_on` so review and security can run simultaneously while ship waits for both. No manual sequencing in the orchestrator.
+- **Parallel stages** — wrap pipeline stages in an array to run them simultaneously. The MCP server enforces ordering automatically so ship waits for both review and security without manual sequencing.
 - **Git isolation** — each job gets its own worktree and branch. Workers commit and push without touching your working tree.
 - **Human-in-the-loop** — workers have a formal `report_blocked` / `resolve_block` cycle. You get notified, fix the issue in the pane, and the worker carries on. Subagents have no equivalent.
 
@@ -115,15 +115,19 @@ Alternatively, create `.claude/agents.json` by hand:
     {
       "name": "frontend",
       "stages": [
-        { "name": "build",    "role": "frontend"                                       },
-        { "name": "review",   "role": "review",   "depends_on": ["build"]              },
-        { "name": "security", "role": "security", "depends_on": ["build"]              },
-        { "name": "ship",     "role": "git",      "depends_on": ["review", "security"] }
+        { "name": "build",    "role": "frontend" },
+        [
+          { "name": "review",   "role": "review"   },
+          { "name": "security", "role": "security" }
+        ],
+        { "name": "ship",     "role": "git"      }
       ]
     }
   ]
 }
 ```
+
+Stages are positional — each entry runs after the previous one finishes. Wrap stages in an array to run them in parallel. The orchestrator derives `depends_on` automatically when generating tasks.
 
 `agents.json` defines your permanent workforce and pipeline definitions. Jobs are separate markdown files.
 
@@ -240,7 +244,7 @@ The orchestrator reads the job file, creates the worktree, generates tasks from 
 ### What the orchestrator does
 
 1. Registers the MCP server, creates worktrees, spins up workers, and loads all tasks via `load_tasks`
-2. Workers register, then start pulling tasks via `get_task` — the server withholds tasks until their `depends_on` stages complete
+2. Workers register, then start pulling tasks via `get_task` — the server withholds tasks until their stage dependencies complete
 3. Monitor progress with `get_status` or `prefix+O` → Status
 4. Read stage output with `get_stage_results(job, stage)` as each stage completes
 
@@ -264,10 +268,12 @@ This walkthrough shows a full pipeline session: four workers, four stages, resul
     {
       "name": "frontend",
       "stages": [
-        { "name": "build",    "role": "frontend"                                       },
-        { "name": "review",   "role": "review",   "depends_on": ["build"]              },
-        { "name": "security", "role": "security", "depends_on": ["build"]              },
-        { "name": "ship",     "role": "git",      "depends_on": ["review", "security"] }
+        { "name": "build",    "role": "frontend" },
+        [
+          { "name": "review",   "role": "review"   },
+          { "name": "security", "role": "security" }
+        ],
+        { "name": "ship",     "role": "git"      }
       ]
     }
   ]
@@ -321,7 +327,7 @@ The CLI spawns workers according to `@claude-agents-layout`. With the default `w
 
 ### Step 4 — Orchestrator loads all tasks
 
-All four tasks are loaded upfront with `depends_on` declaring the stage ordering:
+All four tasks are loaded upfront. The orchestrator derives `depends_on` from pipeline stage position — each entry depends on all stage names from the previous entry:
 
 ```json
 load_tasks([
@@ -525,7 +531,7 @@ Workers only receive tasks matching their role.
 
 #### Tasks
 
-Every task requires a `job` and `stage`. For multi-stage jobs the orchestrator generates tasks from the job file — one per pipeline stage, results feeding forward:
+Every task requires a `job` and `stage`. For multi-stage jobs the orchestrator generates tasks from the job file — one per pipeline stage, with `depends_on` derived from stage position:
 
 ```json
 [

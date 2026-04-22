@@ -100,15 +100,19 @@ git worktree remove .worktrees/auth-login
     {
       "name": "frontend",
       "stages": [
-        { "name": "build",    "role": "frontend"                                       },
-        { "name": "review",   "role": "review",   "depends_on": ["build"]              },
-        { "name": "security", "role": "security", "depends_on": ["build"]              },
-        { "name": "ship",     "role": "git",      "depends_on": ["review", "security"] }
+        { "name": "build",    "role": "frontend" },
+        [
+          { "name": "review",   "role": "review"   },
+          { "name": "security", "role": "security" }
+        ],
+        { "name": "ship",     "role": "git"      }
       ]
     }
   ]
 }
 ```
+
+Pipeline stages are positional: each entry runs after the previous one completes. An array entry means those stages run in parallel. The orchestrator derives `depends_on` when generating tasks — no need to declare it in the config.
 
 ### Job Files
 
@@ -194,6 +198,8 @@ Tasks declare their dependencies via `depends_on: string[]` — stage names with
 same job that must complete before the task becomes claimable. The server enforces this:
 workers get `NO_TASKS` until deps are met and retry automatically. All tasks can be
 loaded upfront — no stage-by-stage loading required.
+
+The orchestrator derives `depends_on` from pipeline stage position — no need to declare it in `agents.json`. Each entry depends on all stage names from the previous entry; array entries run in parallel with shared dependencies.
 
 ```json
 { "stage": "ship", "depends_on": ["review", "security"], ... }
