@@ -303,6 +303,16 @@ export async function validate(args: string[]): Promise<boolean> {
   if (jobName) {
     console.log(`\nJob: ${jobName}`);
 
+    const branchCheck = Bun.spawn(
+      ["git", "check-ref-format", "--branch", `agent/${jobName}`],
+      { stdout: "pipe", stderr: "pipe" }
+    );
+    await branchCheck.exited;
+    if (branchCheck.exitCode !== 0) {
+      printErr(`job '${jobName}': name is not a valid git branch component — avoid spaces, ~, ^, :, ?, *, [, \\, leading/trailing . or -`);
+      errors++;
+    }
+
     if (existsSync(`.claude/jobs/done/${jobName}.md`)) {
       printErr(`job '${jobName}' already completed — move from .claude/jobs/done/ to rerun`); errors++;
     } else {
@@ -777,8 +787,22 @@ async function newJob(): Promise<void> {
     if (!spec) { console.error("Spec is required."); process.exit(1); }
 
     const suggested = (spec.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 35)) || "job";
-    const nameInput = (await ask(`Job name [${suggested}]: `)).trim();
-    const baseName = nameInput || suggested;
+    console.log("  (becomes git branch agent/<name> — lowercase, numbers, hyphens recommended)");
+    let baseName = "";
+    while (!baseName) {
+      const nameInput = (await ask(`Job name [${suggested}]: `)).trim();
+      const candidate = nameInput || suggested;
+      const branchCheck = Bun.spawn(
+        ["git", "check-ref-format", "--branch", `agent/${candidate}`],
+        { stdout: "pipe", stderr: "pipe" }
+      );
+      await branchCheck.exited;
+      if (branchCheck.exitCode !== 0) {
+        console.log(`  Invalid — not a valid git branch name (avoid spaces, ~, ^, :, ?, *, [, \\, leading/trailing . or -)`);
+      } else {
+        baseName = candidate;
+      }
+    }
 
     // Check uniqueness across jobs/ and jobs/done/
     const taken = new Set<string>();

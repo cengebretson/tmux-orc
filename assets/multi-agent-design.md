@@ -112,8 +112,7 @@ git worktree remove .worktrees/auth-login
 
 ### Job Files
 
-Jobs live as markdown files in `.claude/jobs/<name>.md`. YAML frontmatter specifies
-the pipeline and domain; the body is the full feature spec passed as context to each stage.
+Jobs live as markdown files in `.claude/jobs/<name>.md`. The job name becomes the git branch `agent/<name>` — use lowercase letters, numbers, and hyphens. YAML frontmatter specifies the pipeline and domain; the body is the full feature spec passed as context to each stage.
 
 ```
 .claude/
@@ -269,7 +268,7 @@ Configure in `tmux.conf`:
 set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if bun is elsewhere
 set -g @claude-agents-mcp-port   7777                    # default
 set -g @claude-agents-notify     true                    # cross-platform notifications (default: true)
-set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/ (default: false)
 set -g @claude-agents-layout     windows                 # windows | sessions | panes (default: windows)
 ```
 

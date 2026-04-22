@@ -75,7 +75,7 @@ Add to `tmux.conf`:
 set -g @claude-agents-bun-path   /opt/homebrew/bin/bun   # default; override if bun is elsewhere
 set -g @claude-agents-mcp-port   7777                    # default
 set -g @claude-agents-notify     true                    # macOS notifications (default: true)
-set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/
+set -g @claude-agents-watch-jobs true                    # auto-start jobs dropped into .claude/jobs/ (default: false)
 set -g @claude-agents-layout     windows                 # windows | sessions | panes (default: windows)
 ```
 
@@ -117,7 +117,7 @@ Alternatively, create `.claude/agents.json` by hand:
 
 ### Job files
 
-Each job lives in `.claude/jobs/<name>.md`. The frontmatter specifies which pipeline to use and the domain to work in. The body is the full spec — the orchestrator reads it to generate task descriptions for each stage.
+Each job lives in `.claude/jobs/<name>.md`. The job name becomes the git branch `agent/<name>`, so it must be a valid branch component — lowercase letters, numbers, and hyphens are safest. The frontmatter specifies which pipeline to use and the domain to work in. The body is the full spec — the orchestrator reads it to generate task descriptions for each stage.
 
 When a job completes, the orchestrator appends an `## Outcome` section and moves the file to `.claude/jobs/done/`. Pending jobs are what's in `.claude/jobs/`; completed jobs are in `done/`.
 
