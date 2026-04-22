@@ -30,6 +30,18 @@ A tmux plugin for running multiple Claude Code agents in parallel. An orchestrat
 
 Workers are **pull-based** — they call `get_task` themselves when ready, making the system self-scheduling. All inter-agent communication routes through the orchestrator (hub-and-spoke), never directly between workers.
 
+## Why not just use Claude's built-in subagents?
+
+Claude's native subagents are great for one-shot tasks. This is for work that's bigger, longer, or needs a human nearby:
+
+- **Visibility** — every worker runs in its own tmux pane. You watch it work in real time, catch mistakes mid-task, and intervene directly. Native subagents are a black box until they return.
+- **Persistence** — workers stay alive for the whole session and pick up new jobs as they arrive. Subagents are spawned and destroyed per-task; if something goes wrong you lose context.
+- **Parallel stages** — the MCP server enforces `depends_on` so review and security can run simultaneously while ship waits for both. No manual sequencing in the orchestrator.
+- **Git isolation** — each job gets its own worktree and branch. Workers commit and push without touching your working tree.
+- **Human-in-the-loop** — workers have a formal `report_blocked` / `resolve_block` cycle. You get notified, fix the issue in the pane, and the worker carries on. Subagents have no equivalent.
+
+The tradeoff is setup cost — this requires tmux, Bun, and a job file. For a quick one-off task, just use Claude. For a multi-stage feature with parallel reviewers and a PR at the end, this is the better fit.
+
 ## Quickstart
 
 1. Install the plugin (see [Installation](#installation))
