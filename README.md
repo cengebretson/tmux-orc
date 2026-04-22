@@ -528,15 +528,6 @@ All tasks are loaded upfront. `depends_on` lists stage names that must complete 
 
 Orchestrator polls `stage_done(job, stage)` then reads `get_stage_results(job, stage)` to feed results into later stage descriptions.
 
-For quick ad-hoc work, use a single-stage inline job — no job file needed:
-
-```json
-[
-  { "id": "1", "role": "frontend", "description": "Fix login bug",  "job": "fix-login", "stage": "build" },
-  { "id": "2", "role": "backend",  "description": "Fix auth token", "job": "fix-auth",  "stage": "build" }
-]
-```
-
 Two jobs can run the same pipeline simultaneously — each gets its own worktree and independent stage state.
 
 ### Skills and plugins

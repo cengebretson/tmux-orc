@@ -46,16 +46,7 @@ To start an additional job mid-session, use `prefix+O` → **New job…** to cre
 
 ### Tasks
 
-All tasks require `job` and `stage` fields. For quick ad-hoc work with no ordering dependency, use a single-stage inline job — no job file needed:
-
-```json
-[
-  { "id": "1", "role": "frontend", "description": "Fix login bug",  "job": "fix-login", "stage": "build" },
-  { "id": "2", "role": "backend",  "description": "Fix auth token", "job": "fix-auth",  "stage": "build" }
-]
-```
-
-For multi-stage jobs, use `depends_on` to declare which stages must complete before a task becomes claimable. The server enforces this — all tasks can be loaded upfront and workers are held back automatically until their dependencies are met.
+All tasks require `job` and `stage` fields. Use `depends_on` to declare which stages must complete before a task becomes claimable. The server enforces this — all tasks can be loaded upfront and workers are held back automatically until their dependencies are met.
 
 All workers in a job share one worktree (`agent/<job>`). Results are automatically attributed to the correct stage.
 

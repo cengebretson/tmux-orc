@@ -202,14 +202,8 @@ loaded upfront — no stage-by-stage loading required.
 The orchestrator polls `stage_done(job, stage)` then reads `get_stage_results(job, stage)`
 to feed completed stage output as context into later stage descriptions.
 
-For quick ad-hoc work, skip the job file and load a single-stage inline job directly:
-```json
-{ "id": "1", "role": "frontend", "description": "Fix login bug", "job": "fix-login", "stage": "build" }
-```
-
 Multiple jobs can run the same pipeline simultaneously — each has its own worktree,
-branch, and independent stage state. To start a new job mid-session, tell the
-orchestrator and it creates the worktree and calls `load_tasks` — workers pick it up automatically.
+branch, and independent stage state. To start a new job mid-session, use `prefix+O` → **New job…** — workers pick it up automatically.
 
 ## Communication Rules (Hub-and-Spoke)
 
