@@ -32,20 +32,13 @@ Workers are **pull-based** — they call `get_task` themselves when ready, makin
 
 ## Quickstart
 
-```bash
-# 1. Install (see Installation below), then from inside your project:
-# 1. Edit .claude/agents.json to match your project, then write a job file:
-#    .claude/jobs/my-feature.md
-
-# 3. Validate your setup:
-bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate --job=my-feature
-
-# 4. Start a session — workers spawn automatically when one job file exists:
-prefix+O  # opens the control menu → Start session
-
-# 5. Watch the orchestrator load tasks and workers pick them up.
-#    Press prefix+O at any time to check status, inspect results, or clean up.
-```
+1. Install the plugin (see [Installation](#installation))
+2. Press `prefix+O` from inside your project → **Init project**
+3. Edit `.claude/agents.json` to define your workers and pipelines
+4. Press `prefix+O` → **New job…** to create your first job file
+5. Press `prefix+O` → **Start session** — workers spawn automatically
+6. Watch the orchestrator load tasks and workers pick them up
+7. Press `prefix+O` at any time to check status, inspect results, or clean up
 
 ## Requirements
 
@@ -72,11 +65,7 @@ git clone https://github.com/yourname/tmux-claude-agents ~/.tmux/plugins/tmux-cl
 ~/.tmux/plugins/tmux-claude-agents/tmux-claude-agents.tmux
 ```
 
-Install MCP server dependencies:
-
-```bash
-cd ~/.tmux/plugins/tmux-claude-agents/mcp && bun install
-```
+Dependencies are installed automatically on first use.
 
 ### Configuration
 
@@ -96,13 +85,7 @@ On macOS, system notifications fire automatically (set `@claude-agents-notify fa
 
 ## Project Setup
 
-Press `prefix+O` from inside your project. If `.claude/` hasn't been initialized yet, the menu shows **Init project** automatically. Or run it directly:
-
-```bash
-bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts init
-```
-
-This creates `.claude/agents.json`, a sample job file, empty `roles/` and `skills/` override directories, and adds `.mcp.json` and `.worktrees/` to `.gitignore` automatically.
+Press `prefix+O` from inside your project. If `.claude/` hasn't been initialized yet, the menu shows **Init project** automatically. This creates `.claude/agents.json`, a sample job file, empty `roles/` and `skills/` override directories, and adds `.mcp.json` and `.worktrees/` to `.gitignore`.
 
 ### Manual setup
 
@@ -209,23 +192,17 @@ To rerun a completed job, move it back from `done/` first.
 
 ### Validating before you start
 
-Run `cli.ts validate` to check your config before starting a session:
+Press `prefix+O` → **Validate** to run a pre-flight check on your config. It verifies:
 
-```bash
-bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate
-bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate --job=auth-login
-```
-
-It checks:
 - All workers have a role file
-- All skills listed in role files (`## Skills`) exist in `.claude/skills/` or the plugin's `skills/`
+- All skills listed in role files (`## Skills`) exist in `.claude/skills/` or the plugin's `assets/skills/`
 - All pipeline stage roles have role files
 - Job frontmatter has `pipeline:` and `domain:`, and the pipeline is defined in `agents.json`
 - Job hasn't already been completed (not in `done/`)
 
-Plugins listed in role files (`## Plugins`) produce warnings — they can't be verified from the shell, so you'll need to confirm they're enabled in Claude Code settings manually.
+Plugins listed in role files (`## Plugins`) produce warnings — they can't be verified automatically, so you'll need to confirm they're enabled in Claude Code settings manually.
 
-`cli.ts start` runs validation automatically before starting. If validation fails the session won't start.
+Validation also runs automatically when starting a session. If it fails the session won't start.
 
 ## Usage
 
@@ -247,12 +224,6 @@ Once the orchestrator is running, **just tell it what to do**:
 > "start jobs auth-login and auth-signup in parallel"
 
 The orchestrator reads the job file, creates the worktree, generates tasks from the pipeline stages, and calls `load_tasks`. You can also start a pending job via `prefix+O` → **Start \<job-name\>** — it appears automatically for any job file not yet loaded into the running session.
-
-To pre-load a job at cold-start, pass `--job`:
-
-```bash
-bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts start --job=auth-login
-```
 
 ### What the orchestrator does
 
@@ -625,7 +596,7 @@ You never need to touch the plugin folder. Put files in `.claude/` and they auto
 
 **Overriding a built-in skill** — create `.claude/skills/pr-description.md` to replace the plugin's default with a project-specific version.
 
-`cli.ts validate` checks all roles and skills referenced in role files before the session starts, so missing files are caught early.
+Validation (`prefix+O` → **Validate**) checks all roles and skills referenced in role files before the session starts, so missing files are caught early.
 
 ### Inspection Endpoints
 
@@ -685,6 +656,19 @@ git worktree add .worktrees/bob -b agent/bob
 
 - Workers report only to the orchestrator via `submit_result`, never to each other
 - If worker B needs worker A's output, the orchestrator reads A's result and passes the relevant parts as a new task to B
+
+## Direct CLI
+
+Everything is accessible via `prefix+O`, but two commands are occasionally useful to run directly in the terminal for their full output:
+
+```bash
+# Pre-flight check with verbose output
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts validate --job=auth-login
+
+# Start a session (useful for scripting or when outside tmux)
+bun run ~/.tmux/plugins/tmux-claude-agents/cli.ts start --job=auth-login
+```
 
 ## Running tests
 
