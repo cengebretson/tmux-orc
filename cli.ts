@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync, readdirSync, unlinkSync, mkdirSync, appendFileSync } from "fs";
-import { watch as fsWatch } from "fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, mkdirSync, appendFileSync, watch as fsWatch } from "fs";
 import { resolve, join, basename, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
@@ -15,8 +14,24 @@ const PID_FILE = "/tmp/claude-agents-mcp.pid";
 function printErr(msg: string)  { console.error(`  ✗ ${msg}`); }
 function printWarn(msg: string) { console.log(`  ⚠ ${msg}`); }
 function printOk(msg: string)   { console.log(`  ✓ ${msg}`); }
+
 function windowName(name: string): string {
   return name.length <= 20 ? name : name.slice(0, 19) + "…";
+}
+
+function getMcpUrl(): string {
+  const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
+  return `http://localhost:${port}`;
+}
+
+async function tmux(...args: string[]): Promise<void> {
+  const proc = Bun.spawn(["tmux", ...args], { stdout: "inherit", stderr: "inherit" });
+  await proc.exited;
+}
+
+async function tmuxOut(...args: string[]): Promise<string> {
+  const proc = Bun.spawn(["tmux", ...args], { stdout: "pipe", stderr: "pipe" });
+  return new Response(proc.stdout).text().then(s => s.trim());
 }
 
 async function sendWorkerPrompt(pane: string, workerId: string, prompt: string): Promise<void> {
@@ -29,16 +44,6 @@ async function sendWorkerPrompt(pane: string, workerId: string, prompt: string):
   await tmux("paste-buffer", "-b", `w-${workerId}`, "-t", pane);
   await tmux("send-keys", "-t", pane, "", "Enter");
   try { await tmux("delete-buffer", "-b", `w-${workerId}`); } catch {}
-}
-
-async function tmux(...args: string[]): Promise<void> {
-  const proc = Bun.spawn(["tmux", ...args], { stdout: "inherit", stderr: "inherit" });
-  await proc.exited;
-}
-
-async function tmuxOut(...args: string[]): Promise<string> {
-  const proc = Bun.spawn(["tmux", ...args], { stdout: "pipe", stderr: "pipe" });
-  return new Response(proc.stdout).text().then(s => s.trim());
 }
 
 function findRoleFile(role: string): string | null {
@@ -281,11 +286,9 @@ export async function validate(args: string[]): Promise<boolean> {
   }
 
   // active job conflict check (if MCP is running)
-  const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
-  const mcpUrl = process.env.MCP_URL ?? `http://localhost:${port}`;
   if (jobName) {
     try {
-      const res = await fetch(`${mcpUrl}/jobs`, { signal: AbortSignal.timeout(1000) });
+      const res = await fetch(`${getMcpUrl()}/jobs`, { signal: AbortSignal.timeout(1000) });
       if (res.ok) {
         const jobs = await res.json() as Record<string, unknown>;
         if (jobName in jobs) {
@@ -336,7 +339,7 @@ export async function validate(args: string[]): Promise<boolean> {
 // --- start-mcp ---
 
 async function startMcp(args: string[]): Promise<void> {
-  const port = args[0] ?? process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
+  const port = args[0] ?? (process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777");
 
   if (existsSync(PID_FILE)) {
     const pid = readFileSync(PID_FILE, "utf8").trim();
@@ -378,8 +381,7 @@ async function start(args: string[]): Promise<void> {
     }
   }
 
-  const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
-  const mcpUrl = `http://localhost:${port}`;
+  const mcpUrl = getMcpUrl();
 
   const validateArgs = [`--config=${configPath}`];
   if (jobName) validateArgs.push(`--job=${jobName}`);
@@ -550,7 +552,7 @@ async function start(args: string[]): Promise<void> {
             const data = await res.json() as { allDone?: boolean };
             if (data.allDone) { notifyFn(jobName, "done"); break; }
           }
-        } catch { break; }
+        } catch { /* server may be briefly unavailable */ }
         await Bun.sleep(10000);
       }
     })();
@@ -602,8 +604,7 @@ async function watch(args: string[]): Promise<void> {
 // --- menu ---
 
 async function menu(args: string[]): Promise<void> {
-  const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
-  const baseUrl = `http://localhost:${port}`;
+  const baseUrl = getMcpUrl();
   const cliPath = join(PLUGIN_DIR, "cli.ts");
 
   if (args[0] === "show") {
@@ -713,7 +714,7 @@ function notify(args: string[]): void {
 
 async function init(): Promise<void> {
   if (existsSync(".claude")) {
-    console.error("  ✗ .claude/ already exists — run 'bun run cli.ts validate' to check your current setup");
+    console.error("  ✗ .claude/ already exists — press prefix+O → Validate to check your current setup");
     process.exit(1);
   }
   mkdirSync(".claude/jobs", { recursive: true });
@@ -744,7 +745,6 @@ async function init(): Promise<void> {
   console.log("  3. Press prefix+O → Start session to launch the orchestrator");
 }
 
-// --- launch ---
 // --- new-job ---
 
 async function newJob(): Promise<void> {
@@ -801,15 +801,14 @@ async function newJob(): Promise<void> {
     console.log(`\nCreated .claude/jobs/${jobName}.md`);
 
     // Only offer to start if no session is running
-    const port = process.env.CLAUDE_AGENTS_MCP_PORT ?? "7777";
     let sessionRunning = false;
     try {
-      const res = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(500) });
+      const res = await fetch(`${getMcpUrl()}/status`, { signal: AbortSignal.timeout(500) });
       sessionRunning = res.ok;
     } catch { /* not running */ }
 
     if (sessionRunning) {
-      console.log("Session already running — load the job via the orchestrator or watch mode.");
+      console.log("Session already running — press prefix+O → Start <job-name> or tell the orchestrator to start it.");
       rl.close();
       return;
     }
