@@ -1088,7 +1088,9 @@ func listWorkflowNames(root string) []string {
 		}
 	}
 
-	// Walk each chain from its start.
+	// Walk each chain from its start. Skip starts whose next_workflow target is
+	// already visited — those are branch workflows (e.g. pr-repair → pr-open)
+	// and will be inserted adjacent to their target in the next pass.
 	visited := make(map[string]bool)
 	var ordered []string
 	var walk func(name string)
@@ -1101,14 +1103,34 @@ func listWorkflowNames(root string) []string {
 		walk(next[name])
 	}
 	for _, s := range starts {
+		if visited[next[s]] {
+			continue // branch start — handle in insertion pass
+		}
 		walk(s)
 	}
 
-	// Append anything not reached (cycles or disconnected branches).
+	// Insert unvisited workflows immediately after the workflow they point to,
+	// so pr-repair appears right after pr-open rather than at the end.
 	for _, name := range all {
-		if !visited[name] {
+		if visited[name] {
+			continue
+		}
+		target := next[name]
+		pos := -1
+		for i, n := range ordered {
+			if n == target {
+				pos = i
+				break
+			}
+		}
+		if pos >= 0 {
+			tail := make([]string, len(ordered[pos+1:]))
+			copy(tail, ordered[pos+1:])
+			ordered = append(ordered[:pos+1], append([]string{name}, tail...)...)
+		} else {
 			ordered = append(ordered, name)
 		}
+		visited[name] = true
 	}
 
 	return ordered
