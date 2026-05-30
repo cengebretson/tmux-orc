@@ -111,7 +111,7 @@ var (
 
 var startCmd = &cobra.Command{
 	Use:    "start <ticket>",
-	Short:  "Mark a ticket as in_progress — called by agents at session start",
+	Short:  "Mark a ticket as in_progress",
 	Args:   cobra.ExactArgs(1),
 	RunE:   runStart,
 	Hidden: true,
@@ -120,26 +120,28 @@ var startCmd = &cobra.Command{
 var startWorkspace string
 
 var waitCmd = &cobra.Command{
-	Use:   "wait <ticket> <reason>",
-	Short: "[agent] Mark a ticket as waiting for human input or approval",
-	Args:  cobra.MinimumNArgs(2),
-	RunE:  runWait,
+	Use:    "wait <ticket> <reason>",
+	Short:  "Mark a ticket as waiting for human input or approval",
+	Args:   cobra.MinimumNArgs(2),
+	RunE:   runWait,
+	Hidden: true,
 }
 
 var waitWorkspace string
 
 var blockCmd = &cobra.Command{
-	Use:   "block <ticket> <reason>",
-	Short: "[agent] Mark a ticket as blocked with a reason",
-	Args:  cobra.MinimumNArgs(2),
-	RunE:  runBlock,
+	Use:    "block <ticket> <reason>",
+	Short:  "Mark a ticket as blocked with a reason",
+	Args:   cobra.MinimumNArgs(2),
+	RunE:   runBlock,
+	Hidden: true,
 }
 
 var blockWorkspace string
 
 var advanceCmd = &cobra.Command{
 	Use:    "advance <ticket> <stage>",
-	Short:  "[agent] Mark current stage complete and move to the next — writes STATE.yaml",
+	Short:  "Mark current stage complete and move to the next — writes STATE.yaml",
 	Args:   cobra.ExactArgs(2),
 	RunE:   runAdvance,
 	Hidden: true,
@@ -160,6 +162,30 @@ var archiveCmd = &cobra.Command{
 }
 
 var archiveWorkspace string
+
+var helpAllCmd = &cobra.Command{
+	Use:   "help-all",
+	Short: "List all commands, including agent-only hidden commands",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("All orc commands:")
+		fmt.Println()
+		fmt.Printf("  %-30s  %s\n", "COMMAND", "DESCRIPTION")
+		fmt.Printf("  %-30s  %s\n", "-------", "-----------")
+		for _, c := range rootCmd.Commands() {
+			if c.Name() == "help" || c.Name() == "help-all" {
+				continue
+			}
+			tag := ""
+			if c.Hidden {
+				tag = "  [agent]"
+			}
+			fmt.Printf("  %-30s  %s%s\n", c.UseLine(), c.Short, tag)
+		}
+		fmt.Println()
+		fmt.Println("[agent] commands are called by agents, not humans. They are hidden from normal help.")
+	},
+}
 
 func init() {
 	initCmd.Flags().StringVar(&initWorkspace, "workspace", ".", "Workspace root directory (default: current directory)")
@@ -197,6 +223,7 @@ func init() {
 	rootCmd.AddCommand(blockCmd)
 	rootCmd.AddCommand(advanceCmd)
 	rootCmd.AddCommand(archiveCmd)
+	rootCmd.AddCommand(helpAllCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {

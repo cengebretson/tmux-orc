@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/cengebretson/orc/internal/workflow"
 )
 
 type Status int
@@ -70,8 +72,8 @@ func Run(root string) *Report {
 	// required workflows
 	report.Results = append(report.Results, checkFile(filepath.Join(root, "workflows", "intake"), "WORKFLOW.md"))
 
-	// workflow frontmatter
-	report.Results = append(report.Results, checkWorkflowFrontmatter(root))
+	// per-workflow frontmatter details
+	report.Results = append(report.Results, checkWorkflowDetails(root)...)
 
 	// optional dirs — note presence but don't fail if missing
 	for _, d := range []string{"worktrees", "projects", "user-overrides"} {
@@ -188,32 +190,50 @@ func checkOptionalDir(root, name string) Result {
 	return Result{Name: name + "/", Status: Empty, Detail: "not created yet"}
 }
 
-func checkWorkflowFrontmatter(root string) Result {
+func checkWorkflowDetails(root string) []Result {
 	workflowsDir := filepath.Join(root, "workflows")
 	entries, err := os.ReadDir(workflowsDir)
 	if err != nil {
-		return Result{Name: "workflow frontmatter", Status: Missing, Detail: "workflows/ not found"}
+		return []Result{{Name: "workflows/", Status: Missing, Detail: "workflows/ not found"}}
 	}
 
-	var missing []string
+	var results []Result
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		path := filepath.Join(workflowsDir, e.Name(), "WORKFLOW.md")
-		data, err := os.ReadFile(path)
-		if err != nil {
+		name := e.Name()
+		cfg, _ := workflow.Load(workflowsDir, name)
+
+		if cfg.Advance == "" && cfg.NextWorkflow == "" && cfg.Model == "" {
+			results = append(results, Result{
+				Name:   "  " + name,
+				Status: Empty,
+				Detail: "no frontmatter",
+			})
 			continue
 		}
-		if !strings.HasPrefix(strings.TrimSpace(string(data)), "---") {
-			missing = append(missing, e.Name())
-		}
-	}
 
-	if len(missing) == 0 {
-		return Result{Name: "workflow frontmatter", Status: OK, Detail: "all workflows configured"}
+		var parts []string
+		if cfg.NextWorkflow != "" && cfg.NextStage != "" {
+			parts = append(parts, fmt.Sprintf("%s → %s/%s", cfg.Advance, cfg.NextWorkflow, cfg.NextStage))
+		} else {
+			parts = append(parts, "end of chain")
+		}
+		if cfg.Model != "" {
+			parts = append(parts, cfg.Model)
+		}
+		if cfg.Effort != "" {
+			parts = append(parts, cfg.Effort)
+		}
+
+		results = append(results, Result{
+			Name:   "  " + name,
+			Status: OK,
+			Detail: strings.Join(parts, "  "),
+		})
 	}
-	return Result{Name: "workflow frontmatter", Status: Empty, Detail: "missing in: " + strings.Join(missing, ", ")}
+	return results
 }
 
 func checkDirWithCount(root, dir, pattern, label string) Result {
