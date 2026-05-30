@@ -1,6 +1,6 @@
 ---
-next_workflow: pr-open
-next_stage: pr_preflight
+next_workflow: code-review
+next_stage: code_review
 advance: manual
 model: claude-opus-4-7
 effort: high
@@ -41,5 +41,5 @@ Code is committed, `impl/QA_HANDOFF.md` is written, and local tests pass.
 
 When done, run:
 ```
-orc wait <ticket> "Implementation complete — human review before opening PR"
+orc wait <ticket> "Implementation complete — human review before code review"
 ```
