@@ -10,6 +10,7 @@ import (
 
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/workflow"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/cengebretson/orc/internal/workspace"
@@ -163,6 +164,41 @@ var archiveCmd = &cobra.Command{
 
 var archiveWorkspace string
 
+var tmuxCmd = &cobra.Command{
+	Use:   "tmux",
+	Short: "Manage tmux sessions for feature tickets",
+}
+
+var tmuxCreateCmd = &cobra.Command{
+	Use:   "create <ticket>",
+	Short: "Create a tmux session for a ticket with workflow windows",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTmuxCreate,
+}
+
+var tmuxAttachCmd = &cobra.Command{
+	Use:   "attach <ticket>",
+	Short: "Attach to the tmux session for a ticket",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTmuxAttach,
+}
+
+var tmuxListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List active tmux sessions",
+	Args:  cobra.NoArgs,
+	RunE:  runTmuxList,
+}
+
+var tmuxKillCmd = &cobra.Command{
+	Use:   "kill <ticket>",
+	Short: "Kill the tmux session for a ticket",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTmuxKill,
+}
+
+var tmuxWorkspace string
+
 var helpAllCmd = &cobra.Command{
 	Use:   "help-all",
 	Short: "List all commands, including agent-only hidden commands",
@@ -212,6 +248,12 @@ func init() {
 	advanceCmd.Flags().StringVar(&advanceWorkflow, "workflow", "", "New workflow name (required when crossing workflow boundaries)")
 	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 
+	tmuxCmd.PersistentFlags().StringVar(&tmuxWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	tmuxCmd.AddCommand(tmuxCreateCmd)
+	tmuxCmd.AddCommand(tmuxAttachCmd)
+	tmuxCmd.AddCommand(tmuxListCmd)
+	tmuxCmd.AddCommand(tmuxKillCmd)
+
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
 	rootCmd.AddCommand(nextCmd)
@@ -223,6 +265,7 @@ func init() {
 	rootCmd.AddCommand(blockCmd)
 	rootCmd.AddCommand(advanceCmd)
 	rootCmd.AddCommand(archiveCmd)
+	rootCmd.AddCommand(tmuxCmd)
 	rootCmd.AddCommand(helpAllCmd)
 }
 
@@ -421,7 +464,20 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		return nil
 	}
 
-	args := workers.LaunchArgs(worker, root, cwd, prompt)
+	argv := workers.LaunchArgs(worker, root, cwd, prompt)
+
+	// Auto-detect tmux: if a session exists for this ticket, send the command there.
+	if !dry && tmux.Available() && tmux.SessionExists(s.Slug) {
+		window := s.Stage.Workflow
+		fmt.Printf("Sending to tmux session %s:%s...\n", s.Slug, window)
+		if err := tmux.SendCommand(s.Slug, window, featureDir, argv); err != nil {
+			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
+		} else {
+			fmt.Printf("Agent launched in background.\n")
+			fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Slug, window))
+			return nil
+		}
+	}
 
 	if dry {
 		fmt.Printf("Worker:  %s  (%s)\n", worker.Name, matchReason)
@@ -445,7 +501,7 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	}
 
 	fmt.Printf("Launching %s (%s)...\n", worker.Name, worker.Product)
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -852,6 +908,127 @@ func runArchive(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Archived: features/_archive/%s/\n", slug)
 	return nil
+}
+
+func runTmuxCreate(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(tmuxWorkspace)
+	if err != nil {
+		return err
+	}
+	if !tmux.Available() {
+		return fmt.Errorf("tmux is not installed or not in PATH")
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	if tmux.SessionExists(s.Slug) {
+		fmt.Printf("Session already exists: %s\n", s.Slug)
+		fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Slug, s.Stage.Workflow))
+		return nil
+	}
+
+	workflows := listWorkflowNames(root)
+	if err := tmux.CreateSession(s.Slug, featureDir, workflows); err != nil {
+		return err
+	}
+
+	fmt.Printf("Session: %s\n", s.Slug)
+	fmt.Printf("Windows: %s\n", strings.Join(workflows, ", "))
+	fmt.Println()
+	fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Slug, s.Stage.Workflow))
+	return nil
+}
+
+func runTmuxAttach(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(tmuxWorkspace)
+	if err != nil {
+		return err
+	}
+	if !tmux.Available() {
+		return fmt.Errorf("tmux is not installed or not in PATH")
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	if !tmux.SessionExists(s.Slug) {
+		return fmt.Errorf("no tmux session for %s — run `orc tmux create %s` first", s.Ticket, s.Ticket)
+	}
+
+	return tmux.Attach(s.Slug + ":" + s.Stage.Workflow)
+}
+
+func runTmuxList(cmd *cobra.Command, args []string) error {
+	if !tmux.Available() {
+		return fmt.Errorf("tmux is not installed or not in PATH")
+	}
+	sessions := tmux.ListSessions()
+	if len(sessions) == 0 {
+		fmt.Println("No active tmux sessions.")
+		return nil
+	}
+	fmt.Println("Active tmux sessions:")
+	for _, s := range sessions {
+		fmt.Printf("  %s\n", s)
+	}
+	return nil
+}
+
+func runTmuxKill(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(tmuxWorkspace)
+	if err != nil {
+		return err
+	}
+	if !tmux.Available() {
+		return fmt.Errorf("tmux is not installed or not in PATH")
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	if !tmux.SessionExists(s.Slug) {
+		return fmt.Errorf("no tmux session for %s", s.Ticket)
+	}
+
+	if err := tmux.KillSession(s.Slug); err != nil {
+		return err
+	}
+
+	fmt.Printf("Killed session: %s\n", s.Slug)
+	return nil
+}
+
+func listWorkflowNames(root string) []string {
+	entries, err := os.ReadDir(filepath.Join(root, "workflows"))
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	return names
 }
 
 func removeWorktree(repoMain, worktreePath string) error {
