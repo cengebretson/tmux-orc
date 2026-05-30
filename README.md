@@ -107,7 +107,8 @@ flowchart LR
 
     subgraph Workflows
         intake -->|auto| develop
-        develop -->|manual| pr-open
+        develop -->|manual| code-review
+        code-review -->|auto| pr-open
         pr-open -->|manual| qa-automation
         pr-open -->|CI failures| pr-repair
         pr-repair -->|auto| pr-open
@@ -117,6 +118,7 @@ flowchart LR
 
     style intake fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style develop fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style code-review fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style pr-open fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style pr-repair fill:#313244,stroke:#f38ba8,color:#cdd6f4
     style qa-automation fill:#313244,stroke:#cba6f7,color:#cdd6f4
@@ -213,11 +215,12 @@ my-workspace/
   workflows/
     REQUIREMENTS.md  shared contract — status values, state update rules, error handling
     intake/          load ticket context — runs first for every ticket
-    develop/         implementation → pr → qa → evidence
+    develop/         implementation
+    code-review/     review implementation before opening PR
     pr-open/         preflight checks, open PR, handoff for review
     pr-repair/       fix CI failures, review feedback, conflicts
     qa-automation/   implement and run automated tests
-    # each WORKFLOW.md has frontmatter: next_workflow, advance (auto/manual), model, effort
+    # each WORKFLOW.md has frontmatter: next_workflow, next_stage, advance, worker
 
   worktrees/         git worktrees for ticket branches (gitignored)
   user-overrides/    local preferences, never committed
@@ -246,36 +249,31 @@ next_action:
 
 ## Workers
 
-Markdown files with YAML frontmatter. The frontmatter tells `orc` which workflow
-and stage the worker handles and how to launch it. The body gives the agent
-behavioral guidance.
+Markdown files with YAML frontmatter. The frontmatter defines who the worker is
+and how to launch them. The body gives the agent behavioral guidance.
 
 ```markdown
 ---
-id: developer
-name: Developer
-product: claude
-model: claude-sonnet-4-6
+id: bob-developer
+name: Bob the Developer
+product: codex
+model: gpt-5.5
 cost_tier: medium
-workflows:
-  - develop
-  - pr-open
-  - pr-repair
-stages:
-  - implementation
-  - pr_preflight
-  - pr_create
-  - pr_repair
 launch_mode: foreground
 ---
 
 Implements features, opens PRs, and repairs CI failures.
 ```
 
-`orc next` matches the current `stage.workflow` and `stage.current` from
-`STATE.yaml` against all workers, picks the best match, and executes it. The
-agent's prompt includes model/effort hints from the workflow frontmatter and the
-precise `orc advance` or `orc wait` command to run when the stage is done.
+Workflows declare their default worker via `worker: <id>` in `WORKFLOW.md`
+frontmatter. `orc next` looks up that worker, builds the prompt, and launches it.
+
+Worker resolution order:
+1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
+2. `stage.owner` in STATE.yaml — set by a previous `orc advance --owner`
+3. `worker:` in the current workflow's WORKFLOW.md
+4. Fallback: match by `workflows`/`stages` lists if present
+
 Use `--dry` to preview the command without launching.
 
 ## Design docs

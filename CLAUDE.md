@@ -86,13 +86,13 @@ built, what's planned, and where we deliberately diverged from the original plan
 | Health check | `orc health` — filesystem validation, setup status, required workflow check, frontmatter validation |
 | Feature lifecycle | `orc work`, `orc show`, `orc next`, `orc advance`, `orc wait`, `orc start`, `orc block`, `orc archive` |
 | Status dashboard | `orc status` — active and archived features, table view |
-| Worker routing | Frontmatter matching by workflow + stage, cost tier, preferred owner |
+| Worker routing | Workflow owns default worker via `worker:` in WORKFLOW.md frontmatter; overridden by `stage.owner` or `orc next --worker` |
 | Multi-product | Claude and Codex launch commands rendered from worker `product` field |
-| Workflows | intake, develop, pr-open, pr-repair, qa-automation — each with WORKFLOW.md frontmatter |
-| Workflow frontmatter | `next_workflow`, `next_stage`, `advance` (auto/manual), `model`, `effort` hints per workflow |
-| Cross-workflow transitions | `orc advance --workflow` updates `stage.workflow`; worker matching stays correct |
+| Workflows | intake, develop, code-review, pr-open, pr-repair, qa-automation — each with WORKFLOW.md frontmatter |
+| Workflow frontmatter | `next_workflow`, `next_stage`, `advance` (auto/manual), `worker` (default worker ID) |
+| Cross-workflow transitions | `orc advance --workflow` updates `stage.workflow`; worker resolved from new workflow's frontmatter |
 | State mutations | `state.Advance`, `state.Block`, `state.WaitForHuman`, `state.Start`, `state.SetStatus` with history entries |
-| Agent prompt scaffolding | Every `orc next` prompt includes preamble (read AGENTS.md, run `orc start`), workflow hints, and exact end-of-session command |
+| Agent prompt scaffolding | Every `orc next` prompt includes preamble (read AGENTS.md, run `orc start`) and exact end-of-session command |
 | JSON output | `orc show --json`, `orc next --json`, `orc status --json` — machine-readable for agent parsing and CI |
 | Session contract | `REQUIREMENTS.md` shared workflow contract; `AGENTS.md` Session Start section enforces state updates |
 | Worktree cleanup | `orc archive` removes git worktrees, moves feature to `_archive/` |
@@ -102,13 +102,12 @@ built, what's planned, and where we deliberately diverged from the original plan
 
 | Feature | Notes |
 |---------|-------|
-| `orc tmux create/attach/list/kill` | Per-ticket tmux sessions with standard window layout (state, app, qa, claude, servers, tests, logs) |
+| ~~`orc tmux create/attach/list/kill`~~ | Done — per-ticket tmux sessions, one window per workflow, auto-detect in `orc next` |
 | `orc tui` | Bubble Tea dashboard — color-coded status, click to show/launch |
 | ~~`orc run-next`~~ | Done — `orc next` now executes the agent directly; `--dry` to preview |
-| `runtime` in STATE.yaml | tmux session name, window names, cwd per window — written by `orc tmux create` |
 | ~~`--json` flag on `orc status`~~ | Done — `orc status --json` returns `{ active: [...], archived: [...] }` with full state objects |
 | Banner suppression | Auto-suppress when stdout is not a TTY; `--no-banner` flag |
-| `reasoning_effort` / `service_tier` in workers | Codex reasoning effort and priority tier in worker frontmatter, rendered in launch command — workflow frontmatter has `effort` hints but workers don't yet |
+| `reasoning_effort` / `service_tier` in workers | Codex reasoning effort and priority tier in worker frontmatter, rendered in launch command |
 
 ### Deliberate divergences from original design
 
@@ -153,7 +152,7 @@ This is a non-negotiable design constraint. Concretely:
 - Durable state. `STATE.yaml` survives restarts, session changes, and agent switches.
 - Human-in-the-loop first. Background execution comes last, after logging and recovery
   are solid.
-- Lowest-cost capable worker by default. Escalate only when the workflow or human says
-  the complexity requires it.
+- Workflow-assigned workers by default. Override with `--worker` for a single run or
+  set `stage.owner` via `orc advance --owner` to persist across sessions.
 - Product-agnostic by default. Every decision that could couple `orc` or the workspace
   to a single agent product should be reconsidered.
