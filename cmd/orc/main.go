@@ -470,7 +470,7 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	if !dry && tmux.Available() && tmux.SessionExists(s.Slug) {
 		window := s.Stage.Workflow
 		fmt.Printf("Sending to tmux session %s:%s...\n", s.Slug, window)
-		if err := tmux.SendCommand(s.Slug, window, featureDir, argv); err != nil {
+		if err := tmux.SendCommand(s.Slug, window, featureDir, cwd, argv); err != nil {
 			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
 		} else {
 			fmt.Printf("Agent launched in background.\n")
@@ -932,6 +932,15 @@ func runArchive(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("moving feature folder: %w", err)
 	}
 
+	// Kill tmux session if one is running for this ticket.
+	if tmux.Available() && tmux.SessionExists(s.Slug) {
+		if err := tmux.KillSession(s.Slug); err != nil {
+			fmt.Printf("warning: could not kill tmux session %s: %v\n", s.Slug, err)
+		} else {
+			fmt.Printf("Killed tmux session: %s\n", s.Slug)
+		}
+	}
+
 	fmt.Printf("Archived: features/_archive/%s/\n", slug)
 	return nil
 }
@@ -1043,18 +1052,66 @@ func runTmuxKill(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// listWorkflowNames returns workflow directory names ordered by the next_workflow
+// chain defined in each WORKFLOW.md frontmatter. Workflows not reachable from
+// a chain start (e.g. repair branches) are appended at the end.
 func listWorkflowNames(root string) []string {
-	entries, err := os.ReadDir(filepath.Join(root, "workflows"))
+	workflowsDir := filepath.Join(root, "workflows")
+	entries, err := os.ReadDir(workflowsDir)
 	if err != nil {
 		return nil
 	}
-	var names []string
+
+	var all []string
 	for _, e := range entries {
 		if e.IsDir() {
-			names = append(names, e.Name())
+			all = append(all, e.Name())
 		}
 	}
-	return names
+
+	// Build next_workflow map and track which names are referenced.
+	next := make(map[string]string)
+	referenced := make(map[string]bool)
+	for _, name := range all {
+		cfg, _ := workflow.Load(workflowsDir, name)
+		if cfg != nil && cfg.NextWorkflow != "" {
+			next[name] = cfg.NextWorkflow
+			referenced[cfg.NextWorkflow] = true
+		}
+	}
+
+	// Starting points: workflows not referenced as anyone's next_workflow.
+	var starts []string
+	for _, name := range all {
+		if !referenced[name] {
+			starts = append(starts, name)
+		}
+	}
+
+	// Walk each chain from its start.
+	visited := make(map[string]bool)
+	var ordered []string
+	var walk func(name string)
+	walk = func(name string) {
+		if name == "" || visited[name] {
+			return
+		}
+		visited[name] = true
+		ordered = append(ordered, name)
+		walk(next[name])
+	}
+	for _, s := range starts {
+		walk(s)
+	}
+
+	// Append anything not reached (cycles or disconnected branches).
+	for _, name := range all {
+		if !visited[name] {
+			ordered = append(ordered, name)
+		}
+	}
+
+	return ordered
 }
 
 func removeWorktree(repoMain, worktreePath string) error {

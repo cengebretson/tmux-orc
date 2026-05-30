@@ -48,8 +48,8 @@ func CreateSession(slug, featureDir string, workflows []string) error {
 }
 
 // SendCommand sends a shell command to a window in the session, creating the window if needed.
-// It writes the command to a temp script to handle quoting robustly.
-func SendCommand(session, window, featureDir string, argv []string) error {
+// runDir is the working directory the command should execute from.
+func SendCommand(session, window, featureDir, runDir string, argv []string) error {
 	target := session + ":" + window
 
 	// Create window if it doesn't exist
@@ -59,8 +59,10 @@ func SendCommand(session, window, featureDir string, argv []string) error {
 		}
 	}
 
-	// Write command to a temp script to avoid quoting issues with send-keys
-	script, err := writeScript(argv)
+	// Write command to a temp script to avoid quoting issues with send-keys.
+	// The script cds to runDir first so the agent process starts in the right directory,
+	// then self-deletes after the command exits.
+	script, err := writeScript(runDir, argv)
 	if err != nil {
 		return err
 	}
@@ -103,7 +105,7 @@ func AttachHint(session, window string) string {
 	return fmt.Sprintf("tmux attach -t %s:%s", session, window)
 }
 
-func writeScript(argv []string) (string, error) {
+func writeScript(runDir string, argv []string) (string, error) {
 	f, err := os.CreateTemp("", "orc-launch-*.sh")
 	if err != nil {
 		return "", fmt.Errorf("temp script: %w", err)
@@ -114,7 +116,12 @@ func writeScript(argv []string) (string, error) {
 	for _, arg := range argv {
 		parts = append(parts, shellQuote(arg))
 	}
-	fmt.Fprintf(f, "#!/usr/bin/env bash\n%s\n", strings.Join(parts, " "))
+	// cd to the right directory, run the command, then self-delete the script.
+	fmt.Fprintf(f, "#!/usr/bin/env bash\ncd %s\n%s\nrm -f %s\n",
+		shellQuote(runDir),
+		strings.Join(parts, " "),
+		shellQuote(f.Name()),
+	)
 	return f.Name(), nil
 }
 
