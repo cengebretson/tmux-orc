@@ -6,10 +6,6 @@ kind: agent
 model: claude-sonnet-4-6
 thinking: medium
 cost_tier: medium
-workflows:
-  - intake
-stages:
-  - intake
 default_tmux_window: claude
 launch_mode: foreground
 ---

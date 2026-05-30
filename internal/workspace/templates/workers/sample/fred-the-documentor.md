@@ -6,15 +6,6 @@ kind: agent
 model: claude-sonnet-4-6
 thinking: high
 cost_tier: medium
-workflows:
-  - intake
-  - develop
-  - qa-automation
-stages:
-  - intake
-  - ticket_scope
-  - qa_plan
-  - documentation
 default_tmux_window: claude
 launch_mode: foreground
 ---

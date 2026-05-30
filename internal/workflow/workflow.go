@@ -18,12 +18,9 @@ type Config struct {
 	// "auto"   — agent calls orc advance when the stage is done.
 	// "manual" — agent calls orc wait; a human approves before advancing.
 	Advance string `yaml:"advance"`
-	// Model is the recommended model for this workflow (e.g. claude-opus-4-7).
-	// Acts as a hint — matched worker fields take precedence.
-	Model string `yaml:"model"`
-	// Effort is the recommended reasoning effort: low, medium, or high.
-	// Maps to cost_tier for Claude and reasoning_effort for Codex.
-	Effort string `yaml:"effort"`
+	// Worker is the default worker ID assigned to this workflow.
+	// Overridden by stage.owner in STATE.yaml or the --worker flag on orc next.
+	Worker string `yaml:"worker"`
 }
 
 // Load reads the YAML frontmatter from workflows/<name>/WORKFLOW.md.

@@ -6,11 +6,6 @@ kind: agent
 model: claude-opus-4-7
 thinking: high
 cost_tier: high
-workflows:
-  - develop
-stages:
-  - plan
-  - cross_repo_planning
 default_tmux_window: claude
 launch_mode: foreground
 ---

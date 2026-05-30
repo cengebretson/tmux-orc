@@ -1,10 +1,3 @@
----
-next_workflow: pr-open
-next_stage: pr_preflight
-advance: auto
-worker: bob-developer
----
-
 # Workflow: pr-repair
 
 > Before starting: read `workflows/REQUIREMENTS.md` for state update rules and error handling.

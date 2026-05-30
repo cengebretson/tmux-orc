@@ -2,8 +2,7 @@
 next_workflow: pr-open
 next_stage: pr_preflight
 advance: auto
-model: claude-sonnet-4-6
-effort: medium
+worker: zach-reviewer
 ---
 
 # Workflow: code-review

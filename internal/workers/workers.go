@@ -58,14 +58,20 @@ func Match(workers []*Worker, workflow, stage string) []*Worker {
 	return matched
 }
 
-// Preferred returns the worker whose ID matches the owner, or nil.
-func Preferred(workers []*Worker, ownerID string) *Worker {
+// FindByID returns the worker with the given ID, or nil.
+func FindByID(workers []*Worker, id string) *Worker {
 	for _, w := range workers {
-		if w.ID == ownerID {
+		if w.ID == id {
 			return w
 		}
 	}
 	return nil
+}
+
+// Preferred returns the worker whose ID matches the owner, or nil.
+// Deprecated: use FindByID. Kept for fallback match paths.
+func Preferred(workers []*Worker, ownerID string) *Worker {
+	return FindByID(workers, ownerID)
 }
 
 // LaunchCommand renders the launch command string for display.

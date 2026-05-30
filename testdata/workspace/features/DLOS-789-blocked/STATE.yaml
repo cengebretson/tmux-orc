@@ -1,0 +1,24 @@
+ticket: DLOS-789
+slug: DLOS-789-blocked
+status: blocked
+
+stage:
+  current: pr_repair
+  owner: bob-developer
+  workflow: develop
+
+blocker:
+  reason: staging environment unavailable
+  owner: human
+  since: 2026-05-30T11:00:00-05:00
+
+next_action:
+  worker: human
+  prompt: Staging is down. Unblock when environment is restored.
+  cwd: .
+
+history:
+  - at: 2026-05-30T11:00:00-05:00
+    stage: pr_repair
+    owner: bob-developer
+    result: blocked — staging unavailable

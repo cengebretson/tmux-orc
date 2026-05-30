@@ -205,7 +205,7 @@ func checkWorkflowDetails(root string) []Result {
 		name := e.Name()
 		cfg, _ := workflow.Load(workflowsDir, name)
 
-		if cfg.Advance == "" && cfg.NextWorkflow == "" && cfg.Model == "" {
+		if cfg.Advance == "" && cfg.NextWorkflow == "" && cfg.Worker == "" {
 			results = append(results, Result{
 				Name:   "  " + name,
 				Status: Empty,
@@ -220,11 +220,8 @@ func checkWorkflowDetails(root string) []Result {
 		} else {
 			parts = append(parts, "end of chain")
 		}
-		if cfg.Model != "" {
-			parts = append(parts, cfg.Model)
-		}
-		if cfg.Effort != "" {
-			parts = append(parts, cfg.Effort)
+		if cfg.Worker != "" {
+			parts = append(parts, cfg.Worker)
 		}
 
 		results = append(results, Result{

@@ -73,6 +73,7 @@ var (
 	nextWorkspace string
 	nextJSON      bool
 	nextDry       bool
+	nextWorker    string
 )
 
 var statusCmd = &cobra.Command{
@@ -233,6 +234,7 @@ func init() {
 	nextCmd.Flags().StringVar(&nextWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	nextCmd.Flags().BoolVar(&nextJSON, "json", false, "Output as JSON")
 	nextCmd.Flags().BoolVar(&nextDry, "dry", false, "Print the launch command without executing it")
+	nextCmd.Flags().StringVar(&nextWorker, "worker", "", "Override the workflow's default worker (worker ID)")
 	statusCmd.Flags().StringVar(&statusWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Output as JSON")
 	workCmd.Flags().StringVar(&workWorkspace, "workspace", ".", "Workspace root (default: current directory)")
@@ -317,11 +319,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		cwd := s.ResolveCWD(root, featureDir)
-		matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
-		preferred := workers.Preferred(matched, s.Stage.Owner)
-		if preferred == nil && len(matched) > 0 {
-			preferred = matched[0]
-		}
+		wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
 		jsonPrompt := s.NextAction.Prompt
 		if jsonPrompt == "" {
 			jsonPrompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
@@ -329,25 +327,30 @@ func runNext(cmd *cobra.Command, args []string) error {
 		}
 		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and workflows/REQUIREMENTS.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 		jsonPrompt = jsonPreamble + jsonPrompt
-		if wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow); wfCfg != nil {
-			if wfCfg.Model != "" || wfCfg.Effort != "" {
-				var hints []string
-				if wfCfg.Model != "" {
-					hints = append(hints, "model: "+wfCfg.Model)
-				}
-				if wfCfg.Effort != "" {
-					hints = append(hints, "effort: "+wfCfg.Effort)
-				}
-				jsonPrompt += "\n\nWorkflow hints (worker settings take precedence): " + strings.Join(hints, ", ")
+		if wfCfg != nil && wfCfg.NextWorkflow != "" && wfCfg.NextStage != "" {
+			if wfCfg.Advance == "auto" {
+				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc advance %s %s --workflow %s --owner <worker-id> --result \"<summary>\"",
+					s.Ticket, wfCfg.NextStage, wfCfg.NextWorkflow)
+			} else {
+				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s/%s>\"",
+					s.Ticket, wfCfg.NextWorkflow, wfCfg.NextStage)
 			}
-			if wfCfg.NextWorkflow != "" && wfCfg.NextStage != "" {
-				if wfCfg.Advance == "auto" {
-					jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc advance %s %s --workflow %s --owner <worker-id> --result \"<summary>\"",
-						s.Ticket, wfCfg.NextStage, wfCfg.NextWorkflow)
-				} else {
-					jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s/%s>\"",
-						s.Ticket, wfCfg.NextWorkflow, wfCfg.NextStage)
-				}
+		}
+		// Resolve worker using same priority order as runNextAction.
+		var preferred *workers.Worker
+		if nextWorker != "" {
+			preferred = workers.FindByID(allWorkers, nextWorker)
+		}
+		if preferred == nil && s.Stage.Owner != "" {
+			preferred = workers.FindByID(allWorkers, s.Stage.Owner)
+		}
+		if preferred == nil && wfCfg != nil && wfCfg.Worker != "" {
+			preferred = workers.FindByID(allWorkers, wfCfg.Worker)
+		}
+		if preferred == nil {
+			matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+			if len(matched) > 0 {
+				preferred = matched[0]
 			}
 		}
 		out := map[string]any{
@@ -416,16 +419,6 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	prompt = preamble + prompt
 
 	wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
-	if wfCfg.Model != "" || wfCfg.Effort != "" {
-		var hints []string
-		if wfCfg.Model != "" {
-			hints = append(hints, "model: "+wfCfg.Model)
-		}
-		if wfCfg.Effort != "" {
-			hints = append(hints, "effort: "+wfCfg.Effort)
-		}
-		prompt += "\n\nWorkflow hints (worker settings take precedence): " + strings.Join(hints, ", ")
-	}
 	if wfCfg.NextWorkflow != "" && wfCfg.NextStage != "" {
 		var suffix string
 		if wfCfg.Advance == "auto" {
@@ -442,25 +435,35 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		prompt += suffix
 	}
 
-	matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
-	preferred := workers.Preferred(matched, s.Stage.Owner)
-
+	// Resolve worker: --worker flag > stage.owner > workflow default > fallback match
 	var worker *workers.Worker
 	var matchReason string
-	if preferred != nil {
-		worker = preferred
-		matchReason = "matches stage owner"
-	} else if len(matched) > 0 {
-		worker = matched[0]
-		matchReason = "best match for stage"
+	if nextWorker != "" {
+		worker = workers.FindByID(allWorkers, nextWorker)
+		matchReason = "flag override"
+	}
+	if worker == nil && s.Stage.Owner != "" {
+		worker = workers.FindByID(allWorkers, s.Stage.Owner)
+		matchReason = "stage owner"
+	}
+	if worker == nil && wfCfg.Worker != "" {
+		worker = workers.FindByID(allWorkers, wfCfg.Worker)
+		matchReason = "workflow default"
+	}
+	if worker == nil {
+		matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+		if len(matched) > 0 {
+			worker = matched[0]
+			matchReason = "best match for stage"
+		}
 	}
 
 	if worker == nil {
-		fmt.Printf("No workers found for workflow %q stage %q\n", s.Stage.Workflow, s.Stage.Current)
-		if wfCfg.Model != "" || wfCfg.Effort != "" {
-			fmt.Printf("Workflow hints — model: %s  effort: %s\n", wfCfg.Model, wfCfg.Effort)
+		fmt.Printf("No worker found for workflow %q stage %q\n", s.Stage.Workflow, s.Stage.Current)
+		if wfCfg.Worker != "" {
+			fmt.Printf("Workflow default worker %q not found in workers/\n", wfCfg.Worker)
 		}
-		fmt.Println("Add a worker to workers/ that matches this workflow and stage.")
+		fmt.Println("Set worker: in the workflow's WORKFLOW.md or add a matching worker file.")
 		return nil
 	}
 
@@ -489,14 +492,8 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		fmt.Println()
 		fmt.Println("Would run:")
 		fmt.Printf("  %s\n", workers.LaunchCommand(worker, root, cwd, prompt))
-		others := withoutWorker(matched, worker.ID)
-		if len(others) > 0 {
-			fmt.Println()
-			fmt.Println("Alternatives:")
-			for _, w := range others {
-				fmt.Printf("  %-24s %s  cost: %s\n", w.Name, w.Product, w.CostTier)
-			}
-		}
+		fmt.Println()
+		fmt.Printf("Override worker: orc next %s --worker <worker-id>\n", s.Ticket)
 		return nil
 	}
 

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Workspace Orchestration TLDR — LOS</title>
+  <link rel="stylesheet" href="assets/vendor/catppuccin-latte.css" id="hljs-latte" />
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="assets/scripts.js" defer></script>
+</head>
+<body>
+
+<a class="back-link" href="agentic-workspace-orchestration.html">← Full idea document</a>
+
+<h1>Agentic Workspace Orchestration TLDR</h1>
+<p class="subtitle">One-page version of the LOS filesystem orchestration idea · May 2026</p>
+
+<div class="callout recommendation">
+  <div class="callout-title">Core idea</div>
+  <p>
+    Start agents at the shared <code>los-workspace/</code> root. Keep canonical repos under
+    <code>projects/</code>, ticket state in visible <code>features/</code> folders, repo work in
+    isolated sibling <code>worktrees/</code>, and use
+    <code>orc</code> to show the next step instead of making each agent reconstruct context.
+  </p>
+</div>
+
+<h2>Shape</h2>
+
+<pre><code class="language-text">los-workspace/
+  AGENTS.md
+  CLAUDE.md
+  ROUTER.md
+  TOOLS.md
+  RULES.md
+  features/
+    FLYWL-12345-some-feature/
+      STATE.yaml
+      JIRA.md
+      SPEC.md
+      PLAN.md
+      WORKLOG.md
+      DECISIONS.md
+      django/
+        PR.md
+        QA_HANDOFF.md
+      qa/
+        SOURCE_CONTEXT.md
+        QA_PLAN.md
+        RUNS.md
+        QA_RESULT.md
+  workflows/
+  workers/
+  worktrees/
+    los-app-los-django/
+    los-qa-automation/
+  projects/
+    los-app-los-django/
+    los-qa-automation/
+    los-frontend-ideas/</code></pre>
+
+<h2>Responsibilities</h2>
+
+<table>
+  <tr><th>Part</th><th>Owns</th></tr>
+  <tr><td><code>features/</code></td><td>Durable ticket context and cross-repo handoff state.</td></tr>
+  <tr><td><code>STATE.yaml</code></td><td>Current stage, owner, next action, worktree paths, runtime status.</td></tr>
+  <tr><td><code>workflows/</code></td><td>Reusable process docs: workon, Django-to-QA, PR repair, QA automation.</td></tr>
+  <tr><td><code>workflows/commands.yaml</code></td><td>Portable slash-style command map, such as <code>/workon</code>, <code>/qa-plan</code>, and <code>/pr-repair</code>.</td></tr>
+  <tr><td><code>workers/</code></td><td>Who can do work: product, model, stages, launch template, permission boundaries.</td></tr>
+  <tr><td><code>projects/</code></td><td>Canonical long-lived repo checkouts.</td></tr>
+  <tr><td><code>worktrees/</code></td><td>Isolated ticket checkouts for code/test execution, kept beside <code>projects/</code>.</td></tr>
+  <tr><td><code>tmux</code></td><td>Live per-feature runtime sessions and waiting interactive prompts.</td></tr>
+  <tr><td><code>terminal</code></td><td>Baseline fallback when tmux is unavailable; <code>orc next</code> prints commands to run manually.</td></tr>
+  <tr><td><code>orc</code></td><td>Status, next-step dispatch, template rendering, state updates, tmux helpers.</td></tr>
+</table>
+
+<h2>Worker files</h2>
+
+<p>
+  Workers are Markdown files with frontmatter. The frontmatter is for <code>orc</code>; the body
+  is for humans and agents.
+</p>
+
+<pre><code class="language-md">---
+id: bob-developer
+name: Bob the Developer
+product: codex
+model: gpt-5.5
+reasoning_effort: high
+cost_tier: medium
+workflows:
+  - django-feature-to-qa-automation
+  - qa-automation
+stages:
+  - django_implementation
+  - qa_implementation
+  - pr_repair
+default_tmux_window: app-codex
+launch_mode: foreground
+---
+
+# Bob the Developer
+
+Best for code edits, tests, debugging, Playwright automation, and PR repair.
+Ask before dependency installs, destructive Git, external writes, or background execution.</code></pre>
+
+<p>
+  Worker files can define <code>cost_tier</code>, model, and thinking/reasoning level so
+  <code>orc</code> can recommend the lowest-cost capable worker and escalate only when needed.
+  For pay-as-you-go model usage, consistently routing routine work to cheaper workers could
+  plausibly save tens of percent versus using a flagship/high-thinking worker for every step.
+</p>
+
+<h2>STATE.yaml</h2>
+
+<p>
+  Every worker must update <code>STATE.yaml</code> before stopping when status, stage, owner,
+  next action, outputs, worktree paths, tmux runtime, blockers, or human-attention state changes.
+</p>
+
+<pre><code class="language-yaml">ticket: FLYWL-12345
+slug: FLYWL-12345-some-feature
+status: in_progress
+
+stage:
+  current: qa_plan
+  owner: fred-documentor
+  workflow: django-feature-to-qa-automation
+
+next_action:
+  worker: fred-documentor
+  prompt: Continue QA planning from this feature context.
+  cwd: .
+
+runtime:
+  tmux:
+    session: FLYWL-12345
+    detached: true</code></pre>
+
+<pre><code class="language-yaml">status: waiting_for_human
+needs_human:
+  window: qa-codex
+  reason: command approval required
+  since: 2026-05-30T10:14:00-05:00</code></pre>
+
+<h2>orc</h2>
+
+<p>
+  Use <code>orc</code> as the user-facing CLI name, short for orchestrator. Build the real version
+  in Go with Bubble Tea: static binary, good process handling, and a
+  polished TUI. Keep policy in files; keep Go focused on parsing, display, state updates, tmux,
+  and worktree mechanics.
+</p>
+
+<pre><code class="language-text">      .-""""-.
+    .'  o  o  '.
+   /      ^      \
+  |    \_____/    |
+   \             /
+    '.  .___.  .'
+      '-.___.-'
+
+orc · workspace orchestrator</code></pre>
+
+<pre><code class="language-bash">orc status
+orc init --workspace ~/Desktop/los-workspace --with-los-defaults
+orc show FLYWL-12345
+orc next FLYWL-12345
+orc command workon FLYWL-12345
+orc advance FLYWL-12345 qa_plan
+orc tmux create FLYWL-12345
+orc tmux attach FLYWL-12345</code></pre>
+
+<p>
+  First version should be read-only: <code>status</code>, <code>show</code>, and <code>next</code>.
+  <code>init</code> can create the starter folders and templates. Add mutation, worktree creation,
+  tmux helpers, and execution only after the state schema settles.
+</p>
+
+<h2>tmux</h2>
+
+<p>
+  Each feature can have a detached tmux session:
+</p>
+
+<pre><code class="language-bash">tmux new-session -d -s FLYWL-12345 -c /Users/cengebretson/Desktop/los-workspace
+tmux attach -t FLYWL-12345</code></pre>
+
+<p>
+  Use windows like <code>state</code>, <code>app</code>, <code>qa</code>, <code>claude</code>,
+  <code>servers</code>, <code>tests</code>, and <code>logs</code>. If an agent needs human input,
+  the tmux window waits; the human attaches, answers, and detaches.
+  Without tmux, <code>runtime.mode: terminal</code> is the fallback and <code>orc next</code>
+  prints the command to run in a normal shell.
+</p>
+
+<h2>Permission model</h2>
+
+<p>
+  <code>RULES.md</code> should require approval before destructive, external, costly,
+  security-sensitive, or hard-to-undo actions. Repo-level rules may add stricter requirements,
+  but may not weaken workspace-level requirements.
+</p>
+
+<h2>Adoption order</h2>
+
+<ol>
+  <li>Create files and templates.</li>
+  <li>Implement <code>orc init</code> to create the starter workspace.</li>
+  <li>Add <code>STATE.yaml</code> to feature context packs.</li>
+  <li>Add read-only <code>orc</code>.</li>
+  <li>Add worker Markdown files.</li>
+  <li>Add worktree and tmux helpers.</li>
+  <li>Add optional execution only after logging and recovery are solid.</li>
+</ol>
+
+<footer>
+  TLDR · LOS workspace orchestration · features · STATE.yaml · workers · orc · tmux
+</footer>
+
+</body>
+</html>

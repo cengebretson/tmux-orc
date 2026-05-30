@@ -2,8 +2,7 @@
 next_workflow: code-review
 next_stage: code_review
 advance: manual
-model: claude-opus-4-7
-effort: high
+worker: bob-developer
 ---
 
 # Workflow: develop

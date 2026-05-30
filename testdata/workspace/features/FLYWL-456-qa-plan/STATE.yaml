@@ -1,0 +1,34 @@
+ticket: FLYWL-456
+slug: FLYWL-456-qa-plan
+status: ready
+stage:
+  current: qa_plan
+  owner: fred-documentor
+  workflow: develop
+repos: {}
+inputs:
+  ready:
+    - TICKET.md
+    - SPEC.md
+    - impl/QA_HANDOFF.md
+  required: []
+  completed: []
+outputs:
+  ready: []
+  required:
+    - qa/QA_PLAN.md
+    - qa/SOURCE_CONTEXT.md
+  completed: []
+next_action:
+  worker: ""
+  prompt: ""
+  cwd: ""
+history:
+  - at: "2026-05-30T10:00:00-05:00"
+    stage: implementation
+    owner: bob-developer
+    result: PR opened, QA handoff written
+  - at: "2026-05-30T15:50:11-05:00"
+    stage: qa_plan
+    owner: fred-documentor
+    result: qa plan approved

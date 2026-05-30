@@ -1,0 +1,38 @@
+ticket: FLYWL-123
+slug: FLYWL-123-backend-feature
+status: in_progress
+stage:
+  current: implementation
+  owner: bob-developer
+  workflow: develop
+repos:
+  app:
+    main: ../../projects/my-app
+    worktree: ../../worktrees/my-app/FLYWL-123-backend-feature
+    branch: codex/FLYWL-123-backend-feature
+inputs:
+  ready:
+    - TICKET.md
+    - SPEC.md
+    - PLAN.md
+  required: []
+  completed: []
+outputs:
+  ready: []
+  required:
+    - impl/PR.md
+    - impl/QA_HANDOFF.md
+  completed: []
+next_action:
+  worker: bob-developer
+  prompt: PR description needs clarification on the auth scope — please review and update SPEC.md
+  cwd: ../../worktrees/my-app/FLYWL-123-backend-feature
+history:
+  - at: "2026-05-30T09:00:00-05:00"
+    stage: intake
+    owner: fred-documentor
+    result: feature context created
+  - at: "2026-05-30T16:29:15-05:00"
+    stage: implementation
+    owner: bob-developer
+    result: waiting_for_human — PR description needs clarification on the auth scope — please review and update SPEC.md

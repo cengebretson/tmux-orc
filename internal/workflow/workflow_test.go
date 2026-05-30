@@ -25,7 +25,7 @@ func TestLoad_MissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if cfg.NextWorkflow != "" || cfg.Advance != "" || cfg.Model != "" {
+	if cfg.NextWorkflow != "" || cfg.Advance != "" || cfg.Worker != "" {
 		t.Errorf("expected empty config, got %+v", cfg)
 	}
 }
@@ -49,8 +49,7 @@ func TestLoad_FullFrontmatter(t *testing.T) {
 next_workflow: develop
 next_stage: implementation
 advance: auto
-model: claude-sonnet-4-6
-effort: medium
+worker: fred-documentor
 ---
 
 # Workflow: intake
@@ -69,11 +68,8 @@ effort: medium
 	if cfg.Advance != "auto" {
 		t.Errorf("Advance: got %q, want %q", cfg.Advance, "auto")
 	}
-	if cfg.Model != "claude-sonnet-4-6" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "claude-sonnet-4-6")
-	}
-	if cfg.Effort != "medium" {
-		t.Errorf("Effort: got %q, want %q", cfg.Effort, "medium")
+	if cfg.Worker != "fred-documentor" {
+		t.Errorf("Worker: got %q, want %q", cfg.Worker, "fred-documentor")
 	}
 }
 
@@ -81,8 +77,7 @@ func TestLoad_PartialFrontmatter(t *testing.T) {
 	dir := t.TempDir()
 	writeWorkflow(t, dir, "qa-automation", `---
 advance: manual
-model: claude-sonnet-4-6
-effort: medium
+worker: fred-documentor
 ---
 
 # Workflow: qa-automation

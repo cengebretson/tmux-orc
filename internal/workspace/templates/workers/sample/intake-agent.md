@@ -4,10 +4,6 @@ name: Intake Agent
 product: claude
 model: claude-sonnet-4-6
 cost_tier: medium
-workflows:
-  - intake
-stages:
-  - intake
 launch_mode: foreground
 ---
 
