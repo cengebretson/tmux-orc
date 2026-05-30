@@ -1,135 +1,159 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
-**tmux-orc** is a multi-agent Claude orchestration system. An orchestrator agent coordinates workers via a local MCP server (message bus), with git worktrees providing per-job repo isolation. Workers run in tmux panes and are pull-based — they call `get_task` themselves when ready.
+**orc** is a Go CLI for agentic workspace orchestration. It scaffolds and manages a
+filesystem-based workspace where agents (Claude, Codex, Cursor, etc.) carry feature
+work across repos — from ticket intake through implementation, PR repair, QA automation,
+and evidence collection.
 
-This repo will be split into two deliverables:
-- `tmux-claude-agents` — TPM-installable tmux plugin (bash)
-- `claude-agents-mcp` — MCP server published to npm (TypeScript/Bun)
+The core idea: durable state lives in files (`STATE.yaml`, markdown docs), not in memory.
+Policy lives in files (`RULES.md`, `AGENTS.md`, worker definitions), not in code.
+`orc` reads, validates, renders, and updates — it does not encode workflow logic.
 
-## Architecture
-
-```
-┌──────────────────┬──────────────────┐
-│  pane 1          │  pane 2          │
-│  orchestrator    │  worker 1        │
-│  (claude)        │  (claude)        │
-│                  ├──────────────────┤
-│                  │  pane 3          │
-│                  │  worker 2        │
-│                  │  (claude)        │
-└──────────────────┴──────────────────┘
-         ↕                  ↕
-    MCP Server (local, port 7777 default)
-```
-
-### MCP Server (`mcp/`)
-
-Bun/TypeScript HTTP/SSE server. Not stdio — runs persistently and serves multiple agents simultaneously. All state is in-memory (`state.ts`). Shared types live in `types.ts`.
-
-Tools exposed to agents:
-
-| Tool | Caller | Purpose |
-|---|---|---|
-| `register_worker(worker_id, pane_id)` | Worker | Register on startup |
-| `get_task(worker_id, role)` | Worker | Pull next role-matched task |
-| `submit_result(worker_id, result)` | Worker | Post output when done |
-| `load_tasks(tasks[])` | Orchestrator | Seed the task queue |
-| `get_result(worker_id)` | Orchestrator | Read a worker's result |
-| `get_status()` | Orchestrator | Queue depth + worker states |
-| `all_done()` | Orchestrator | True when queue empty and all workers are submitted or idle |
-| `stage_done(job, stage)` | Orchestrator | True when all stage tasks submitted |
-| `get_stage_results(job, stage)` | Orchestrator | All results from a stage |
-| `get_jobs_status(job?)` | Orchestrator | Stage breakdown for one or all jobs |
-| `reset_job(job)` | Orchestrator | Clear stage state to rerun a job |
-| `get_hung_workers(threshold_ms)` | Orchestrator | Workers in working state with no activity for longer than threshold_ms |
-| `report_blocked(worker_id, reason)` | Worker | Signal stuck state — fires Basso notification |
-| `resolve_block(worker_id, resolution)` | Worker | Unblock self and append resolution to `## Lessons Learned` in `.claude/roles/<role>.md` |
-
-HTTP inspection endpoints (curl-friendly): `/status`, `/queue`, `/results`, `/result/:worker`, `/jobs`, `/job/:name`, `/job/:name/:stage/results`
-
-### Project Config
-
-`.claude/agents.json` defines workers and pipeline definitions:
-```json
-{
-  "workers": [
-    { "id": "bob", "role": "frontend" },
-    { "id": "rex", "role": "review" }
-  ],
-  "pipelines": [
-    {
-      "name": "frontend",
-      "stages": [
-        { "name": "build",  "role": "frontend" },
-        { "name": "review", "role": "review"   }
-      ]
-    }
-  ]
-}
-```
-
-Jobs live as markdown files in `.claude/jobs/<name>.md` with YAML frontmatter (`pipeline:`, `domain:`) and a free-form spec body. Completed jobs are moved to `.claude/jobs/done/` with an `## Outcome` section appended.
-
-### Git Worktrees
-
-One shared worktree per job, created by the orchestrator:
-```bash
-git worktree add .worktrees/auth-login -b agent/auth-login
-```
-All workers in the same job share this worktree. After the final stage the orchestrator removes the worktree; the branch stays for the open PR.
-
-`.worktrees/` must be in `.gitignore`.
-
-## CLI
-
-`cli.ts` at the project root is the primary entry point (called by all tmux keybinds):
+## Repository Layout
 
 ```
-bun run cli.ts init       # scaffold .claude/ in a new project (agents.json, sample job, dirs)
-bun run cli.ts validate   # pre-flight checks: roles, skills, plugins, job frontmatter
-bun run cli.ts start      # starts MCP server + orchestrator; --job=<name> spawns workers too
-bun run cli.ts start-mcp  # launches bun server, guards double-start via PID file
-bun run cli.ts watch      # watches .claude/jobs/ and auto-starts new jobs
-bun run cli.ts menu       # tmux display-menu for status inspection
-bun run cli.ts cleanup    # kills MCP server, removes worktrees + branches
-bun run cli.ts notify     # macOS notifications (Glass = done, Basso = blocked)
+orc/
+  cmd/orc/main.go                 CLI entry point (Cobra)
+  internal/
+    health/                       workspace filesystem health checks
+    state/                        STATE.yaml parsing and mutations
+    workers/                      worker definition parsing and matching
+    workflow/                     WORKFLOW.md frontmatter parsing
+    workspace/                    init, work, and template embedding
+      templates/                  embedded workspace scaffold templates
+        AGENTS.md, CLAUDE.md, ROUTER.md, TOOLS.md, RULES.md
+        features/_template/       feature context pack template
+        workers/                  worker definition templates
+          _template.md
+          sample/                 sample workers (--with-sample-workers)
+        workflows/                workflow docs, REQUIREMENTS.md, commands.yaml
+  docs/                           design documentation (HTML)
+  assets/                         roles and skills reference files
+  go.mod
 ```
 
-`start --job=<name>` creates the worktree, installs skills, spawns workers according to the configured layout (see tmux config), then starts the orchestrator in the `agents` window. Without `--job=`, only the orchestrator pane is created and it handles worker setup manually.
-
-Worker layout is controlled by `@claude-agents-layout`:
-- `windows` (default) — one tmux window per job, workers as panes inside it
-- `sessions` — one new tmux session per job, workers as windows inside it
-- `panes` — all workers split as panes in the orchestrator's window
-
-
-## Worker Lifecycle
-
-```
-register_worker() → get_task() → do work → submit_result() → get_task() → ...
-```
-
-When `get_task` returns `NO_TASKS`, workers wait 30 seconds and retry. They stay alive for the full session and pick up new jobs as they are loaded.
-
-## Running Tests
+## Build and Run
 
 ```bash
-bun test
+go build -o orc ./cmd/orc/...
+./orc --help
+./orc init --dry-run
+./orc init --workspace ~/Desktop/my-workspace --with-sample-workers
 ```
 
-## tmux Configuration
+## Tests
 
-```tmux
-set -g @plugin 'yourname/tmux-claude-agents'
-set -g @claude-agents-mcp-port   7777      # default
-set -g @claude-agents-notify     true      # macOS notifications (set false to disable)
-set -g @claude-agents-watch-jobs true      # auto-start jobs dropped into .claude/jobs/
-set -g @claude-agents-layout     windows   # windows | sessions | panes (default: windows)
-
-set -g bell-action any
-set -g visual-bell on
+```bash
+go test ./...
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `orc init` | Scaffold a new workspace |
+| `orc init --workspace <path>` | Scaffold at a specific path |
+| `orc init --with-sample-workers` | Include sample worker files |
+| `orc init --dry-run` | Preview without writing |
+| `orc init --force` | Overwrite existing files |
+| `orc health` | Check workspace filesystem health |
+| `orc status` | Show all features and their current stage |
+| `orc work <ticket>` | Create the feature folder for a ticket — run once by the human |
+| `orc show <ticket>` | Show full state for one ticket |
+| `orc show <ticket> --json` | Full state as JSON for agent parsing |
+| `orc next <ticket>` | Launch the next agent for a ticket |
+| `orc next <ticket> --dry` | Preview the launch command without executing |
+| `orc next <ticket> --json` | Next action as JSON for CI or scripting |
+| `orc start <ticket>` | Mark a ticket in_progress — called by the agent at the start of each session (hidden from help) |
+| `orc advance <ticket> <stage>` | Mark current stage complete and move to the next (called by agents, hidden from help) |
+| `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
+| `orc block <ticket> <reason>` | Mark a ticket as blocked |
+| `orc archive <ticket>` | Archive a completed feature, remove worktrees |
+
+## Roadmap
+
+The original design document lives in `docs/`. This section tracks what's been
+built, what's planned, and where we deliberately diverged from the original plan.
+
+### Implemented
+
+| Area | What exists |
+|------|-------------|
+| Workspace scaffold | `orc init` with embedded templates, `--with-sample-workers`, `--dry-run`, `--force` |
+| Configuration | `SETUP.md` — agent-driven setup (not in original design, added improvement) |
+| Health check | `orc health` — filesystem validation, setup status, required workflow check, frontmatter validation |
+| Feature lifecycle | `orc work`, `orc show`, `orc next`, `orc advance`, `orc wait`, `orc start`, `orc block`, `orc archive` |
+| Status dashboard | `orc status` — active and archived features, table view |
+| Worker routing | Frontmatter matching by workflow + stage, cost tier, preferred owner |
+| Multi-product | Claude and Codex launch commands rendered from worker `product` field |
+| Workflows | intake, develop, pr-open, pr-repair, qa-automation — each with WORKFLOW.md frontmatter |
+| Workflow frontmatter | `next_workflow`, `next_stage`, `advance` (auto/manual), `model`, `effort` hints per workflow |
+| Cross-workflow transitions | `orc advance --workflow` updates `stage.workflow`; worker matching stays correct |
+| State mutations | `state.Advance`, `state.Block`, `state.WaitForHuman`, `state.Start`, `state.SetStatus` with history entries |
+| Agent prompt scaffolding | Every `orc next` prompt includes preamble (read AGENTS.md, run `orc start`), workflow hints, and exact end-of-session command |
+| JSON output | `orc show --json`, `orc next --json`, `orc status --json` — machine-readable for agent parsing and CI |
+| Session contract | `REQUIREMENTS.md` shared workflow contract; `AGENTS.md` Session Start section enforces state updates |
+| Worktree cleanup | `orc archive` removes git worktrees, moves feature to `_archive/` |
+| Tests | health, state, workers, workspace packages all covered |
+
+### Planned
+
+| Feature | Notes |
+|---------|-------|
+| `orc tmux create/attach/list/kill` | Per-ticket tmux sessions with standard window layout (state, app, qa, claude, servers, tests, logs) |
+| `orc tui` | Bubble Tea dashboard — color-coded status, click to show/launch |
+| ~~`orc run-next`~~ | Done — `orc next` now executes the agent directly; `--dry` to preview |
+| `runtime` in STATE.yaml | tmux session name, window names, cwd per window — written by `orc tmux create` |
+| ~~`--json` flag on `orc status`~~ | Done — `orc status --json` returns `{ active: [...], archived: [...] }` with full state objects |
+| Banner suppression | Auto-suppress when stdout is not a TTY; `--no-banner` flag |
+| `reasoning_effort` / `service_tier` in workers | Codex reasoning effort and priority tier in worker frontmatter, rendered in launch command — workflow frontmatter has `effort` hints but workers don't yet |
+
+### Deliberate divergences from original design
+
+| Original | What we did instead | Why |
+|----------|--------------------|----|
+| `JIRA.md` in feature template | `TICKET.md` | System-agnostic — works with GitHub Issues, Linear, local files, or manual |
+| `django/` subfolder in features | `impl/` | Not framework-specific |
+| `orc workon` command | `orc work` | Shorter, cleaner |
+| `orc done` command | `orc archive` with `_archive/` folder | Preserves history, keeps workspace clean, reversible |
+| No first-run config | `SETUP.md` agent-driven setup | Cleaner than hand-editing files; works with Claude or Codex |
+| Intake bundled into main workflow | Separate `intake` workflow | Cleaner separation — every ticket goes through intake first, then routes to the right workflow |
+| `backend/` subfolder | `impl/` subfolder | Generic — not coupled to backend/frontend distinction |
+
+## Template System
+
+Templates are embedded in the binary via `//go:embed all:templates`.
+The `all:` prefix is required to include directories starting with `_` (like `_template`).
+
+To add a new template file, drop it under `internal/workspace/templates/` and rebuild.
+
+## Hard Requirements
+
+**orc and the workspaces it generates must work equally well for Claude and Codex.**
+
+This is a non-negotiable design constraint. Concretely:
+
+- The workspace scaffold (`AGENTS.md`, `CLAUDE.md`, worker files, workflow docs) must
+  be readable and actionable by both Claude Code and Codex without modification.
+- `CLAUDE.md` imports `AGENTS.md` as the shared source of truth. Codex reads `AGENTS.md`
+  directly. The two must never diverge.
+- `orc` CLI output (launch commands, prompts, next-action text) must be correct for
+  whichever product the worker definition specifies — never assume Claude.
+- Worker definitions use `product: claude` or `product: codex` (or others) in frontmatter.
+  `orc next` renders the correct launch command for the active worker's product.
+- Do not add features, flags, or template content that only makes sense for one product.
+  If a feature is product-specific, gate it behind the worker's `product` field at runtime.
+
+## Design Principles
+
+- Policy in files, not code. Worker behavior, model choice, and cost tier live in
+  markdown files. `orc` parses, matches, renders, and updates state.
+- Durable state. `STATE.yaml` survives restarts, session changes, and agent switches.
+- Human-in-the-loop first. Background execution comes last, after logging and recovery
+  are solid.
+- Lowest-cost capable worker by default. Escalate only when the workflow or human says
+  the complexity requires it.
+- Product-agnostic by default. Every decision that could couple `orc` or the workspace
+  to a single agent product should be reconsidered.

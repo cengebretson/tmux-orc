@@ -1,0 +1,866 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/cengebretson/orc/internal/health"
+	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/workflow"
+	"github.com/cengebretson/orc/internal/workers"
+	"github.com/cengebretson/orc/internal/workspace"
+	"github.com/spf13/cobra"
+)
+
+const banner = `
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⣶⣧⣄⣉⣉⣠⣼⣶⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⡿⣿⣿⣿⣿⢿⣿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⣼⣤⣤⣈⠙⠳⢄⣉⣋⡡⠞⠋⣁⣤⣤⣧⠀⠀⠀⠀⠀⠀⠀
+⠀⢲⣶⣤⣄⡀⢀⣿⣄⠙⠿⣿⣦⣤⡿⢿⣤⣴⣿⠿⠋⣠⣿⠀⢀⣠⣤⣶⡖⠀
+⠀⠀⠙⣿⠛⠇⢸⣿⣿⡟⠀⡄⢉⠉⢀⡀⠉⡉⢠⠀⢻⣿⣿⡇⠸⠛⣿⠋⠀⠀
+⠀⠀⠀⠘⣷⠀⢸⡏⠻⣿⣤⣤⠂⣠⣿⣿⣄⠑⣤⣤⣿⠟⢹⡇⠀⣾⠃⠀⠀⠀
+⠀⠀⠀⠀⠘⠀⢸⣿⡀⢀⠙⠻⢦⣌⣉⣉⣡⡴⠟⠋⡀⢀⣿⡇⠀⠃⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⢸⣿⣧⠈⠛⠂⠀⠉⠛⠛⠉⠀⠐⠛⠁⣼⣿⡇⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠸⣏⠀⣤⡶⠖⠛⠋⠉⠉⠙⠛⠲⢶⣤⠀⣹⠇⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⣿⣶⣿⣿⣿⣿⣿⣿⣶⣿⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠛⠛⠛⠛⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀
+
+orc · workspace orchestrator
+`
+
+var rootCmd = &cobra.Command{
+	Use:   "orc",
+	Short: "orc — agentic workspace orchestrator",
+	Long:  banner,
+}
+
+var initCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Scaffold a new orc workspace",
+	RunE:  runInit,
+}
+
+var (
+	initWorkspace       string
+	initWithSampleWorkers bool
+	initDryRun          bool
+	initForce           bool
+)
+
+var healthCmd = &cobra.Command{
+	Use:   "health",
+	Short: "Check workspace and integration health",
+	RunE:  runHealth,
+}
+
+var healthWorkspace string
+
+var nextCmd = &cobra.Command{
+	Use:   "next <ticket>",
+	Short: "Launch the next agent for a ticket — use --dry to preview without running",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runNext,
+}
+
+var (
+	nextWorkspace string
+	nextJSON      bool
+	nextDry       bool
+)
+
+var statusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show all features and their current stage",
+	RunE:  runStatus,
+}
+
+var (
+	statusWorkspace string
+	statusJSON      bool
+)
+
+var workCmd = &cobra.Command{
+	Use:   "work <ticket>",
+	Short: "Start work on a ticket — creates the feature folder and STATE.yaml",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWork,
+}
+
+var (
+	workWorkspace string
+	workSlug      string
+)
+
+var showCmd = &cobra.Command{
+	Use:   "show <slug>",
+	Short: "Show full details for a feature ticket",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runShow,
+}
+
+var (
+	showWorkspace string
+	showJSON      bool
+)
+
+var startCmd = &cobra.Command{
+	Use:    "start <ticket>",
+	Short:  "Mark a ticket as in_progress — called by agents at session start",
+	Args:   cobra.ExactArgs(1),
+	RunE:   runStart,
+	Hidden: true,
+}
+
+var startWorkspace string
+
+var waitCmd = &cobra.Command{
+	Use:   "wait <ticket> <reason>",
+	Short: "[agent] Mark a ticket as waiting for human input or approval",
+	Args:  cobra.MinimumNArgs(2),
+	RunE:  runWait,
+}
+
+var waitWorkspace string
+
+var blockCmd = &cobra.Command{
+	Use:   "block <ticket> <reason>",
+	Short: "[agent] Mark a ticket as blocked with a reason",
+	Args:  cobra.MinimumNArgs(2),
+	RunE:  runBlock,
+}
+
+var blockWorkspace string
+
+var advanceCmd = &cobra.Command{
+	Use:    "advance <ticket> <stage>",
+	Short:  "[agent] Mark current stage complete and move to the next — writes STATE.yaml",
+	Args:   cobra.ExactArgs(2),
+	RunE:   runAdvance,
+	Hidden: true,
+}
+
+var (
+	advanceWorkspace string
+	advanceOwner     string
+	advanceResult    string
+	advanceWorkflow  string
+)
+
+var archiveCmd = &cobra.Command{
+	Use:   "archive <ticket>",
+	Short: "Archive a completed feature — removes worktrees and moves folder to features/_archive/",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runArchive,
+}
+
+var archiveWorkspace string
+
+func init() {
+	initCmd.Flags().StringVar(&initWorkspace, "workspace", ".", "Workspace root directory (default: current directory)")
+	initCmd.Flags().BoolVar(&initWithSampleWorkers, "with-sample-workers", false, "Include sample worker files")
+	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Print what would be created without writing files")
+	initCmd.Flags().BoolVar(&initForce, "force", false, "Overwrite existing generated files")
+
+	healthCmd.Flags().StringVar(&healthWorkspace, "workspace", ".", "Workspace root to check (default: current directory)")
+	nextCmd.Flags().StringVar(&nextWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	nextCmd.Flags().BoolVar(&nextJSON, "json", false, "Output as JSON")
+	nextCmd.Flags().BoolVar(&nextDry, "dry", false, "Print the launch command without executing it")
+	statusCmd.Flags().StringVar(&statusWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Output as JSON")
+	workCmd.Flags().StringVar(&workWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	workCmd.Flags().StringVar(&workSlug, "slug", "", "Optional slug suffix (e.g. add-user-export → TICKET-123-add-user-export)")
+	showCmd.Flags().StringVar(&showWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
+	startCmd.Flags().StringVar(&startWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	waitCmd.Flags().StringVar(&waitWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	blockCmd.Flags().StringVar(&blockWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	advanceCmd.Flags().StringVar(&advanceWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	advanceCmd.Flags().StringVar(&advanceOwner, "owner", "", "Worker or role that owns the new stage")
+	advanceCmd.Flags().StringVar(&advanceResult, "result", "", "Summary of what was accomplished in the previous stage")
+	advanceCmd.Flags().StringVar(&advanceWorkflow, "workflow", "", "New workflow name (required when crossing workflow boundaries)")
+	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(healthCmd)
+	rootCmd.AddCommand(nextCmd)
+	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(workCmd)
+	rootCmd.AddCommand(showCmd)
+	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(waitCmd)
+	rootCmd.AddCommand(blockCmd)
+	rootCmd.AddCommand(advanceCmd)
+	rootCmd.AddCommand(archiveCmd)
+}
+
+func runInit(cmd *cobra.Command, args []string) error {
+	if cmd.Parent() != nil {
+		fmt.Print(banner)
+	}
+
+	opts := workspace.InitOptions{
+		Root:              initWorkspace,
+		WithSampleWorkers: initWithSampleWorkers,
+		DryRun:            initDryRun,
+		Force:             initForce,
+	}
+
+	return workspace.Init(opts)
+}
+
+func runHealth(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(healthWorkspace)
+	if err != nil {
+		return err
+	}
+
+	report := health.Run(root)
+	health.Print(report)
+	return nil
+}
+
+func runNext(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(nextWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	if nextJSON {
+		allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+		if err != nil {
+			return err
+		}
+		cwd := s.ResolveCWD(root, featureDir)
+		matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+		preferred := workers.Preferred(matched, s.Stage.Owner)
+		if preferred == nil && len(matched) > 0 {
+			preferred = matched[0]
+		}
+		jsonPrompt := s.NextAction.Prompt
+		if jsonPrompt == "" {
+			jsonPrompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
+				s.Ticket, s.Stage.Current, s.Slug, s.Stage.Workflow)
+		}
+		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and workflows/REQUIREMENTS.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
+		jsonPrompt = jsonPreamble + jsonPrompt
+		if wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow); wfCfg != nil {
+			if wfCfg.Model != "" || wfCfg.Effort != "" {
+				var hints []string
+				if wfCfg.Model != "" {
+					hints = append(hints, "model: "+wfCfg.Model)
+				}
+				if wfCfg.Effort != "" {
+					hints = append(hints, "effort: "+wfCfg.Effort)
+				}
+				jsonPrompt += "\n\nWorkflow hints (worker settings take precedence): " + strings.Join(hints, ", ")
+			}
+			if wfCfg.NextWorkflow != "" && wfCfg.NextStage != "" {
+				if wfCfg.Advance == "auto" {
+					jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc advance %s %s --workflow %s --owner <worker-id> --result \"<summary>\"",
+						s.Ticket, wfCfg.NextStage, wfCfg.NextWorkflow)
+				} else {
+					jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s/%s>\"",
+						s.Ticket, wfCfg.NextWorkflow, wfCfg.NextStage)
+				}
+			}
+		}
+		out := map[string]any{
+			"ticket": s.Ticket,
+			"status": s.Status,
+			"stage":  s.Stage.Current,
+			"owner":  s.Stage.Owner,
+			"cwd":    cwd,
+			"prompt": jsonPrompt,
+		}
+		if preferred != nil {
+			out["worker"] = preferred.ID
+			out["product"] = preferred.Product
+			out["model"] = preferred.Model
+			out["launch"] = workers.LaunchCommand(preferred, root, cwd, jsonPrompt)
+		}
+		return printJSON(out)
+	}
+
+	fmt.Printf("Ticket:  %s\n", s.Ticket)
+	fmt.Printf("Status:  %s\n", s.Status)
+	fmt.Printf("Stage:   %s\n", s.Stage.Current)
+	fmt.Printf("Owner:   %s\n", s.Stage.Owner)
+
+	switch s.Status {
+	case "pending":
+		fmt.Println()
+		fmt.Println("Intake has not run yet. Launching intake agent:")
+	case "in_progress":
+		fmt.Println()
+		fmt.Println("⚠ This ticket is already in_progress — an agent session may be active.")
+		fmt.Println("  Check for partial work before launching a new session.")
+	case "waiting_for_human":
+		fmt.Println()
+		fmt.Printf("Needs your input: %s\n", s.NextAction.Prompt)
+		fmt.Println()
+		fmt.Println("Resolve then run `orc next` again to continue:")
+		return nil
+	case "blocked":
+		fmt.Println()
+		fmt.Printf("Blocked: %s\n", s.NextAction.Prompt)
+		fmt.Println()
+		fmt.Println("Resolve the external issue then run `orc next` to continue:")
+		return nil
+	}
+	fmt.Println()
+
+	return runNextAction(root, featureDir, s, nextDry)
+}
+
+// runNextAction resolves the recommended worker and either executes or prints the launch command.
+// When dry is true, it prints the command without executing (preview mode).
+func runNextAction(root, featureDir string, s *state.State, dry bool) error {
+	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+	if err != nil {
+		return err
+	}
+
+	cwd := s.ResolveCWD(root, featureDir)
+	prompt := s.NextAction.Prompt
+	if prompt == "" {
+		prompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
+			s.Ticket, s.Stage.Current, s.Slug, s.Stage.Workflow)
+	}
+	preamble := fmt.Sprintf("Before starting: read AGENTS.md and workflows/REQUIREMENTS.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
+	prompt = preamble + prompt
+
+	wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
+	if wfCfg.Model != "" || wfCfg.Effort != "" {
+		var hints []string
+		if wfCfg.Model != "" {
+			hints = append(hints, "model: "+wfCfg.Model)
+		}
+		if wfCfg.Effort != "" {
+			hints = append(hints, "effort: "+wfCfg.Effort)
+		}
+		prompt += "\n\nWorkflow hints (worker settings take precedence): " + strings.Join(hints, ", ")
+	}
+	if wfCfg.NextWorkflow != "" && wfCfg.NextStage != "" {
+		var suffix string
+		if wfCfg.Advance == "auto" {
+			suffix = fmt.Sprintf(
+				"\n\nWhen this stage is complete, run:\n  orc advance %s %s --workflow %s --owner <worker-id> --result \"<summary>\"",
+				s.Ticket, wfCfg.NextStage, wfCfg.NextWorkflow,
+			)
+		} else {
+			suffix = fmt.Sprintf(
+				"\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s/%s>\"",
+				s.Ticket, wfCfg.NextWorkflow, wfCfg.NextStage,
+			)
+		}
+		prompt += suffix
+	}
+
+	matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+	preferred := workers.Preferred(matched, s.Stage.Owner)
+
+	var worker *workers.Worker
+	var matchReason string
+	if preferred != nil {
+		worker = preferred
+		matchReason = "matches stage owner"
+	} else if len(matched) > 0 {
+		worker = matched[0]
+		matchReason = "best match for stage"
+	}
+
+	if worker == nil {
+		fmt.Printf("No workers found for workflow %q stage %q\n", s.Stage.Workflow, s.Stage.Current)
+		if wfCfg.Model != "" || wfCfg.Effort != "" {
+			fmt.Printf("Workflow hints — model: %s  effort: %s\n", wfCfg.Model, wfCfg.Effort)
+		}
+		fmt.Println("Add a worker to workers/ that matches this workflow and stage.")
+		return nil
+	}
+
+	args := workers.LaunchArgs(worker, root, cwd, prompt)
+
+	if dry {
+		fmt.Printf("Worker:  %s  (%s)\n", worker.Name, matchReason)
+		fmt.Printf("Product: %s\n", worker.Product)
+		if worker.Model != "" {
+			fmt.Printf("Model:   %s\n", worker.Model)
+		}
+		fmt.Printf("cwd:     %s\n", cwd)
+		fmt.Println()
+		fmt.Println("Would run:")
+		fmt.Printf("  %s\n", workers.LaunchCommand(worker, root, cwd, prompt))
+		others := withoutWorker(matched, worker.ID)
+		if len(others) > 0 {
+			fmt.Println()
+			fmt.Println("Alternatives:")
+			for _, w := range others {
+				fmt.Printf("  %-24s %s  cost: %s\n", w.Name, w.Product, w.CostTier)
+			}
+		}
+		return nil
+	}
+
+	fmt.Printf("Launching %s (%s)...\n", worker.Name, worker.Product)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Dir = cwd
+	return cmd.Run()
+}
+
+
+
+func runWork(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(workWorkspace)
+	if err != nil {
+		return err
+	}
+
+	result, err := workspace.Work(workspace.WorkOptions{
+		Root:   root,
+		Ticket: args[0],
+		Slug:   workSlug,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Created: features/%s/\n\n", result.Slug)
+
+	s, err := state.Load(result.FeatureDir)
+	if err != nil {
+		return err
+	}
+
+	return runNextAction(root, result.FeatureDir, s, true)
+}
+
+func runStatus(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(statusWorkspace)
+	if err != nil {
+		return err
+	}
+
+	type row struct {
+		ticket string
+		status string
+		stage  string
+		owner  string
+		next   string
+	}
+
+	collectRows := func(dir string) []row {
+		entries, _ := os.ReadDir(dir)
+		var rows []row
+		for _, e := range entries {
+			if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
+				continue
+			}
+			featureDir := filepath.Join(dir, e.Name())
+			s, err := state.Load(featureDir)
+			if err != nil {
+				rows = append(rows, row{ticket: e.Name(), status: "error", next: err.Error()})
+				continue
+			}
+			next := s.NextAction.Prompt
+			if len(next) > 40 {
+				next = next[:40] + "…"
+			}
+			rows = append(rows, row{
+				ticket: s.Ticket,
+				status: s.Status,
+				stage:  s.Stage.Current,
+				owner:  s.Stage.Owner,
+				next:   next,
+			})
+		}
+		return rows
+	}
+
+	printTable := func(rows []row) {
+		fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "Ticket", "Status", "Stage", "Owner", "Next")
+		fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "------", "------", "-----", "-----", "----")
+		for _, r := range rows {
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", r.ticket, r.status, r.stage, r.owner, r.next)
+		}
+	}
+
+	featuresDir := filepath.Join(root, "features")
+
+	if statusJSON {
+		collectStates := func(dir string) []*state.State {
+			entries, _ := os.ReadDir(dir)
+			var out []*state.State
+			for _, e := range entries {
+				if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
+					continue
+				}
+				s, err := state.Load(filepath.Join(dir, e.Name()))
+				if err == nil {
+					out = append(out, s)
+				}
+			}
+			return out
+		}
+		return printJSON(map[string]any{
+			"active":   collectStates(featuresDir),
+			"archived": collectStates(filepath.Join(featuresDir, "_archive")),
+		})
+	}
+
+	active := collectRows(featuresDir)
+	archived := collectRows(filepath.Join(featuresDir, "_archive"))
+
+	if len(active) == 0 && len(archived) == 0 {
+		fmt.Println("No features found. Start one with `orc work <ticket>`.")
+		return nil
+	}
+
+	if len(active) > 0 {
+		fmt.Printf("Active (%d)\n\n", len(active))
+		printTable(active)
+	}
+
+	if len(archived) > 0 {
+		if len(active) > 0 {
+			fmt.Println()
+		}
+		fmt.Printf("Archived (%d)\n\n", len(archived))
+		printTable(archived)
+	}
+
+	return nil
+}
+
+func runShow(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(showWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	if showJSON {
+		return printJSON(s)
+	}
+
+	fmt.Printf("Ticket:   %s\n", s.Ticket)
+	fmt.Printf("Slug:     %s\n", s.Slug)
+	fmt.Printf("Status:   %s\n", s.Status)
+
+	fmt.Println()
+	fmt.Println("Stage")
+	fmt.Printf("  Current:   %s\n", s.Stage.Current)
+	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
+	fmt.Printf("  Workflow:  %s\n", s.Stage.Workflow)
+
+	if len(s.Inputs.Ready)+len(s.Inputs.Required)+len(s.Inputs.Completed) > 0 {
+		fmt.Println()
+		fmt.Println("Inputs")
+		for _, f := range s.Inputs.Ready {
+			fmt.Printf("  %s  %s\n", fileCheck(featureDir, f), f)
+		}
+		for _, f := range s.Inputs.Required {
+			fmt.Printf("  %s  %s\n", fileCheck(featureDir, f), f)
+		}
+		for _, f := range s.Inputs.Completed {
+			fmt.Printf("  %s  %s\n", fileCheck(featureDir, f), f)
+		}
+	}
+
+	if len(s.Outputs.Ready)+len(s.Outputs.Required)+len(s.Outputs.Completed) > 0 {
+		fmt.Println()
+		fmt.Println("Outputs")
+		for _, f := range s.Outputs.Ready {
+			fmt.Printf("  %s  %s\n", fileCheck(featureDir, f), f)
+		}
+		for _, f := range s.Outputs.Required {
+			fmt.Printf("  %s  %s\n", fileCheck(featureDir, f), f)
+		}
+		for _, f := range s.Outputs.Completed {
+			fmt.Printf("  %s  %s\n", fileCheck(featureDir, f), f)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("Next")
+	if s.Status == "waiting_for_human" {
+		fmt.Printf("  Waiting: %s\n", s.NextAction.Prompt)
+		fmt.Println("  Run `orc next` after resolving to continue.")
+	} else if s.Status == "blocked" {
+		fmt.Printf("  Blocked: %s\n", s.NextAction.Prompt)
+		fmt.Println("  Run `orc next` after resolving to continue.")
+	} else {
+		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
+		matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+		preferred := workers.Preferred(matched, s.Stage.Owner)
+		if preferred == nil && len(matched) > 0 {
+			preferred = matched[0]
+		}
+		if preferred != nil {
+			fmt.Printf("  Worker:  %s (%s)\n", preferred.Name, preferred.Product)
+			if preferred.Model != "" {
+				fmt.Printf("  Model:   %s\n", preferred.Model)
+			}
+		}
+		fmt.Println("  Run `orc next` to launch.")
+	}
+
+	if len(s.History) > 0 {
+		fmt.Println()
+		fmt.Println("History")
+		for _, h := range s.History {
+			fmt.Printf("  %s  %-24s  %-20s  %s\n", h.At, h.Stage, h.Owner, h.Result)
+		}
+	}
+
+	return nil
+}
+
+func fileCheck(featureDir, relPath string) string {
+	if _, err := os.Stat(filepath.Join(featureDir, relPath)); err == nil {
+		return "✓"
+	}
+	return "✗"
+}
+
+func runStart(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(startWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	if err := state.Start(featureDir); err != nil {
+		return err
+	}
+
+	fmt.Printf("Ticket:  %s\n", s.Ticket)
+	fmt.Printf("Status:  in_progress\n")
+	fmt.Printf("Stage:   %s\n", s.Stage.Current)
+	fmt.Printf("Owner:   %s\n", s.Stage.Owner)
+	return nil
+}
+
+func runWait(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(waitWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	reason := strings.Join(args[1:], " ")
+	if err := state.WaitForHuman(featureDir, reason); err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Ticket:  %s\n", s.Ticket)
+	fmt.Printf("Status:  waiting_for_human\n")
+	fmt.Printf("Needs:   %s\n", reason)
+	fmt.Printf("\nRun `orc advance %s <stage>` to continue once resolved.\n", s.Ticket)
+	return nil
+}
+
+func runBlock(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(blockWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	reason := strings.Join(args[1:], " ")
+	if err := state.Block(featureDir, reason); err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Ticket:  %s\n", s.Ticket)
+	fmt.Printf("Status:  blocked\n")
+	fmt.Printf("Reason:  %s\n", reason)
+	fmt.Printf("\nRun `orc advance %s <stage>` to unblock when resolved.\n", s.Ticket)
+	return nil
+}
+
+func runAdvance(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(advanceWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	prevStage := s.Stage.Current
+	newStage := args[1]
+	result := advanceResult
+	if result == "" {
+		result = fmt.Sprintf("advanced from %s to %s", prevStage, newStage)
+	}
+
+	if err := state.Advance(featureDir, newStage, advanceWorkflow, advanceOwner, result); err != nil {
+		return err
+	}
+
+	fmt.Printf("Ticket:  %s\n", s.Ticket)
+	fmt.Printf("Stage:   %s → %s\n", prevStage, newStage)
+	if advanceOwner != "" {
+		fmt.Printf("Owner:   %s\n", advanceOwner)
+	}
+	fmt.Printf("\nRun `orc next %s` to launch the next worker.\n", s.Ticket)
+	fmt.Println()
+
+	s, err = state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+	return runNextAction(root, featureDir, s, true)
+}
+
+func runArchive(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(archiveWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	// remove git worktrees for any write repos
+	for name, repo := range s.Repos {
+		if repo.Worktree == "" {
+			continue
+		}
+		worktreePath := filepath.Join(root, repo.Worktree)
+		fmt.Printf("Removing worktree: %s\n", repo.Worktree)
+		if err := removeWorktree(repo.Main, worktreePath); err != nil {
+			fmt.Printf("  warning: %v\n", err)
+			fmt.Printf("  you may need to run: git -C %q worktree remove %q --force\n", repo.Main, worktreePath)
+		} else {
+			fmt.Printf("  removed %s (%s)\n", name, repo.Branch)
+		}
+	}
+
+	// stamp status: archived in STATE.yaml before moving
+	if err := state.SetStatus(featureDir, "archived"); err != nil {
+		return fmt.Errorf("updating status: %w", err)
+	}
+
+	// move to features/_archive/
+	archiveDir := filepath.Join(root, "features", "_archive")
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		return fmt.Errorf("creating _archive dir: %w", err)
+	}
+
+	slug := filepath.Base(featureDir)
+	dest := filepath.Join(archiveDir, slug)
+	if err := os.Rename(featureDir, dest); err != nil {
+		return fmt.Errorf("moving feature folder: %w", err)
+	}
+
+	fmt.Printf("Archived: features/_archive/%s/\n", slug)
+	return nil
+}
+
+func removeWorktree(repoMain, worktreePath string) error {
+	out, err := exec.Command("git", "-C", repoMain, "worktree", "remove", worktreePath, "--force").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func printJSON(v any) error {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
+func withoutWorker(list []*workers.Worker, id string) []*workers.Worker {
+	var out []*workers.Worker
+	for _, w := range list {
+		if w.ID != id {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+func resolveRoot(path string) (string, error) {
+	if path == "." {
+		return os.Getwd()
+	}
+	return path, nil
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
