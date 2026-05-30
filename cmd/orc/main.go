@@ -543,11 +543,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	type row struct {
-		ticket string
-		status string
-		stage  string
-		owner  string
-		next   string
+		ticket  string
+		status  string
+		stage   string
+		owner   string
+		next    string
+		session string
+	}
+
+	// Fetch active tmux sessions once for cross-referencing.
+	activeSessions := make(map[string]bool)
+	showTmux := tmux.Available()
+	if showTmux {
+		for _, name := range tmux.ListSessions() {
+			activeSessions[name] = true
+		}
 	}
 
 	collectRows := func(dir string) []row {
@@ -567,22 +577,35 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			if len(next) > 40 {
 				next = next[:40] + "…"
 			}
+			session := "-"
+			if activeSessions[s.Slug] {
+				session = "✓"
+			}
 			rows = append(rows, row{
-				ticket: s.Ticket,
-				status: s.Status,
-				stage:  s.Stage.Current,
-				owner:  s.Stage.Owner,
-				next:   next,
+				ticket:  s.Ticket,
+				status:  s.Status,
+				stage:   s.Stage.Current,
+				owner:   s.Stage.Owner,
+				next:    next,
+				session: session,
 			})
 		}
 		return rows
 	}
 
 	printTable := func(rows []row) {
-		fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "Ticket", "Status", "Stage", "Owner", "Next")
-		fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "------", "------", "-----", "-----", "----")
-		for _, r := range rows {
-			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", r.ticket, r.status, r.stage, r.owner, r.next)
+		if showTmux {
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "Ticket", "Status", "Stage", "Owner", "Tmux", "Next")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "------", "------", "-----", "-----", "----", "----")
+			for _, r := range rows {
+				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", r.ticket, r.status, r.stage, r.owner, r.session, r.next)
+			}
+		} else {
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "Ticket", "Status", "Stage", "Owner", "Next")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "------", "------", "-----", "-----", "----")
+			for _, r := range rows {
+				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", r.ticket, r.status, r.stage, r.owner, r.next)
+			}
 		}
 	}
 
@@ -656,6 +679,9 @@ func runShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Slug:     %s\n", s.Slug)
 	fmt.Printf("Status:   %s\n", s.Status)
+	if tmux.Available() && tmux.SessionExists(s.Slug) {
+		fmt.Printf("Session:  %s\n", tmux.AttachHint(s.Slug, s.Stage.Workflow))
+	}
 
 	fmt.Println()
 	fmt.Println("Stage")
