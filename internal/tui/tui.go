@@ -1017,7 +1017,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 		wTicket = 12
 		wName   = 22
 		wStatus = 20
-		wTmux   = 4
+		wTmux   = 6
 	)
 	// fixed overhead: leading space + static columns + separators (5 × "  ")
 	fixed := 1 + wTicket + wName + wStatus + wTmux + 5*2
