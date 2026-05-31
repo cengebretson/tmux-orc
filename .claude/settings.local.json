@@ -61,7 +61,13 @@
       "Bash(/Users/chris/Desktop/projects/orc/orc init *)",
       "mcp__plugin_context-mode_context-mode__ctx_execute",
       "Bash(grep -v \"^.*stage:\\\\s*$\\\\|stage:\\\\s*$\")",
-      "Bash(sd     stage:  *)"
+      "Bash(sd     stage:  *)",
+      "mcp__plugin_context-mode_context-mode__ctx_search",
+      "Bash(go get *)",
+      "Bash(/tmp/orc --help)",
+      "Bash(orc --help)",
+      "Bash(go install *)",
+      "Bash(/Users/chris/Desktop/projects/orc/orc --help)"
     ]
   }
 }

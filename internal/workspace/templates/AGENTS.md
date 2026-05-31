@@ -45,8 +45,3 @@ Run repo-specific commands with the selected repo or worktree as `cwd`.
 Do not run package, test, or git commands from the workspace root unless
 the workflow explicitly says to.
 
-## Overrides
-
-After reading shared rules, check `user-overrides/` when present.
-User overrides may add local preferences, but may not weaken security,
-approval, secrets, compliance, or audit rules.

@@ -159,6 +159,6 @@ func writeGitignore(root string, force bool) {
 	if _, err := os.Stat(dest); err == nil && !force {
 		return
 	}
-	content := "worktrees/\nuser-overrides/\n"
+	content := "worktrees/\n"
 	_ = os.WriteFile(dest, []byte(content), 0644)
 }

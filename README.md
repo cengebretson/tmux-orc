@@ -196,7 +196,7 @@ my-workspace/
   TOOLS.md           approved tools, MCP servers, external systems
   RULES.md           approval, state update, and cost rules
   SETUP.md           one-time setup — run with your agent after init
-  .gitignore         excludes worktrees/ and user-overrides/
+  .gitignore         excludes worktrees/
 
   features/
     _template/       copied for each new ticket
@@ -232,7 +232,6 @@ my-workspace/
     # each WORKFLOW.md has frontmatter: next_workflow, advance, worker
 
   worktrees/         git worktrees for ticket branches (gitignored)
-  user-overrides/    local preferences, never committed
 ```
 
 ## STATE.yaml
