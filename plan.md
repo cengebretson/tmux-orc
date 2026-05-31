@@ -1,59 +1,57 @@
 # orc — Plan
 
-Remaining work distilled from code review and cleanup analysis. Items are
-ordered by value vs. effort. Completed work from review.md and cleanup.md
-has been intentionally omitted.
-
 ---
 
 ## ~~1. Unify config parsing~~ ✓ Done
 
-`internal/workflow` deleted. All workflow types (`WorkflowDef`, `StageDef`,
-`RepairStageDef`) and methods (`Names`, `Stages`, `StageNames`, `NextStage`,
-`StageConfig`, `IsRepairStage`, `RepairStage`) now live in `internal/config`.
-All callers use a single `config.Load` call.
+`internal/workflow` deleted. All workflow types and methods moved into
+`internal/config`. All callers use a single `config.Load` call.
 
 ---
 
 ## ~~2. Worktree contract validation~~ ✓ Done
 
-`state.ValidateRepos(s, root)` added to `internal/state`. Called by `orc advance`
-and `orc wait` before writing state. Checks main path existence, worktree under
-`worktrees/`, non-empty branch when worktree is set, and cwd under a recorded
-worktree when any worktrees are present. 7 tests added.
+`state.ValidateRepos(s, root)` added. Called by `orc advance` and `orc wait`
+before writing state. Checks main path existence, worktree under `worktrees/`,
+non-empty branch when worktree is set, cwd under a recorded worktree. 7 tests.
 
 ---
 
 ## ~~3. Extract next-action planning from `main.go`~~ ✓ Done
 
-**What:** `cmd/orc/main.go` owns Cobra wiring, output rendering, workflow
-resolution, prompt construction, worker selection, tmux orchestration, archive
-logic, and state transitions. Core behavior is untestable without invoking
-command globals. JSON and non-JSON paths duplicate logic.
-
-**Fix:** Create `internal/runner` (or `internal/orc`) that computes:
-
-- Resolved workflow and stage config
-- Next stage name and completion instruction
-- Selected worker (with resolution order)
-- Full prompt string
-- Launch args
-
-Keep Cobra functions focused on flags, args, and printing.
-
-**Effort:** Large. High payoff for testability but a real refactor — scope
-carefully and do it in one focused pass.
+`internal/runner` package created. `runner.Compute` resolves workflow, stage
+config, worker, prompt, and launch args. `runNext` and `runNextAction` collapsed
+into `runNext` + `printDryRun`. 6 tests added.
 
 ---
 
-## Product direction note
+## Up next
 
-The highest-leverage direction is reliability over features. The three items
-above — unified config, worktree validation, and testable next-action planning
-— make the system more trustworthy before adding new capabilities.
+### Banner suppression
 
-Once those are solid, the next natural additions are:
+Auto-suppress the ASCII banner when stdout is not a TTY. Add `--no-banner` flag
+for scripting. Most useful when piping `orc next --json` into other tools.
 
-- `settings.notify` — agent session completion webhook / bell
-- `settings.quotes` + `settings.theme` — TUI customization from `orc.yaml`
-- Ticket system config (`settings.ticket_system`) for machine-readable source
+**Effort:** Small.
+
+---
+
+### `reasoning_effort` / `service_tier` in workers
+
+Add `reasoning_effort` and `service_tier` fields to worker frontmatter so Codex
+workers can declare priority tier and reasoning depth. Render them in the launch
+command when set.
+
+**Effort:** Small.
+
+---
+
+## Future ideas
+
+Lower priority — worth revisiting once the core is solid.
+
+| Idea | Notes |
+|------|-------|
+| Agent session completion notification | Terminal bell, tmux alert, or webhook when an agent finishes a stage. Most useful in `--tmux` mode where sessions run unattended. Controlled via `settings.notify` in `orc.yaml`. |
+| Quotes and themes in `orc.yaml` | `settings.quotes: [...]` for a custom TUI quote pool; `settings.theme: catppuccin-mocha` to swap the lipgloss palette. |
+| Ticket system config | `settings.ticket_system` for machine-readable source — lets the intake stage know where to fetch ticket data without hardcoding it in the stage doc. |
