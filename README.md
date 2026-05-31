@@ -229,6 +229,8 @@ or human picks up exactly where the last one left off.
 
 ## Commands
 
+### Human commands
+
 | Command | Description |
 |---------|-------------|
 | `orc init` | Scaffold a new workspace |
@@ -238,7 +240,7 @@ or human picks up exactly where the last one left off.
 | `orc init --force` | Overwrite existing files |
 | `orc health` | Check workspace filesystem health |
 | `orc status [--json]` | Show all features and their current workflow/stage |
-| `orc work <ticket>` | Create the feature folder for a ticket — run once by the human |
+| `orc work <ticket>` | Create the feature folder for a ticket |
 | `orc work <ticket> --workflow <name>` | Use a named workflow instead of the configured default |
 | `orc work <ticket> --tmux` | Also enable tmux session for this ticket |
 | `orc show <ticket> [--json]` | Show full state for one ticket |
@@ -247,12 +249,24 @@ or human picks up exactly where the last one left off.
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc next <ticket> --worker <id>` | Override the selected worker for one launch |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
-| `orc tui` | Open the interactive dashboard |
-| `orc start <ticket>` | Mark a ticket in_progress — called by agents (hidden from help) |
-| `orc advance <ticket> [--stage <stage>]` | Mark current stage complete and move to the next (called by agents) |
-| `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
-| `orc block <ticket> <reason>` | Mark a ticket as blocked |
+| `orc validate <ticket>` | Validate a ticket's state — checks workflow, stage, worker, worktrees |
+| `orc resume <ticket>` | Generate a recovery prompt for a stuck or interrupted ticket |
 | `orc archive <ticket>` | Archive a completed feature, remove worktrees |
+| `orc tui` | Open the interactive dashboard |
+
+### Agent commands
+
+These are called by agents at the end of each session. They are hidden from `orc --help` but visible via `orc help-all`.
+
+| Command | Description |
+|---------|-------------|
+| `orc start <ticket>` | Mark a ticket as in_progress — run at the start of every session |
+| `orc advance <ticket>` | Mark the current stage complete and move to the next |
+| `orc advance <ticket> --stage <name>` | Advance to a specific stage (e.g. crossing workflow boundaries) |
+| `orc advance <ticket> --owner <id>` | Persist a worker as stage owner for future sessions |
+| `orc advance <ticket> --result "<summary>"` | Record what was done in history |
+| `orc wait <ticket> "<reason>"` | Pause for human review — used when `advance: manual` or input is needed |
+| `orc block <ticket> "<reason>"` | Mark a ticket blocked by an external issue |
 
 ## Workspace layout
 
@@ -390,6 +404,7 @@ Worker resolution order:
 1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
 2. `stage.owner` in STATE.yaml — set by a previous `orc advance --owner`
 3. `worker:` for the current stage in `orc.yaml`
-4. Fallback: match by `workflows:` or `stages:` list in worker frontmatter
+
+If no worker is found at any step, `orc next` exits with a clear error pointing to `orc.yaml`.
 
 Use `--dry` to preview the command without launching.
