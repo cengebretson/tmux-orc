@@ -660,9 +660,26 @@ func (m Model) viewDashboard() string {
 	}
 	visibleRows := allRows[offset:end]
 
-	featuresTitle := styleSection.Render("Features") + archiveToggle
-	if total > maxDataRows {
-		featuresTitle += styleDim.Render(fmt.Sprintf("  %d–%d of %d", offset+1, end, total))
+	var featuresTitle string
+	if m.searching {
+		query := m.search.Value()
+		matchCount := len(m.visibleFeatures())
+		var matchHint string
+		if query == "" {
+			matchHint = styleDim.Render("  type to filter  esc cancel")
+		} else {
+			noun := "matches"
+			if matchCount == 1 {
+				noun = "match"
+			}
+			matchHint = styleDim.Render(fmt.Sprintf("  %d %s  esc cancel", matchCount, noun))
+		}
+		featuresTitle = styleSection.Render("Features") + "  " + m.search.View() + matchHint
+	} else {
+		featuresTitle = styleSection.Render("Features") + archiveToggle + styleDim.Render("  [/] search")
+		if total > maxDataRows {
+			featuresTitle += styleDim.Render(fmt.Sprintf("  %d–%d of %d", offset+1, end, total))
+		}
 	}
 
 	var tableLines []string
@@ -680,35 +697,18 @@ func (m Model) viewDashboard() string {
 	b.WriteString(topBlock)
 	b.WriteString(drawBoxLabeledWith(featuresTitle, tableLines, outerW, featuresBorderColor) + "\n")
 
-	// ── Help bar / search input ───────────────────────────────────────
-	if m.searching {
-		query := m.search.Value()
-		matchCount := len(m.visibleFeatures())
-		hint := styleDim.Render(fmt.Sprintf("  %d match", matchCount))
-		if matchCount != 1 {
-			hint = styleDim.Render(fmt.Sprintf("  %d matches", matchCount))
-		}
-		if query == "" {
-			hint = styleDim.Render("  type to filter")
-		}
-		b.WriteString(" " + m.search.View() + hint + "  " + styleDim.Render("enter confirm  esc cancel"))
-	} else {
+	// ── Help bar ─────────────────────────────────────────────────────
+	if !m.searching {
 		var helpItems []string
 		helpItems = append(helpItems,
 			helpItem("↑↓", "navigate"),
 			helpItem("enter", "open"),
-			helpItem("/", "search"),
 			helpItem("tab", "focus sections"),
 			helpItem("t", "attach"),
 			helpItem("1-4", "expand/collapse"),
 	
 			helpItem("q", "quit"),
 		)
-		if m.search.Value() != "" {
-			helpItems = append([]string{
-				styleHelpKey.Render("/") + styleDim.Render(" "+m.search.Value()) + "  " + styleDim.Render("esc clear"),
-			}, helpItems...)
-		}
 		b.WriteString(styleHelp.Render(" " + strings.Join(helpItems, "  ")))
 	}
 
