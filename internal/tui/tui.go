@@ -435,7 +435,18 @@ func (m Model) viewDashboard() string {
 		styleDim.Render("  ·  ") +
 		styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)) +
 		styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
-	b.WriteString("\n" + drawBoxLabeled(headerTitle, []string{statsLine}, outerW) + "\n")
+
+	const logoW = 30
+	var headerBlock string
+	if outerW > logoW+44 {
+		boxW := outerW - logoW - 2
+		box := drawBoxLabeled(headerTitle, []string{statsLine}, boxW)
+		logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1)).Render(logo)
+		headerBlock = lipgloss.JoinHorizontal(lipgloss.Top, box, "  ", logoRendered)
+	} else {
+		headerBlock = drawBoxLabeled(headerTitle, []string{statsLine}, outerW)
+	}
+	b.WriteString("\n" + headerBlock + "\n")
 
 	// ── Collapsible section boxes ─────────────────────────────────────
 	b.WriteString(m.sectionBox("health", "1", "Health",
