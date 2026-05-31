@@ -50,6 +50,10 @@ Do not re-run sections already marked complete.
 - If local files: ask for the folder path, fill it in
 - If manual: update the workflow to say the human fills in TICKET.md by hand
 
+**Also update `ROUTER.md`:**
+- Fill in the Ticket System section with the chosen system, project/team key,
+  the exact command to retrieve a ticket by ID, and any auth requirements
+
 **Also update `TOOLS.md`:**
 - In the Ticket System section, fill in the system name and any required fields
 - Note: MCP server config lives at the user level (~/.claude/mcp.json or equivalent)
