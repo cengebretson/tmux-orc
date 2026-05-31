@@ -675,6 +675,14 @@ func (m Model) viewDashboard() string {
 			matchHint = styleDim.Render(fmt.Sprintf("  %d %s  esc cancel", matchCount, noun))
 		}
 		featuresTitle = styleSection.Render("Features") + "  " + m.search.View() + matchHint
+	} else if m.search.Value() != "" {
+		noun := "matches"
+		if total == 1 {
+			noun = "match"
+		}
+		featuresTitle = styleSection.Render("Features") +
+			styleDim.Render("  /") + " " + styleStatusWaiting.Render(m.search.Value()) +
+			styleDim.Render(fmt.Sprintf("  %d %s  esc clear", total, noun))
 	} else {
 		featuresTitle = styleSection.Render("Features") + archiveToggle + styleDim.Render("  [/] search")
 		if total > maxDataRows {
