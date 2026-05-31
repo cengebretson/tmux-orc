@@ -1034,7 +1034,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
 		padRight(styleTableHeader.Render("Stage"), wWorkflow) + "  " +
 		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
-		styleTableHeader.Render("Tmux")
+		padRight(styleTableHeader.Render("Tmux"), wTmux)
 
 	div := " " + styleDivider.Render(strings.Repeat("─", w-1))
 
@@ -1074,7 +1074,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 				padRight(truncate(icon+" "+s.Status, wStatus), wStatus) + "  " +
 				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
 				padRight(truncate(plainWorker, wWorker), wWorker) + "  " +
-				plainTmux
+				padRight(plainTmux, wTmux)
 			lines = append(lines, styleRowSelected.Width(w).Render(line))
 		} else {
 			statusCell := statusStyle(s.Status).Render(icon + " " + s.Status)
@@ -1096,7 +1096,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 				padRight(statusCell, wStatus) + "  " +
 				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
 				padRight(workerCell, wWorker) + "  " +
-				tmuxCell
+				padRight(tmuxCell, wTmux)
 			lines = append(lines, line)
 		}
 	}
