@@ -314,9 +314,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					f := items[m.sectionCursor]
 					var content string
 					var err error
-					if m.sectionFocus == "workers" {
+					switch m.sectionFocus {
+					case "workers":
 						content, err = renderWorkerFile(f.path, m.width-4)
-					} else {
+					case "workflows":
+						content, err = renderWorkflowFile(f.path, m.width-4)
+					default:
 						content, err = renderFile(f.path)
 					}
 					if err != nil {
@@ -1419,6 +1422,116 @@ func renderWorkerFile(path string, width int) (string, error) {
 	}
 
 	// Render markdown body.
+	if body != "" {
+		r, err := glamour.NewTermRenderer(
+			glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
+			glamour.WithWordWrap(width),
+		)
+		if err == nil {
+			if out, err := r.Render(body); err == nil {
+				sb.WriteString(out)
+			} else {
+				sb.WriteString(body)
+			}
+		} else {
+			sb.WriteString(body)
+		}
+	}
+
+	return sb.String(), nil
+}
+
+// renderWorkflowFile renders a WORKFLOW.md as a frontmatter info box followed
+// by the markdown body. width is the available viewport width.
+func renderWorkflowFile(path string, width int) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	raw := string(data)
+	body := raw
+
+	var cfg workflow.Config
+	hasFM := false
+	if strings.HasPrefix(strings.TrimSpace(raw), "---") {
+		content := strings.TrimSpace(raw)[3:]
+		if end := strings.Index(content, "\n---"); end != -1 {
+			fm := strings.TrimSpace(content[:end])
+			if e := yaml.Unmarshal([]byte(fm), &cfg); e == nil {
+				hasFM = true
+				rest := content[end+4:]
+				body = strings.TrimSpace(rest)
+			}
+		}
+	}
+
+	// Derive workflow name from the parent directory name.
+	wfName := filepath.Base(filepath.Dir(path))
+
+	var sb strings.Builder
+
+	if hasFM {
+		type row struct{ label, value string }
+		var rows []row
+		add := func(label, value string) {
+			if value != "" {
+				rows = append(rows, row{label, value})
+			}
+		}
+		add("worker", cfg.Worker)
+
+		// advance shown with color hint
+		if cfg.Advance != "" {
+			var advVal string
+			switch cfg.Advance {
+			case "auto":
+				advVal = styleHealthOK.Render("auto") + styleDim.Render("  agent advances when done")
+			case "manual":
+				advVal = styleStatusWaiting.Render("manual") + styleDim.Render("  human approves before next stage")
+			default:
+				advVal = cfg.Advance
+			}
+			rows = append(rows, row{"advance", advVal})
+		}
+
+		// next_workflow shown with arrow
+		if cfg.NextWorkflow != "" {
+			rows = append(rows, row{"next", styleDim.Render("→ ") + styleSection.Render(cfg.NextWorkflow)})
+		} else {
+			rows = append(rows, row{"next", styleDim.Render("(end of pipeline)")})
+		}
+
+		add("", "") // ignored — using rows directly
+
+		// measure label column (plain text widths only)
+		labelW := 0
+		for _, r := range rows {
+			if lipgloss.Width(r.label) > labelW {
+				labelW = lipgloss.Width(r.label)
+			}
+		}
+
+		innerW := width - 4
+		var lines []string
+		for _, r := range rows {
+			if r.label == "" {
+				continue
+			}
+			pad := strings.Repeat(" ", labelW-lipgloss.Width(r.label))
+			label := styleDetailLabel.Render(r.label+pad) + styleDim.Render("  ")
+			lines = append(lines, "  "+label+r.value)
+		}
+
+		sb.WriteString(drawBoxLabeledWith(
+			styleHeader.Render(wfName),
+			lines,
+			innerW,
+			mauve,
+		))
+		sb.WriteString("\n")
+	}
+
 	if body != "" {
 		r, err := glamour.NewTermRenderer(
 			glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
