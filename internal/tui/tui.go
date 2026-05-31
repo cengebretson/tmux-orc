@@ -44,6 +44,7 @@ const (
 	viewDashboard viewState = iota
 	viewDetail
 	viewFile
+	viewWorkflowDetail
 )
 
 // ── messages ─────────────────────────────────────────────────────
@@ -120,6 +121,10 @@ type Model struct {
 	refreshInterval time.Duration
 	width           int
 	height          int
+
+	// workflow detail drill-in
+	wfDetailName   string
+	wfDetailCursor int
 
 	// section pane navigation
 	focusedPane   string // "features" or "section"
@@ -405,20 +410,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					switch m.sectionFocus {
 					case "workers":
 						content, err = renderWorkerFile(f.path, m.features, m.width-4)
+						if err != nil {
+							content = styleHealthErr.Render("could not read: " + err.Error())
+						}
+						m.viewport = viewport.New(m.width-4, m.height-6)
+						m.viewport.SetContent(content)
+						m.viewerTitle = f.label
+						m.viewerContext = sectionLabel(m.sectionFocus)
+						m.viewerReturn = viewDashboard
+						m.view = viewFile
 					case "workflows":
-						content = renderWorkflowDetail(f.label, m.workflows, m.allWorkers, filepath.Join(m.root, "stages"), m.features, m.width-4)
+						m.wfDetailName = f.label
+						m.wfDetailCursor = 0
+						content = renderWorkflowDetail(f.label, m.workflows, m.allWorkers, filepath.Join(m.root, "stages"), m.features, 0, m.width-4)
+						m.viewport = viewport.New(m.width-4, m.height-6)
+						m.viewport.SetContent(content)
+						m.view = viewWorkflowDetail
 					default:
 						content, err = renderFile(f.path)
+						if err != nil {
+							content = styleHealthErr.Render("could not read: " + err.Error())
+						}
+						m.viewport = viewport.New(m.width-4, m.height-6)
+						m.viewport.SetContent(content)
+						m.viewerTitle = f.label
+						m.viewerContext = sectionLabel(m.sectionFocus)
+						m.viewerReturn = viewDashboard
+						m.view = viewFile
 					}
-					if err != nil {
-						content = styleHealthErr.Render("could not read: " + err.Error())
-					}
-					m.viewport = viewport.New(m.width-4, m.height-6)
-					m.viewport.SetContent(content)
-					m.viewerTitle = f.label
-					m.viewerContext = sectionLabel(m.sectionFocus)
-					m.viewerReturn = viewDashboard
-					m.view = viewFile
 				}
 			} else {
 				rows := m.visibleFeatures()
@@ -465,11 +484,56 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case viewWorkflowDetail:
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "esc", "b":
+			m.view = viewDashboard
+		case "up", "k":
+			if m.wfDetailCursor > 0 {
+				m.wfDetailCursor--
+				m.reRenderWorkflowDetail()
+			}
+		case "down", "j":
+			if m.wfDetailCursor < wfDetailTotal(m.wfDetailName, m.workflows)-1 {
+				m.wfDetailCursor++
+				m.reRenderWorkflowDetail()
+			}
+		case "enter":
+			stageName, advance, stepNum, total := wfDetailSelectedStage(m.wfDetailName, m.wfDetailCursor, m.workflows)
+			if stageName != "" {
+				stagesDir := filepath.Join(m.root, "stages")
+				content, err := renderFile(filepath.Join(stagesDir, stageName+".md"))
+				if err != nil {
+					content = styleHealthErr.Render("could not read: " + err.Error())
+				}
+				wfCount := stageWorkflowCount(m.workflows, stageName)
+				wfWord := "workflows"
+				if wfCount == 1 {
+					wfWord = "workflow"
+				}
+				m.viewport = viewport.New(m.width-4, m.height-6)
+				m.viewport.SetContent(content)
+				m.viewerTitle = fmt.Sprintf("%s · step %d of %d · %s · %d %s", stageName, stepNum, total, advance, wfCount, wfWord)
+				m.viewerContext = m.wfDetailName
+				m.viewerReturn = viewWorkflowDetail
+				m.view = viewFile
+			}
+		default:
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
+		}
+
 	case viewFile:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "esc", "b":
+			if m.viewerReturn == viewWorkflowDetail {
+				m.reRenderWorkflowDetail()
+			}
 			m.view = m.viewerReturn
 		default:
 			var cmd tea.Cmd
@@ -514,6 +578,8 @@ func (m Model) View() string {
 		return m.viewDetail()
 	case viewFile:
 		return m.viewFile()
+	case viewWorkflowDetail:
+		return m.viewWorkflowDetailPage()
 	default:
 		return m.viewDashboard()
 	}
@@ -1296,6 +1362,80 @@ func (m Model) viewFile() string {
 	return b.String()
 }
 
+// ── Workflow detail view ──────────────────────────────────────────
+
+func (m Model) viewWorkflowDetailPage() string {
+	outerW := m.width - 2
+	var b strings.Builder
+	title := styleDetailTitle.Render(" Workflows") +
+		styleDim.Render(" · ") +
+		styleSubtext.Render(m.wfDetailName+" ")
+	b.WriteString("\n" + drawBox(title, nil, outerW) + "\n")
+	b.WriteString(m.viewport.View())
+	help := strings.Join([]string{
+		helpItem("↑↓", "select stage"),
+		helpItem("enter", "view stage"),
+		helpItem("esc", "back"),
+		helpItem("q", "quit"),
+	}, "  ")
+	b.WriteString("\n" + styleHelp.Render("  "+help))
+	return b.String()
+}
+
+func (m *Model) reRenderWorkflowDetail() {
+	yOff := m.viewport.YOffset
+	content := renderWorkflowDetail(m.wfDetailName, m.workflows, m.allWorkers, filepath.Join(m.root, "stages"), m.features, m.wfDetailCursor, m.width-4)
+	m.viewport.SetContent(content)
+	m.viewport.SetYOffset(yOff)
+}
+
+func wfDetailTotal(name string, chains []workflowChain) int {
+	for _, c := range chains {
+		if c.name == name {
+			return len(c.steps) + len(c.repairSteps)
+		}
+	}
+	return 0
+}
+
+func wfDetailSelectedStage(name string, idx int, chains []workflowChain) (stageName, advance string, stepNum, total int) {
+	for _, c := range chains {
+		if c.name != name {
+			continue
+		}
+		total = len(c.steps) + len(c.repairSteps)
+		if idx < len(c.steps) {
+			s := c.steps[idx]
+			return s.name, s.advance, idx + 1, total
+		}
+		ri := idx - len(c.steps)
+		if ri < len(c.repairSteps) {
+			rs := c.repairSteps[ri]
+			return rs.name, rs.advance, idx + 1, total
+		}
+	}
+	return "", "", 0, 0
+}
+
+func stageWorkflowCount(chains []workflowChain, stageName string) int {
+	count := 0
+	for _, c := range chains {
+		for _, s := range c.steps {
+			if s.name == stageName {
+				count++
+				break
+			}
+		}
+		for _, rs := range c.repairSteps {
+			if rs.name == stageName {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
 // ── Commands ──────────────────────────────────────────────────────
 
 func tickEvery(d time.Duration) tea.Cmd {
@@ -1759,7 +1899,7 @@ func renderWorkerFile(path string, features []*featureRow, width int) (string, e
 
 // renderWorkflowFile renders a stage markdown file. width is the available viewport width.
 // renderWorkflowDetail renders an inline detail view for a named workflow.
-func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*workers.Worker, stagesDir string, features []*featureRow, width int) string {
+func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*workers.Worker, stagesDir string, features []*featureRow, selectedIdx int, width int) string {
 	var chain *workflowChain
 	for i := range chains {
 		if chains[i].name == name {
@@ -1838,10 +1978,12 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 		styleTableHeader.Render("Active")
 	divider := "  " + styleDivider.Render(strings.Repeat("─", innerW-2))
 
-	stageRows := func(steps []routeStep) []string {
+	cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve))
+
+	stageRows := func(steps []routeStep, baseIdx int) []string {
 		var lines []string
 		lines = append(lines, header, divider)
-		for _, step := range steps {
+		for i, step := range steps {
 			var advVal string
 			if step.advance == "manual" {
 				advVal = styleStatusWaiting.Render("● manual")
@@ -1855,7 +1997,11 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 			} else {
 				activeVal = styleDim.Render("—")
 			}
-			lines = append(lines, "  "+
+			cursor := "  "
+			if baseIdx+i == selectedIdx {
+				cursor = cursorStyle.Render("▶") + " "
+			}
+			lines = append(lines, cursor+
 				padRight(stageExists(step.name), wCheck)+"  "+
 				padRight(styleSubtext.Render(truncate(step.name, wStageName)), wStageName)+"  "+
 				padRight(workerLabel(step.workerID), wWorker)+"  "+
@@ -1865,7 +2011,7 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 		return lines
 	}
 
-	sb.WriteString(drawBox(styleSection.Render(" Stages "), stageRows(chain.steps), width) + "\n")
+	sb.WriteString(drawBox(styleSection.Render(" Stages "), stageRows(chain.steps, 0), width) + "\n")
 
 	if len(chain.repairSteps) > 0 {
 		// convert repairSteps to routeStep slice for reuse
@@ -1873,7 +2019,7 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 		for i, rs := range chain.repairSteps {
 			repairAsSteps[i] = routeStep{name: rs.name, advance: rs.advance, workerID: rs.workerID}
 		}
-		repairLines := stageRows(repairAsSteps)
+		repairLines := stageRows(repairAsSteps, len(chain.steps))
 		// append repairs/max-retries annotation under each repair row
 		for _, rs := range chain.repairSteps {
 			detail := fmt.Sprintf("repairs %s", rs.repairs)
