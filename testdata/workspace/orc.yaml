@@ -8,6 +8,10 @@
 #   default_workflow: default     # workflow used by `orc work` when --workflow is omitted
 #   auto_archive: false           # archive tickets automatically when the last stage completes
 #   tui_refresh: 60               # TUI auto-refresh interval in seconds (default: 60)
+#   quotes:                       # custom TUI quotes (overrides built-in set)
+#     - "Ship it."
+#     - "Make it work, make it right, make it fast."
+#     - "Done is better than perfect."
 
 repos:
   - name: my-app

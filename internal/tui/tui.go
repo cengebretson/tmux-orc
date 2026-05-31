@@ -28,12 +28,14 @@ import (
 //go:embed quotes.json
 var quotesJSON []byte
 
-func pickQuote() string {
-	var quotes []string
-	if err := json.Unmarshal(quotesJSON, &quotes); err != nil || len(quotes) == 0 {
-		return ""
+func pickQuote(custom []string) string {
+	pool := custom
+	if len(pool) == 0 {
+		if err := json.Unmarshal(quotesJSON, &pool); err != nil || len(pool) == 0 {
+			return ""
+		}
 	}
-	return quotes[rand.Intn(len(quotes))]
+	return pool[rand.Intn(len(pool))]
 }
 
 // ── view states ──────────────────────────────────────────────────
@@ -60,6 +62,7 @@ type dataMsg struct {
 	repos           []config.Repo
 	sectionItems    map[string][]sectionItem
 	refreshInterval time.Duration
+	quotes          []string
 }
 
 type routeStep struct {
@@ -175,7 +178,6 @@ func New(root string) Model {
 			"routes":    true,
 		},
 		search: ti,
-		quote:  pickQuote(),
 	}
 }
 
@@ -223,6 +225,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.repos = msg.repos
 		m.sectionItems = msg.sectionItems
 		m.refreshInterval = msg.refreshInterval
+		if m.quote == "" {
+			m.quote = pickQuote(msg.quotes)
+		}
 		m.lastRefresh = time.Now()
 		if rows := m.visibleFeatures(); m.cursor >= len(rows) && len(rows) > 0 {
 			m.cursor = len(rows) - 1
@@ -1581,6 +1586,7 @@ func loadData(root string) tea.Cmd {
 			repos:           repos,
 			sectionItems:    si,
 			refreshInterval: workflowCfg.TuiRefreshInterval(),
+			quotes:          workflowCfg.Settings.Quotes,
 		}
 	}
 }

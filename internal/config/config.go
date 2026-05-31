@@ -19,9 +19,10 @@ type Repo struct {
 }
 
 type Settings struct {
-	DefaultWorkflow string `yaml:"default_workflow"`
-	AutoArchive     bool   `yaml:"auto_archive"`
-	TuiRefresh      int    `yaml:"tui_refresh"` // seconds; 0 means use default (60)
+	DefaultWorkflow string   `yaml:"default_workflow"`
+	AutoArchive     bool     `yaml:"auto_archive"`
+	TuiRefresh      int      `yaml:"tui_refresh"` // seconds; 0 means use default (60)
+	Quotes          []string `yaml:"quotes"`
 }
 
 // WorkflowDef is a named sequence of stages.
