@@ -23,6 +23,8 @@ type State struct {
 
 	Stage Stage `yaml:"stage"`
 
+	Runtime Runtime `yaml:"runtime,omitempty"`
+
 	Repos map[string]Repo `yaml:"repos"`
 
 	Inputs  IOSet `yaml:"inputs"`
@@ -31,6 +33,14 @@ type State struct {
 	NextAction NextAction `yaml:"next_action"`
 
 	History []HistoryEntry `yaml:"history"`
+}
+
+type Runtime struct {
+	Tmux *TmuxRuntime `yaml:"tmux,omitempty"`
+}
+
+type TmuxRuntime struct {
+	Session string `yaml:"session"`
 }
 
 type Stage struct {
@@ -272,6 +282,44 @@ func FindFeatureDir(workspaceRoot, query string) (string, error) {
 
 // ResolveCWD returns an absolute path for the next action cwd,
 // resolving relative paths against the feature directory.
+// SetRuntime writes the runtime.tmux session name to STATE.yaml.
+func SetRuntime(featureDir, tmuxSession string) error {
+	path := filepath.Join(featureDir, Filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	var s State
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	s.Runtime.Tmux = &TmuxRuntime{Session: tmuxSession}
+	out, err := yaml.Marshal(&s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0644)
+}
+
+// ClearRuntime removes the runtime block from STATE.yaml.
+func ClearRuntime(featureDir string) error {
+	path := filepath.Join(featureDir, Filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	var s State
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	s.Runtime = Runtime{}
+	out, err := yaml.Marshal(&s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0644)
+}
+
 func (s *State) ResolveCWD(workspaceRoot, featureDir string) string {
 	cwd := s.NextAction.CWD
 	if cwd == "" || cwd == "." {

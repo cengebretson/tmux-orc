@@ -469,16 +469,21 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 
 	argv := workers.LaunchArgs(worker, root, cwd, prompt)
 
-	// Auto-detect tmux: if a session exists for this ticket, send the command there.
-	if !dry && tmux.Available() && tmux.SessionExists(s.Slug) {
+	// Auto-detect tmux: if a session is recorded in state and is alive, send the command there.
+	if !dry && tmux.Available() && s.Runtime.Tmux != nil {
+		session := s.Runtime.Tmux.Session
 		window := s.Stage.Workflow
-		fmt.Printf("Sending to tmux session %s:%s...\n", s.Slug, window)
-		if err := tmux.SendCommand(s.Slug, window, featureDir, cwd, argv); err != nil {
-			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
+		if tmux.SessionExists(session) {
+			fmt.Printf("Sending to tmux session %s:%s...\n", session, window)
+			if err := tmux.SendCommand(session, window, featureDir, cwd, argv); err != nil {
+				fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
+			} else {
+				fmt.Printf("Agent launched in background.\n")
+				fmt.Printf("Attach:  %s\n", tmux.AttachHint(session, window))
+				return nil
+			}
 		} else {
-			fmt.Printf("Agent launched in background.\n")
-			fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Slug, window))
-			return nil
+			fmt.Printf("tmux session %q not running — use `orc tmux create %s` to restart, or proceeding in foreground\n", session, s.Ticket)
 		}
 	}
 
@@ -575,8 +580,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				next = next[:40] + "…"
 			}
 			session := "-"
-			if activeSessions[s.Slug] {
-				session = "✓"
+			if s.Runtime.Tmux != nil {
+				if activeSessions[s.Runtime.Tmux.Session] {
+					session = "✓"
+				} else {
+					session = "✗" // configured but not running
+				}
 			}
 			rows = append(rows, row{
 				ticket:   s.Ticket,
@@ -676,8 +685,13 @@ func runShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Slug:     %s\n", s.Slug)
 	fmt.Printf("Status:   %s\n", s.Status)
-	if tmux.Available() && tmux.SessionExists(s.Slug) {
-		fmt.Printf("Session:  %s\n", tmux.AttachHint(s.Slug, s.Stage.Workflow))
+	if s.Runtime.Tmux != nil {
+		session := s.Runtime.Tmux.Session
+		if tmux.Available() && tmux.SessionExists(session) {
+			fmt.Printf("Session:  %s\n", tmux.AttachHint(session, s.Stage.Workflow))
+		} else {
+			fmt.Printf("Session:  %s  (not running — use `orc tmux create %s` to restart)\n", session, s.Ticket)
+		}
 	}
 
 	fmt.Println()
@@ -943,6 +957,11 @@ func runArchive(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Killed tmux session: %s\n", s.Slug)
 		}
 	}
+	// Clear runtime from the archived STATE.yaml regardless of whether the session existed.
+	archiveDest := filepath.Join(root, "features", "_archive", filepath.Base(featureDir))
+	if err := state.ClearRuntime(archiveDest); err != nil {
+		fmt.Printf("warning: could not clear runtime from STATE.yaml: %v\n", err)
+	}
 
 	fmt.Printf("Archived: features/_archive/%s/\n", slug)
 	return nil
@@ -975,6 +994,10 @@ func runTmuxCreate(cmd *cobra.Command, args []string) error {
 	workflows := listWorkflowNames(root)
 	if err := tmux.CreateSession(s.Slug, featureDir, workflows); err != nil {
 		return err
+	}
+
+	if err := state.SetRuntime(featureDir, s.Slug); err != nil {
+		fmt.Printf("warning: could not write runtime to STATE.yaml: %v\n", err)
 	}
 
 	fmt.Printf("Session: %s\n", s.Slug)
