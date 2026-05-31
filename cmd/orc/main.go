@@ -103,6 +103,7 @@ var (
 	workWorkspace string
 	workSlug      string
 	workTmux      bool
+	workNext      bool
 	workWorkflow  string
 )
 
@@ -248,6 +249,7 @@ func init() {
 	workCmd.Flags().StringVar(&workWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	workCmd.Flags().StringVar(&workSlug, "slug", "", "Optional slug suffix (e.g. add-user-export → TICKET-123-add-user-export)")
 	workCmd.Flags().BoolVar(&workTmux, "tmux", false, "Enable tmux session for this ticket — session created automatically on first orc next")
+	workCmd.Flags().BoolVar(&workNext, "next", false, "Immediately launch the first stage after creating the feature")
 	workCmd.Flags().StringVar(&workWorkflow, "workflow", "", "Workflow to use (default: settings.default_workflow in orc.yaml, or \"default\")")
 	showCmd.Flags().StringVar(&showWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
@@ -430,6 +432,10 @@ func runNext(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	return launchPlan(root, featureDir, s, plan)
+}
+
+func launchPlan(root, featureDir string, s *state.State, plan *runner.Plan) error {
 	// Auto-tmux: create a session if available, fall through to foreground on failure.
 	if tmux.Available() {
 		session := s.Slug
@@ -508,6 +514,15 @@ func runWork(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	if workNext {
+		s, err := state.Load(result.FeatureDir)
+		if err != nil {
+			return err
+		}
+		return launchPlan(root, result.FeatureDir, s, plan)
+	}
+
 	printDryRun(plan, result.Slug)
 	return nil
 }
