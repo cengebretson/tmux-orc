@@ -639,39 +639,54 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 		selected := i == m.cursor
 
 		icon := statusIcon(s.Status)
-		statusCell := statusStyle(s.Status).Render(icon + " " + s.Status)
+		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
 
-		var tmuxCell string
+		plainWorker := row.workerName
+		if plainWorker == "" {
+			plainWorker = "—"
+		}
+		plainTmux := "-"
 		if s.Runtime.Tmux != nil {
 			if row.tmuxLive {
-				tmuxCell = styleTmuxLive.Render("✓")
+				plainTmux = "✓"
 			} else {
-				tmuxCell = styleTmuxDead.Render("✗")
+				plainTmux = "✗"
 			}
-		} else {
-			tmuxCell = styleTmuxNone.Render("-")
 		}
-
-		worker := row.workerName
-		if worker == "" {
-			worker = styleDim.Render("—")
-		}
-
-		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
-		nameCell := styleDim.Render(truncate(name, wName))
-
-		line := " " +
-			padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
-			padRight(nameCell, wName) + "  " +
-			padRight(statusCell, wStatus) + "  " +
-			padRight(truncate(s.Stage.Workflow, wWorkflow), wWorkflow) + "  " +
-			padRight(truncate(worker, wWorker), wWorker) + "  " +
-			tmuxCell
 
 		if selected {
-			line = styleRowSelected.Width(w).Render(line)
+			// Plain unstyled text so styleRowSelected background covers the full row
+			line := " " +
+				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
+				padRight(truncate(name, wName), wName) + "  " +
+				padRight(truncate(icon+" "+s.Status, wStatus), wStatus) + "  " +
+				padRight(truncate(s.Stage.Workflow, wWorkflow), wWorkflow) + "  " +
+				padRight(truncate(plainWorker, wWorker), wWorker) + "  " +
+				plainTmux
+			lines = append(lines, styleRowSelected.Width(w).Render(line))
+		} else {
+			statusCell := statusStyle(s.Status).Render(icon + " " + s.Status)
+			nameCell := styleDim.Render(truncate(name, wName))
+			workerCell := styleDim.Render(truncate(plainWorker, wWorker))
+			var tmuxCell string
+			if s.Runtime.Tmux != nil {
+				if row.tmuxLive {
+					tmuxCell = styleTmuxLive.Render(plainTmux)
+				} else {
+					tmuxCell = styleTmuxDead.Render(plainTmux)
+				}
+			} else {
+				tmuxCell = styleTmuxNone.Render(plainTmux)
+			}
+			line := " " +
+				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
+				padRight(nameCell, wName) + "  " +
+				padRight(statusCell, wStatus) + "  " +
+				padRight(truncate(s.Stage.Workflow, wWorkflow), wWorkflow) + "  " +
+				padRight(workerCell, wWorker) + "  " +
+				tmuxCell
+			lines = append(lines, line)
 		}
-		lines = append(lines, line)
 	}
 
 	return strings.Join(lines, "\n")
