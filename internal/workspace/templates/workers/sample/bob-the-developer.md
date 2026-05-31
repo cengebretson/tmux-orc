@@ -1,6 +1,6 @@
 ---
 id: bob-developer
-name: Bob the Developer
+name: Bob (Developer)
 engine: codex
 kind: agent
 model: gpt-5.5
@@ -11,7 +11,7 @@ default_tmux_window: app-codex
 launch_mode: foreground
 ---
 
-# Bob the Developer
+# Bob (Developer)
 
 ## Role
 

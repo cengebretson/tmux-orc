@@ -1,6 +1,6 @@
 ---
 id: zach-reviewer
-name: Zach the Reviewer
+name: Zach (Ninja)
 engine: claude
 kind: agent
 model: claude-sonnet-4-6
@@ -9,7 +9,7 @@ args:
 launch_mode: foreground
 ---
 
-# Zach the Reviewer
+# Zach (Ninja)
 
 ## Role
 

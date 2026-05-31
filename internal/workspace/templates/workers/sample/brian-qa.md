@@ -1,6 +1,6 @@
 ---
 id: brian-qa
-name: Brian QA
+name: Brian (QA)
 engine: claude
 kind: agent
 model: claude-sonnet-4-6
@@ -10,7 +10,7 @@ default_tmux_window: claude
 launch_mode: foreground
 ---
 
-# Brian QA
+# Brian (QA)
 
 ## Role
 
