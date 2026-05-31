@@ -375,7 +375,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 			"cwd":      plan.CWD,
 			"prompt":   plan.Prompt,
 			"worker":   plan.Worker.ID,
-			"product":  plan.Worker.Product,
+			"product":  plan.Worker.Engine,
 			"model":    plan.Worker.Model,
 			"launch":   plan.LaunchCommand,
 		})
@@ -417,7 +417,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	if nextDry {
 		fmt.Printf("Worker:  %s  (%s)\n", plan.Worker.Name, plan.WorkerReason)
-		fmt.Printf("Product: %s\n", plan.Worker.Product)
+		fmt.Printf("Engine: %s\n", plan.Worker.Engine)
 		if plan.Worker.Model != "" {
 			fmt.Printf("Model:   %s\n", plan.Worker.Model)
 		}
@@ -465,7 +465,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 		}
 	}
 runForeground:
-	fmt.Printf("Launching %s (%s)...\n", plan.Worker.Name, plan.Worker.Product)
+	fmt.Printf("Launching %s (%s)...\n", plan.Worker.Name, plan.Worker.Engine)
 	c := exec.Command(plan.LaunchArgv[0], plan.LaunchArgv[1:]...)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
@@ -717,7 +717,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		if workerID != "" {
 			preferred := workers.FindByID(allWorkers, workerID)
 			if preferred != nil {
-				fmt.Printf("  Worker:  %s (%s)\n", preferred.Name, preferred.Product)
+				fmt.Printf("  Worker:  %s (%s)\n", preferred.Name, preferred.Engine)
 				if preferred.Model != "" {
 					fmt.Printf("  Model:   %s\n", preferred.Model)
 				}
@@ -1121,7 +1121,7 @@ func printJSON(v any) error {
 
 func printDryRun(plan *runner.Plan, ticket string) {
 	fmt.Printf("Worker:  %s  (%s)\n", plan.Worker.Name, plan.WorkerReason)
-	fmt.Printf("Product: %s\n", plan.Worker.Product)
+	fmt.Printf("Engine: %s\n", plan.Worker.Engine)
 	if plan.Worker.Model != "" {
 		fmt.Printf("Model:   %s\n", plan.Worker.Model)
 	}

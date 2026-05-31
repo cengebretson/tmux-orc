@@ -1,7 +1,7 @@
 ---
 id: zach-reviewer
 name: Zach the Reviewer
-product: claude
+engine: claude
 kind: agent
 model: claude-sonnet-4-6
 args:

@@ -1,7 +1,7 @@
 ---
 id: ada-architect
 name: Ada the Architect
-product: claude
+engine: claude
 kind: agent
 model: claude-opus-4-7
 args:

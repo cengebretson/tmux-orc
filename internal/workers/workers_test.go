@@ -33,8 +33,8 @@ func TestLoad_ParsesFrontmatter(t *testing.T) {
 	if bob == nil {
 		t.Fatal("bob-developer not found")
 	}
-	if bob.Product != "codex" {
-		t.Errorf("product = %q, want codex", bob.Product)
+	if bob.Engine != "codex" {
+		t.Errorf("product = %q, want codex", bob.Engine)
 	}
 	if bob.Args["service_tier"] != "medium" {
 		t.Errorf("args.service_tier = %q, want medium", bob.Args["service_tier"])

@@ -1,7 +1,7 @@
 ---
 id: intake-agent
 name: Intake Agent
-product: claude
+engine: claude
 model: claude-sonnet-4-6
 args:
   effort: medium

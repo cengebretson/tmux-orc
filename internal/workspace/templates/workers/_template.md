@@ -1,7 +1,7 @@
 ---
 id: worker-id
 name: Worker Display Name
-product: claude
+engine: claude
 kind: agent
 model: claude-sonnet-4-6
 args:

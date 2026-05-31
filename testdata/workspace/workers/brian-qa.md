@@ -1,7 +1,7 @@
 ---
 id: brian-qa
 name: Brian QA
-product: claude
+engine: claude
 kind: agent
 model: claude-sonnet-4-6
 args:

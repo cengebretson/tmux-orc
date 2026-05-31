@@ -11,11 +11,11 @@ import (
 )
 
 type Worker struct {
-	ID      string `yaml:"id"`
-	Name    string `yaml:"name"`
-	Product string `yaml:"product"` // claude | codex | cursor
-	Kind    string `yaml:"kind"`
-	Model   string `yaml:"model"`
+	ID     string `yaml:"id"`
+	Name   string `yaml:"name"`
+	Engine string `yaml:"engine"` // claude | codex | cursor
+	Kind   string `yaml:"kind"`
+	Model  string `yaml:"model"`
 
 	Args map[string]string `yaml:"args"` // extra flags: --key value (claude) or -c key=value (codex)
 
@@ -76,7 +76,7 @@ func LaunchCommand(w *Worker, workspaceRoot, cwd, prompt string) string {
 // cwd is where repo commands should run (the worktree).
 // prompt is the instruction string.
 func LaunchArgs(w *Worker, workspaceRoot, cwd, prompt string) []string {
-	switch strings.ToLower(w.Product) {
+	switch strings.ToLower(w.Engine) {
 	case "codex":
 		model := w.Model
 		if model == "" {

@@ -112,7 +112,7 @@ If no — mark `claude: complete` and skip this section.
 ---
 id: intake-agent-claude
 name: Intake Agent (Claude)
-product: claude
+engine: claude
 model: <chosen model>
 service_tier: <low/medium/high>
 workflows:
@@ -151,7 +151,7 @@ If no — mark `codex: complete` and skip this section.
 ---
 id: intake-agent-codex
 name: Intake Agent (Codex)
-product: codex
+engine: codex
 model: <chosen model or omit for default>
 service_tier: <low/medium/high>
 workflows:

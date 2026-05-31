@@ -1,7 +1,7 @@
 ---
 id: fred-documentor
 name: Fred the Documentor
-product: claude
+engine: claude
 kind: agent
 model: claude-sonnet-4-6
 args:

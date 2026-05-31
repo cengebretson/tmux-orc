@@ -1611,7 +1611,7 @@ func renderWorkerFile(path string, width int) (string, error) {
 			}
 		}
 		add("id", w.ID)
-		add("product", w.Product)
+		add("engine", w.Engine)
 		add("model", w.Model)
 		argKeys := make([]string, 0, len(w.Args))
 		for k := range w.Args {

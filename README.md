@@ -388,7 +388,7 @@ and how to launch them. The body gives the agent behavioral guidance.
 ---
 id: bob-developer
 name: Bob the Developer
-product: codex
+engine: codex
 model: gpt-5.5
 args:
   reasoning_effort: high

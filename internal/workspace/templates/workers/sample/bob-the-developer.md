@@ -1,7 +1,7 @@
 ---
 id: bob-developer
 name: Bob the Developer
-product: codex
+engine: codex
 kind: agent
 model: gpt-5.5
 args:
