@@ -94,42 +94,101 @@ Lower priority — worth revisiting once the core is solid.
 | Idea | Notes |
 |------|-------|
 | ~~Quotes in `orc.yaml`~~ ✓ Done | `settings.quotes: [...]` — troll quotes ship as default in the workspace template. |
-| Theme configuration | See spec below. |
-| Ticket system config | `settings.ticket_system` for machine-readable source — lets the intake stage know where to fetch ticket data without hardcoding it in the stage doc. |
+| ~~Rainbow logo easter egg~~ ✓ Done | Type `orc` on the dashboard — logo and header title cycle through all 12 Catppuccin palette colors for ~4 seconds. |
+| Bard's Tale character sheet easter egg | Press `!` on the worker detail page to reveal a retro RPG character sheet. See spec below. |
+| ~~Theme configuration~~ ✓ Done | Colors extracted to `internal/tui/themes/catppuccin-mocha.json`, `LoadTheme()` reads it at startup, `settings.theme` in orc.yaml controls which file loads. |
+| ~~Ticket system config~~ ✓ Done | Moved to `ROUTER.md` — a dedicated **Ticket System** section tells agents where to fetch tickets. Keeps it with repo routing info where it belongs. |
 
 ---
 
-### Theme configuration (spec)
+### Bard's Tale character sheet easter egg (spec)
 
-Swap the TUI color palette via `settings.theme` in `orc.yaml`. The hardcoded
-Catppuccin Mocha constants in `tui.go` would be extracted into a theme struct
-and resolved at startup.
+Press `!` on any worker detail page to toggle a retro RPG character sheet overlay.
+Press `!` again (or `esc`) to return to the normal worker view.
 
-#### Config shape
+#### Layout
 
-```yaml
-settings:
-  theme: catppuccin-mocha   # default; options: catppuccin-mocha | catppuccin-latte | dracula | gruvbox
+```
+┌─ CHARACTER SHEET ──────────────────┐
+│  ┌──────┐  Name:  Bob (Developer)  │
+│  │ ASCII│  Class: WARRIOR          │
+│  │  art │  Race:  Claude           │
+│  │      │  Level: opus-4           │
+│  └──────┘  Guild: bob-the-developer│
+├────────────┬───────────────────────┤
+│ ST ████░░  │ WEAPON  claude-opus-4 │
+│ IQ ███████ │ SHIELD  auto-advance  │
+│ DE ████░░  │ HELM    develop       │
+│ CN █████░  │ RING    —             │
+│ LK ██░░░░  ├───────────────────────┤
+│            │ HP ████  3 quests     │
+│            │ XP ██░░  12 complete  │
+├────────────┴───────────────────────┤
+│ Active quests:                     │
+│  ► STORY-123  develop  in_progress │
+│    FLYWL-099  review   waiting     │
+└────────────────────────────────────┘
 ```
 
-#### Built-in themes to ship
+#### Data mappings
 
-| Name | Background | Feel |
-|------|-----------|------|
-| `catppuccin-mocha` | dark | current default |
-| `catppuccin-latte` | light | same palette, light mode |
-| `dracula` | dark | purple/pink accent |
-| `gruvbox` | dark | warm retro |
+| Sheet field | Source |
+|-------------|--------|
+| Name | worker `name:` |
+| Class | derived from name keywords: Developer→WARRIOR, QA→RANGER, Document→BARD, Ninja→ROGUE, default→ADVENTURER |
+| Race | worker `engine:` field (claude→CLAUDE, codex→CODEX, cursor→CURSOR) |
+| Level | worker `model:` field |
+| Guild | worker ID (filename stem) |
+| ST / IQ / DE / CN / LK | deterministic from worker ID hash — same worker always has same stats |
+| WEAPON | model name |
+| SHIELD | advance mode most common in their assigned stages (auto/manual) |
+| HELM | first stage name found in orc.yaml assigned to this worker |
+| HP | count of active tickets assigned to this worker |
+| XP | count of history entries in STATE.yaml files owned by this worker |
+| Active quests | live ticket list (ticket, stage, status) for this worker |
+
+#### Portrait system
+
+Small ASCII art portraits stored as a slice of `[]string` in a new `internal/tui/portraits.go` file.
+Portraits are grouped by class (warrior, ranger, bard, rogue, generic pool).
+Portrait is selected by: `portraits[classPool][hash(workerID) % len(classPool)]` — deterministic,
+so the same worker always shows the same face.
+
+Each portrait fits in ~8 lines × 12 chars to fill the top-left box.
+
+Example warrior portrait:
+```
+   O
+  /|\
+  / \
+ sword
+```
+
+Ship at least 3 portraits per class (warrior, ranger, bard, rogue) + 5 generic fallbacks.
+
+#### Visual style
+
+- Box-drawing borders (`┌─┬─┐│└─┴─┘`)
+- Surface0 background, Yellow for stat bars (`█` filled, `░` empty)
+- Mauve for section headers, Text for values
+- Stat bars: 8 chars wide, value 1–20
 
 #### Implementation notes
 
-- Extract the color constants at the top of `tui.go` into a `Theme` struct
-  with fields for each semantic role (`base`, `surface`, `text`, `subtext`,
-  `mauve`, `green`, `yellow`, `red`, etc.)
-- Add `var themes = map[string]Theme{...}` with the built-in palettes
-- Add `Theme string yaml:"theme"` to `Settings` in `internal/config`
-- Resolve the active theme in `Run()` and pass it into `New(root, theme)`
-- All `lipgloss.NewStyle().Foreground(lipgloss.Color(mauve))` calls reference
-  the resolved theme instead of the package-level constants
+- Add `viewCharacterSheet` to the `viewState` enum
+- Add `charSheetWorker *workers.Worker` to Model
+- `!` in `viewDetail` (worker detail) sets `m.view = viewCharacterSheet` and `m.charSheetWorker`
+- `!` or `esc` in `viewCharacterSheet` returns to `viewDetail`
+- `renderCharacterSheet(w *workers.Worker, features []*featureRow, width int) string` builds the full sheet
+- Stats derived via `workerStats(id string) [5]int` using FNV hash of the ID, values 5–18 range
+- New file `internal/tui/portraits.go` — portrait data only, no logic
 
-**Effort:** Medium — mechanical but thorough; touches every style definition in `tui.go`.
+**Effort:** Medium-high. Mostly rendering code; no state changes required.
+
+---
+
+~~### Theme configuration~~ ✓ Done
+
+Implemented: palette and glamour style extracted to `internal/tui/themes/catppuccin-mocha.json`.
+`LoadTheme(name)` reads the JSON at startup, `initStyles()` reinitializes all style vars.
+`settings.theme` in orc.yaml selects the theme file; defaults to `catppuccin-mocha`.

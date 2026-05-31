@@ -53,6 +53,23 @@ The worktree path for the active ticket is always recorded in `STATE.yaml` under
 
 ---
 
+## Ticket System
+
+**ROUTER.md is the source of truth for how to retrieve tickets in this workspace.**
+
+Edit the section below to describe your ticket system — the agent reads this during
+the intake stage to know where to fetch ticket data. Do not hardcode ticket system
+details in stage files; keep them here so they apply to every ticket.
+
+```
+Ticket system: <e.g. Linear, GitHub Issues, Jira, local file>
+Project / team key: <e.g. STORY, ENG, #my-repo>
+How to retrieve a ticket: <e.g. gh issue view <number>, linear issue get <id>, cat tickets/<id>.md>
+Authentication: <e.g. GITHUB_TOKEN env var, Linear API key in ~/.config/linear>
+```
+
+---
+
 ## Stages
 
 Stage definitions live in `stages/<name>.md`. Flow control (order, worker per
