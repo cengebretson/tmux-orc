@@ -1821,7 +1821,6 @@ func renderWorkerFile(path string, features []*featureRow, width int) (string, e
 		for _, k := range argKeys {
 			add(k, w.Args[k])
 		}
-		add("launch mode", w.LaunchMode)
 		// Measure label column width.
 		labelW := 0
 		for _, r := range rows {

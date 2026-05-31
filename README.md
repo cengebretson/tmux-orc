@@ -393,7 +393,6 @@ model: gpt-5.5
 args:
   reasoning_effort: high
   service_tier: medium
-launch_mode: foreground
 ---
 
 Implements features, opens PRs, and repairs CI failures.

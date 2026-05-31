@@ -112,7 +112,6 @@ id: intake-agent-claude
 name: Intake Agent (Claude)
 engine: claude
 model: <chosen model>
-launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.
@@ -146,7 +145,6 @@ id: intake-agent-codex
 name: Intake Agent (Codex)
 engine: codex
 model: <chosen model or omit for default>
-launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.

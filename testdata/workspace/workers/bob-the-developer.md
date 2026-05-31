@@ -8,7 +8,6 @@ args:
   reasoning_effort: high
   service_tier: medium
 default_tmux_window: app-codex
-launch_mode: foreground
 ---
 
 # Bob (Developer)

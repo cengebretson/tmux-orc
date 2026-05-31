@@ -20,7 +20,6 @@ type Worker struct {
 	Args map[string]string `yaml:"args"` // extra flags: --key value (claude) or -c key=value (codex)
 
 	DefaultTmuxWindow string `yaml:"default_tmux_window"`
-	LaunchMode        string `yaml:"launch_mode"`
 }
 
 // Load parses all worker markdown files in the given directory.

@@ -5,7 +5,6 @@ engine: claude
 model: claude-sonnet-4-6
 args:
   effort: medium
-launch_mode: foreground
 ---
 
 # Intake Agent

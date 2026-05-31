@@ -7,7 +7,6 @@ model: claude-opus-4-7
 args:
   effort: high
 default_tmux_window: claude
-launch_mode: foreground
 ---
 
 # Ada the Architect

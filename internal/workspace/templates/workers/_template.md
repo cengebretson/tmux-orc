@@ -7,7 +7,6 @@ model: claude-sonnet-4-6
 args:
   effort: medium
 default_tmux_window: claude
-launch_mode: foreground
 ---
 
 # Worker Display Name

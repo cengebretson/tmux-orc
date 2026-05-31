@@ -6,7 +6,6 @@ kind: agent
 model: claude-sonnet-4-6
 args:
   effort: medium
-launch_mode: foreground
 ---
 
 # Zach (Ninja)
