@@ -33,8 +33,6 @@ orc/
           _template.md
           sample/                 sample workers (--with-sample-workers)
         stages/                   stage docs (plain markdown, no frontmatter)
-  docs/                           design documentation (HTML)
-  assets/                         roles and skills reference files
   go.mod
 ```
 
@@ -65,6 +63,7 @@ go test ./...
 | `orc health` | Check workspace filesystem health |
 | `orc status` | Show all features and their current workflow |
 | `orc work <ticket>` | Create the feature folder for a ticket — run once by the human |
+| `orc work <ticket> --workflow <name>` | Use a named workflow instead of the configured default |
 | `orc work <ticket> --tmux` | Also enable tmux session for this ticket |
 | `orc show <ticket>` | Show full state for one ticket |
 | `orc show <ticket> --json` | Full state as JSON for agent parsing |
@@ -72,6 +71,7 @@ go test ./...
 | `orc next <ticket> --dry` | Preview the launch command without executing |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
+| `orc tui` | Open the interactive dashboard |
 | `orc start <ticket>` | Mark a ticket in_progress — called by the agent at the start of each session (hidden from help) |
 | `orc advance <ticket> [--stage <stage>]` | Mark current stage complete and move to the next (called by agents, hidden from help) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
@@ -80,8 +80,8 @@ go test ./...
 
 ## Roadmap
 
-The original design document lives in `docs/`. This section tracks what's been
-built, what's planned, and where we deliberately diverged from the original plan.
+This section tracks what's been built, what's planned, and where we deliberately
+diverged from the original plan.
 
 ### Implemented
 
@@ -95,6 +95,7 @@ built, what's planned, and where we deliberately diverged from the original plan
 | Worker routing | `orc.yaml` owns default worker per stage; overridden by `stage.owner` or `orc next --worker` |
 | Multi-product | Claude and Codex launch commands rendered from worker `product` field |
 | Workflows + stages | `orc.yaml` defines named pipelines with stage sequences, advance mode, and per-stage worker |
+| Default workflow setting | `settings.default_workflow` chooses the workflow used by `orc work` when `--workflow` is omitted |
 | Stage files | `stages/*.md` — plain markdown, no frontmatter; flow control lives entirely in `orc.yaml` |
 | Repair loops | `repair_stages` section in `orc.yaml` with `repairs`, `worker`, `advance`, `max_retries` |
 | Retry tracking | `stage_counts` map in STATE.yaml — incremented by `orc advance` |
@@ -104,6 +105,7 @@ built, what's planned, and where we deliberately diverged from the original plan
 | Session contract | `ORC.md` at workspace root (replaces `REQUIREMENTS.md`); `AGENTS.md` Session Start section enforces state updates |
 | Worktree cleanup | `orc archive` removes git worktrees, moves feature to `_archive/` |
 | tmux integration | `orc work --tmux` opts in; `orc next` auto-creates session, sends agent to stage window; `orc attach` to jump in; runtime persisted in STATE.yaml |
+| Interactive dashboard | `orc tui` opens a Bubble Tea dashboard for status review and ticket actions |
 | Tests | health, state, workers, workspace, workflow packages all covered |
 
 ### Planned
@@ -111,7 +113,6 @@ built, what's planned, and where we deliberately diverged from the original plan
 | Feature | Notes |
 |---------|-------|
 | ~~`orc tmux create/attach/list/kill`~~ | Done — `orc attach <ticket>`; sessions auto-created by `orc next`, one window per stage |
-| `orc tui` | Bubble Tea dashboard — color-coded status, click to show/launch |
 | ~~`orc run-next`~~ | Done — `orc next` now executes the agent directly; `--dry` to preview |
 | ~~`--json` flag on `orc status`~~ | Done — `orc status --json` returns `{ active: [...], archived: [...] }` with full state objects |
 | Banner suppression | Auto-suppress when stdout is not a TTY; `--no-banner` flag |
