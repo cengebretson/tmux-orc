@@ -23,6 +23,7 @@ type Settings struct {
 	AutoArchive     bool     `yaml:"auto_archive"`
 	TuiRefresh      int      `yaml:"tui_refresh"` // seconds; 0 means use default (60)
 	Quotes          []string `yaml:"quotes"`
+	Theme           string   `yaml:"theme"` // e.g. "catppuccin-mocha"; defaults to catppuccin-mocha
 }
 
 // WorkflowDef is a named sequence of stages.

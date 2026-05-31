@@ -153,8 +153,8 @@ type detailFile struct {
 func New(root string) Model {
 	ti := textinput.New()
 	ti.Placeholder = "filter tickets..."
-	ti.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(mauve))
-	ti.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(text))
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Mauve))
+	ti.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Text))
 	ti.Prompt = "/ "
 	ti.CharLimit = 64
 
@@ -174,6 +174,9 @@ func New(root string) Model {
 }
 
 func Run(root string) error {
+	if cfg, err := config.Load(root); err == nil {
+		_ = LoadTheme(cfg.Settings.Theme)
+	}
 	m := New(root)
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
@@ -679,8 +682,8 @@ func (m Model) viewDashboard() string {
 		leftStr := left.String()
 		leftHeight := lipgloss.Height(leftStr)
 
-		logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
-		quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(overlay0)).Italic(true)
+		logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Surface1))
+		quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Overlay0)).Italic(true)
 
 		var rightLines []string
 		for _, l := range strings.Split(logo, "\n") {
@@ -702,7 +705,7 @@ func (m Model) viewDashboard() string {
 		}
 		rightLines = rightLines[:targetLines]
 
-		rightBox := drawBoxLabeledWith("", rightLines, rightBoxOuter, surface1)
+		rightBox := drawBoxLabeledWith("", rightLines, rightBoxOuter, activeTheme.Palette.Surface1)
 		topBlock = "\n" + lipgloss.JoinHorizontal(lipgloss.Top, leftStr, strings.Repeat(" ", logoGap), rightBox) + "\n"
 	} else {
 		topBlock = "\n" + left.String() + "\n"
@@ -777,9 +780,9 @@ func (m Model) viewDashboard() string {
 	} else {
 		tableLines = strings.Split(m.renderTable(visibleRows, outerW-2, m.cursor-offset), "\n")
 	}
-	featuresBorderColor := surface1
+	featuresBorderColor := activeTheme.Palette.Surface1
 	if m.focusedPane == "features" {
-		featuresBorderColor = mauve
+		featuresBorderColor = activeTheme.Palette.Mauve
 	}
 
 	var b strings.Builder
@@ -819,14 +822,14 @@ func drawBox(title string, contentLines []string, outerW int) string {
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(surface1)).
+		BorderForeground(lipgloss.Color(activeTheme.Palette.Surface1)).
 		Width(innerW).
 		Render(strings.Join(all, "\n"))
 }
 
 // drawBoxLabeled renders a rounded box with the title embedded in the top border.
 func drawBoxLabeled(title string, contentLines []string, outerW int) string {
-	return drawBoxLabeledWith(title, contentLines, outerW, surface1)
+	return drawBoxLabeledWith(title, contentLines, outerW, activeTheme.Palette.Surface1)
 }
 
 // drawBoxLabeledWith is drawBoxLabeled with a configurable border color.
@@ -918,9 +921,9 @@ func (m Model) renderHealthLines(maxW int) []string {
 // Expanded: full box with content.
 func (m Model) sectionBox(key, keyStr, name, summary string, content []string, outerW int, focused bool) string {
 	innerW := outerW - 2
-	borderColor := surface1
+	borderColor := activeTheme.Palette.Surface1
 	if focused {
-		borderColor = mauve
+		borderColor = activeTheme.Palette.Mauve
 	}
 	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(borderColor))
 	title := styleDim.Render(keyStr) + " " + styleSection.Render(name)
@@ -1694,79 +1697,13 @@ func buildFileList(featureDir string, s *state.State) []detailFile {
 	return out
 }
 
-// catppuccinMochaStyle is a glamour style JSON matching the Catppuccin Mocha palette.
-const catppuccinMochaStyle = `{
-  "document": { "block_prefix": "\n", "block_suffix": "\n", "color": "#cdd6f4", "margin": 2 },
-  "block_quote": { "indent": 1, "indent_token": "│ ", "color": "#a6adc8" },
-  "paragraph": {},
-  "list": { "level_indent": 2 },
-  "heading": { "block_suffix": "\n", "color": "#cba6f7", "bold": true },
-  "h1": { "prefix": " ", "suffix": " ", "color": "#1e1e2e", "background_color": "#cba6f7", "bold": true },
-  "h2": { "prefix": "## ", "color": "#cba6f7", "bold": true },
-  "h3": { "prefix": "### ", "color": "#b4befe", "bold": true },
-  "h4": { "prefix": "#### ", "color": "#89b4fa" },
-  "h5": { "prefix": "##### ", "color": "#74c7ec" },
-  "h6": { "prefix": "###### ", "color": "#6c7086" },
-  "text": {},
-  "strikethrough": { "crossed_out": true },
-  "emph": { "italic": true },
-  "strong": { "bold": true, "color": "#f5c2e7" },
-  "hr": { "color": "#45475a", "format": "\n────────\n" },
-  "item": { "block_prefix": "• " },
-  "enumeration": { "block_prefix": ". " },
-  "task": { "ticked": "[✓] ", "unticked": "[ ] " },
-  "link": { "color": "#89b4fa", "underline": true },
-  "link_text": { "color": "#74c7ec", "bold": true },
-  "image": { "color": "#f5c2e7", "underline": true },
-  "image_text": { "color": "#6c7086", "format": "Image: {{.text}} →" },
-  "code": { "prefix": " ", "suffix": " ", "color": "#f38ba8", "background_color": "#313244" },
-  "code_block": {
-    "color": "#cdd6f4", "margin": 2,
-    "chroma": {
-      "text": { "color": "#cdd6f4" },
-      "error": { "color": "#f38ba8", "background_color": "#313244" },
-      "comment": { "color": "#6c7086" },
-      "comment_preproc": { "color": "#fab387" },
-      "keyword": { "color": "#cba6f7" },
-      "keyword_reserved": { "color": "#cba6f7" },
-      "keyword_namespace": { "color": "#f38ba8" },
-      "keyword_type": { "color": "#f9e2af" },
-      "operator": { "color": "#89dceb" },
-      "punctuation": { "color": "#cdd6f4" },
-      "name": { "color": "#cdd6f4" },
-      "name_builtin": { "color": "#fab387" },
-      "name_tag": { "color": "#cba6f7" },
-      "name_attribute": { "color": "#89b4fa" },
-      "name_class": { "color": "#f9e2af", "bold": true },
-      "name_constant": { "color": "#fab387" },
-      "name_decorator": { "color": "#f9e2af" },
-      "name_function": { "color": "#89b4fa" },
-      "literal_number": { "color": "#fab387" },
-      "literal_string": { "color": "#a6e3a1" },
-      "literal_string_escape": { "color": "#94e2d5" },
-      "generic_deleted": { "color": "#f38ba8" },
-      "generic_emph": { "italic": true },
-      "generic_inserted": { "color": "#a6e3a1" },
-      "generic_strong": { "bold": true },
-      "generic_subheading": { "color": "#6c7086" },
-      "background": { "background_color": "#1e1e2e" }
-    }
-  },
-  "table": {},
-  "definition_list": {},
-  "definition_term": {},
-  "definition_description": { "block_prefix": "\n🠶 " },
-  "html_block": {},
-  "html_span": {}
-}`
-
 func renderFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	r, err := glamour.NewTermRenderer(
-		glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
+		glamour.WithStylesFromJSONBytes(activeTheme.Glamour),
 		glamour.WithWordWrap(120),
 	)
 	if err != nil {
@@ -1854,7 +1791,7 @@ func renderWorkerFile(path string, features []*featureRow, width int) (string, e
 			styleHeader.Render(workerName),
 			lines,
 			innerW,
-			mauve,
+			activeTheme.Palette.Mauve,
 		))
 		sb.WriteString("\n")
 
@@ -1878,7 +1815,7 @@ func renderWorkerFile(path string, features []*featureRow, width int) (string, e
 	// Render markdown body.
 	if body != "" {
 		r, err := glamour.NewTermRenderer(
-			glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
+			glamour.WithStylesFromJSONBytes(activeTheme.Glamour),
 			glamour.WithWordWrap(width),
 		)
 		if err == nil {
@@ -1976,7 +1913,7 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 		styleTableHeader.Render("Active")
 	divider := "  " + styleDivider.Render(strings.Repeat("─", innerW-2))
 
-	cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve))
+	cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Mauve))
 
 	stageRows := func(steps []routeStep, baseIdx int) []string {
 		var lines []string

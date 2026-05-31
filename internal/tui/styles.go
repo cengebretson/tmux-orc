@@ -1,10 +1,74 @@
 package tui
 
 import (
+	"embed"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
+
+//go:embed themes/*.json
+var themesFS embed.FS
+
+// Theme holds the palette and glamour style for a TUI theme.
+type Theme struct {
+	Palette struct {
+		Crust    string `json:"crust"`
+		Mantle   string `json:"mantle"`
+		Base     string `json:"base"`
+		Surface0 string `json:"surface0"`
+		Surface1 string `json:"surface1"`
+		Surface2 string `json:"surface2"`
+		Overlay0 string `json:"overlay0"`
+		Overlay1 string `json:"overlay1"`
+		Subtext0 string `json:"subtext0"`
+		Subtext1 string `json:"subtext1"`
+		Text     string `json:"text"`
+		Lavender string `json:"lavender"`
+		Blue     string `json:"blue"`
+		Sapphire string `json:"sapphire"`
+		Sky      string `json:"sky"`
+		Teal     string `json:"teal"`
+		Green    string `json:"green"`
+		Yellow   string `json:"yellow"`
+		Peach    string `json:"peach"`
+		Maroon   string `json:"maroon"`
+		Red      string `json:"red"`
+		Mauve    string `json:"mauve"`
+		Pink     string `json:"pink"`
+		Flamingo string `json:"flamingo"`
+	} `json:"palette"`
+	Glamour json.RawMessage `json:"glamour"`
+}
+
+var activeTheme Theme
+
+// LoadTheme loads a theme by name from the embedded themes directory.
+// Falls back to catppuccin-mocha if name is empty or not found.
+func LoadTheme(name string) error {
+	if name == "" {
+		name = "catppuccin-mocha"
+	}
+	data, err := themesFS.ReadFile("themes/" + name + ".json")
+	if err != nil {
+		return fmt.Errorf("theme %q not found", name)
+	}
+	var t Theme
+	if err := json.Unmarshal(data, &t); err != nil {
+		return fmt.Errorf("parsing theme %q: %w", name, err)
+	}
+	activeTheme = t
+	initStyles()
+	return nil
+}
+
+func init() {
+	if err := LoadTheme(""); err != nil {
+		panic("failed to load default theme: " + err.Error())
+	}
+}
 
 const logo = `⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -20,132 +84,86 @@ const logo = `⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⣿⣶⣿⣿⣿⣿⣿⣿⣶⣿⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠛⠛⠛⠛⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀`
 
-// Catppuccin Mocha palette
-const (
-	crust    = "#11111b"
-	mantle   = "#181825"
-	base     = "#1e1e2e"
-	surface0 = "#313244"
-	surface1 = "#45475a"
-	surface2 = "#585b70"
-	overlay0 = "#6c7086"
-	overlay1 = "#7f849c"
-	subtext0 = "#a6adc8"
-	subtext1 = "#bac2de"
-	text     = "#cdd6f4"
-	lavender = "#b4befe"
-	blue     = "#89b4fa"
-	sapphire = "#74c7ec"
-	sky      = "#89dceb"
-	teal     = "#94e2d5"
-	green    = "#a6e3a1"
-	yellow   = "#f9e2af"
-	peach    = "#fab387"
-	maroon   = "#eba0ac"
-	red      = "#f38ba8"
-	mauve    = "#cba6f7"
-	pink     = "#f5c2e7"
-	flamingo = "#f2cdcd"
-)
-
+// Style vars — initialized by initStyles(), called from LoadTheme.
 var (
-	styleDim = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(overlay0))
+	styleDim     lipgloss.Style
+	styleSubtext lipgloss.Style
 
-	styleSubtext = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(subtext0))
+	styleHeader  lipgloss.Style
+	styleSection lipgloss.Style
 
-	// Header
-	styleHeader = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(mauve)).
-			Bold(true)
+	styleTableHeader lipgloss.Style
+	styleRowSelected lipgloss.Style
 
-	// Section titles
-	styleSection = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(lavender)).
-			Bold(true)
+	styleStatusReady      lipgloss.Style
+	styleStatusInProgress lipgloss.Style
+	styleStatusWaiting    lipgloss.Style
+	styleStatusBlocked    lipgloss.Style
+	styleStatusArchived   lipgloss.Style
+	styleStatusPending    lipgloss.Style
 
-	// Table
-	styleTableHeader = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(subtext0)).
-				Bold(true)
+	styleHealthOK   lipgloss.Style
+	styleHealthWarn lipgloss.Style
+	styleHealthErr  lipgloss.Style
 
-	styleRowSelected = lipgloss.NewStyle().
-				Background(lipgloss.Color(surface0)).
-				Foreground(lipgloss.Color(text))
+	styleDetailLabel lipgloss.Style
+	styleDetailValue lipgloss.Style
+	styleDetailTitle lipgloss.Style
 
-	// Status colors
-	styleStatusReady = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(blue))
+	styleFileOK       lipgloss.Style
+	styleFileMissing  lipgloss.Style
+	styleFileSelected lipgloss.Style
 
-	styleStatusInProgress = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(mauve))
+	styleHelp    lipgloss.Style
+	styleHelpKey lipgloss.Style
 
-	styleStatusWaiting = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(yellow))
+	styleTmuxLive lipgloss.Style
+	styleTmuxDead lipgloss.Style
+	styleTmuxNone lipgloss.Style
 
-	styleStatusBlocked = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(red))
-
-	styleStatusArchived = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(overlay0))
-
-	styleStatusPending = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(peach))
-
-	// Health indicators
-	styleHealthOK = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(green))
-
-	styleHealthWarn = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(yellow))
-
-	styleHealthErr = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(red))
-
-	// Detail view
-	styleDetailLabel = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(subtext0))
-
-	styleDetailValue = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(text))
-
-	styleDetailTitle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(mauve)).
-				Bold(true)
-
-	// File chips
-	styleFileOK = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(green)).
-			Background(lipgloss.Color(surface0)).
-			Padding(0, 1)
-
-	styleFileMissing = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(overlay0)).
-				Background(lipgloss.Color(surface0)).
-				Padding(0, 1)
-
-	styleFileSelected = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(base)).
-				Background(lipgloss.Color(mauve)).
-				Padding(0, 1)
-
-	// Help bar
-	styleHelp = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(overlay0))
-
-	styleHelpKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(subtext1))
-
-	// Tmux status
-	styleTmuxLive = lipgloss.NewStyle().Foreground(lipgloss.Color(green))
-	styleTmuxDead = lipgloss.NewStyle().Foreground(lipgloss.Color(red))
-	styleTmuxNone = lipgloss.NewStyle().Foreground(lipgloss.Color(overlay0))
-
-	// Border/divider
-	styleDivider = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(surface1))
+	styleDivider lipgloss.Style
 )
+
+func initStyles() {
+	p := activeTheme.Palette
+
+	styleDim = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Overlay0))
+	styleSubtext = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Subtext0))
+
+	styleHeader = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Mauve)).Bold(true)
+	styleSection = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Lavender)).Bold(true)
+
+	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Subtext0)).Bold(true)
+	styleRowSelected = lipgloss.NewStyle().Background(lipgloss.Color(p.Surface0)).Foreground(lipgloss.Color(p.Text))
+
+	styleStatusReady = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Blue))
+	styleStatusInProgress = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Mauve))
+	styleStatusWaiting = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
+	styleStatusBlocked = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Red))
+	styleStatusArchived = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Overlay0))
+	styleStatusPending = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Peach))
+
+	styleHealthOK = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Green))
+	styleHealthWarn = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
+	styleHealthErr = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Red))
+
+	styleDetailLabel = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Subtext0))
+	styleDetailValue = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text))
+	styleDetailTitle = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Mauve)).Bold(true)
+
+	styleFileOK = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Green)).Background(lipgloss.Color(p.Surface0)).Padding(0, 1)
+	styleFileMissing = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Overlay0)).Background(lipgloss.Color(p.Surface0)).Padding(0, 1)
+	styleFileSelected = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Base)).Background(lipgloss.Color(p.Mauve)).Padding(0, 1)
+
+	styleHelp = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Overlay0))
+	styleHelpKey = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Subtext1))
+
+	styleTmuxLive = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Green))
+	styleTmuxDead = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Red))
+	styleTmuxNone = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Overlay0))
+
+	styleDivider = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Surface1))
+}
 
 func statusStyle(status string) lipgloss.Style {
 	switch status {
@@ -185,14 +203,13 @@ func statusIcon(status string) string {
 	}
 }
 
-// stalenessStyle returns dim when fresh, yellow when a refresh cycle has been
-// missed (~15s), and red when clearly stale (~45s+).
 func stalenessStyle(age time.Duration) lipgloss.Style {
+	p := activeTheme.Palette
 	switch {
 	case age > 45*time.Second:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color(red))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Red))
 	case age > 15*time.Second:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color(yellow))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
 	default:
 		return styleDim
 	}
