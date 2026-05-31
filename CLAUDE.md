@@ -102,7 +102,7 @@ built, what's planned, and where we deliberately diverged from the original plan
 
 | Feature | Notes |
 |---------|-------|
-| ~~`orc tmux create/attach/list/kill`~~ | Done — per-ticket tmux sessions, one window per workflow, auto-detect in `orc next` |
+| ~~`orc tmux create/attach/list/kill`~~ | Done — `orc attach <ticket>`; sessions auto-created by `orc next`, one window per workflow |
 | `orc tui` | Bubble Tea dashboard — color-coded status, click to show/launch |
 | ~~`orc run-next`~~ | Done — `orc next` now executes the agent directly; `--dry` to preview |
 | ~~`--json` flag on `orc status`~~ | Done — `orc status --json` returns `{ active: [...], archived: [...] }` with full state objects |

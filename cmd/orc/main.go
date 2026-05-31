@@ -165,40 +165,14 @@ var archiveCmd = &cobra.Command{
 
 var archiveWorkspace string
 
-var tmuxCmd = &cobra.Command{
-	Use:   "tmux",
-	Short: "Manage tmux sessions for feature tickets",
-}
-
-var tmuxCreateCmd = &cobra.Command{
-	Use:   "create <ticket>",
-	Short: "Create a tmux session for a ticket with workflow windows",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTmuxCreate,
-}
-
-var tmuxAttachCmd = &cobra.Command{
+var attachCmd = &cobra.Command{
 	Use:   "attach <ticket>",
 	Short: "Attach to the tmux session for a ticket",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runTmuxAttach,
+	RunE:  runAttach,
 }
 
-var tmuxListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List active tmux sessions",
-	Args:  cobra.NoArgs,
-	RunE:  runTmuxList,
-}
-
-var tmuxKillCmd = &cobra.Command{
-	Use:   "kill <ticket>",
-	Short: "Kill the tmux session for a ticket",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTmuxKill,
-}
-
-var tmuxWorkspace string
+var attachWorkspace string
 
 var helpAllCmd = &cobra.Command{
 	Use:   "help-all",
@@ -249,12 +223,7 @@ func init() {
 	advanceCmd.Flags().StringVar(&advanceResult, "result", "", "Summary of what was accomplished in the previous stage")
 	advanceCmd.Flags().StringVar(&advanceWorkflow, "workflow", "", "New workflow name (required when crossing workflow boundaries)")
 	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-
-	tmuxCmd.PersistentFlags().StringVar(&tmuxWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	tmuxCmd.AddCommand(tmuxCreateCmd)
-	tmuxCmd.AddCommand(tmuxAttachCmd)
-	tmuxCmd.AddCommand(tmuxListCmd)
-	tmuxCmd.AddCommand(tmuxKillCmd)
+	attachCmd.Flags().StringVar(&attachWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
@@ -267,7 +236,7 @@ func init() {
 	rootCmd.AddCommand(blockCmd)
 	rootCmd.AddCommand(advanceCmd)
 	rootCmd.AddCommand(archiveCmd)
-	rootCmd.AddCommand(tmuxCmd)
+	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(helpAllCmd)
 }
 
@@ -710,7 +679,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		if tmux.Available() && tmux.SessionExists(session) {
 			fmt.Printf("Session:  %s\n", tmux.AttachHint(session, s.Stage.Workflow))
 		} else {
-			fmt.Printf("Session:  %s  (not running — use `orc tmux create %s` to restart)\n", session, s.Ticket)
+			fmt.Printf("Session:  %s  (not running — run `orc next %s` to restart)\n", session, s.Ticket)
 		}
 	}
 
@@ -987,48 +956,8 @@ func runArchive(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTmuxCreate(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(tmuxWorkspace)
-	if err != nil {
-		return err
-	}
-	if !tmux.Available() {
-		return fmt.Errorf("tmux is not installed or not in PATH")
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
-
-	if tmux.SessionExists(s.Slug) {
-		fmt.Printf("Session already exists: %s\n", s.Slug)
-		fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Slug, s.Stage.Workflow))
-		return nil
-	}
-
-	workflows := listWorkflowNames(root)
-	if err := tmux.CreateSession(s.Slug, featureDir, workflows); err != nil {
-		return err
-	}
-
-	if err := state.SetRuntime(featureDir, s.Slug); err != nil {
-		fmt.Printf("warning: could not write runtime to STATE.yaml: %v\n", err)
-	}
-
-	fmt.Printf("Session: %s\n", s.Slug)
-	fmt.Printf("Windows: %s\n", strings.Join(workflows, ", "))
-	fmt.Println()
-	fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Slug, s.Stage.Workflow))
-	return nil
-}
-
-func runTmuxAttach(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(tmuxWorkspace)
+func runAttach(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(attachWorkspace)
 	if err != nil {
 		return err
 	}
@@ -1046,60 +975,10 @@ func runTmuxAttach(cmd *cobra.Command, args []string) error {
 	}
 
 	if !tmux.SessionExists(s.Slug) {
-		return fmt.Errorf("no tmux session for %s — run `orc tmux create %s` first", s.Ticket, s.Ticket)
+		return fmt.Errorf("no tmux session for %s — run `orc next %s` to start one", s.Ticket, s.Ticket)
 	}
 
 	return tmux.Attach(s.Slug + ":" + s.Stage.Workflow)
-}
-
-func runTmuxList(cmd *cobra.Command, args []string) error {
-	if !tmux.Available() {
-		return fmt.Errorf("tmux is not installed or not in PATH")
-	}
-	sessions := tmux.ListSessions()
-	if len(sessions) == 0 {
-		fmt.Println("No active tmux sessions.")
-		return nil
-	}
-	fmt.Println("Active tmux sessions:")
-	for _, s := range sessions {
-		fmt.Printf("  %s\n", s)
-	}
-	return nil
-}
-
-func runTmuxKill(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(tmuxWorkspace)
-	if err != nil {
-		return err
-	}
-	if !tmux.Available() {
-		return fmt.Errorf("tmux is not installed or not in PATH")
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
-
-	if !tmux.SessionExists(s.Slug) {
-		return fmt.Errorf("no tmux session for %s", s.Ticket)
-	}
-
-	if err := tmux.KillSession(s.Slug); err != nil {
-		return err
-	}
-
-	if err := state.ClearRuntime(featureDir); err != nil {
-		fmt.Printf("warning: could not clear runtime from STATE.yaml: %v\n", err)
-	}
-
-	fmt.Printf("Killed session: %s\n", s.Slug)
-	return nil
 }
 
 // listWorkflowNames returns workflow directory names ordered by the next_workflow
