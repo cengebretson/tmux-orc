@@ -29,10 +29,24 @@ context over and over, or the work drifts.
 
 `orc` fixes this with a **feature folder**: a durable context pack that travels
 with the ticket. Every stage reads what the previous one wrote, then writes its
-own outputs into a named subfolder. The developer's implementation summary lands
-in `develop/HANDOFF.md`. The reviewer's verdict lands in `code-review/REVIEW.md`.
-The PR URL lands in `pr-open/PR.md`. Any agent — or human — can pick up mid-flight
+own outputs into a named subfolder. Any agent — or human — can pick up mid-flight
 and know exactly where things stand without asking anyone.
+
+```mermaid
+flowchart LR
+    IN([intake])       -->|"TICKET.md · SPEC.md · PLAN.md"| DE
+    DE([develop])      -->|"develop/HANDOFF.md"| CR
+    CR([code-review])  -->|"code-review/REVIEW.md"| PO
+    PO([pr-open])      -->|"pr-open/PR.md"| QA
+    QA([qa-automation])--> AR([archived])
+
+    style IN  fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style DE  fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style CR  fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style PO  fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style QA  fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style AR  fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+```
 
 ## Why orc?
 
@@ -144,25 +158,36 @@ launch command without executing it.
 flowchart TD
     W([orc work]) --> intake
 
-    intake -->|auto| develop
-    develop -->|manual| code-review
-    code-review -->|auto| pr-open
-    pr-open -->|manual| qa-automation
-    pr-open -.->|CI failures| pr-repair
-    pr-repair -->|auto| pr-open
+    intake       -->|auto|        develop
+    develop      -->|manual ●|    code-review
+    code-review  -->|auto|        pr-open
+    pr-open      -->|manual ●|    qa-automation
+    pr-open      -.->|CI failures| pr-repair
+    pr-repair    -->|auto|        pr-open
 
     qa-automation --> A([orc archive])
 
-    style intake fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style develop fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style W           fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style A           fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style intake      fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style develop     fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style code-review fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style pr-open fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style pr-repair fill:#313244,stroke:#f38ba8,color:#cdd6f4
+    style pr-open     fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style pr-repair   fill:#313244,stroke:#f38ba8,color:#cdd6f4
     style qa-automation fill:#313244,stroke:#cba6f7,color:#cdd6f4
+
+    linkStyle 0 stroke:#a6e3a1
+    linkStyle 1 stroke:#a6e3a1
+    linkStyle 2 stroke:#f9e2af
+    linkStyle 3 stroke:#a6e3a1
+    linkStyle 4 stroke:#f9e2af
+    linkStyle 5 stroke:#f38ba8,stroke-dasharray:5
+    linkStyle 6 stroke:#a6e3a1
+    linkStyle 7 stroke:#a6e3a1
 ```
 
-`auto` — agent calls `orc advance` when done and the next agent picks up immediately.  
-`manual` — agent calls `orc wait`; a human reviews and approves before continuing.
+`auto` — agent calls `orc advance`, next stage picks up immediately  
+`manual ●` — agent calls `orc wait`; a human approves before continuing
 
 ---
 
