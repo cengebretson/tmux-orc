@@ -12,6 +12,7 @@ import (
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/resume"
+	"github.com/cengebretson/orc/internal/runner"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/tui"
@@ -361,58 +362,23 @@ func runNext(cmd *cobra.Command, args []string) error {
 	}
 
 	if nextJSON {
-		allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+		plan, err := runner.Compute(root, featureDir, nextWorker)
 		if err != nil {
 			return err
 		}
-		cwd := s.ResolveCWD(root, featureDir)
-		jsonPrompt := s.NextAction.Prompt
-		if jsonPrompt == "" {
-			jsonPrompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nStage: stages/%s.md",
-				s.Ticket, s.Stage.Name, s.Slug, s.Stage.Name)
-		}
-		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
-		jsonPrompt = jsonPreamble + jsonPrompt
-		workflowCfg, _ := config.Load(root)
-		jsonPipeline := resolveWorkflow(root, s.Workflow)
-		stageCfg, _ := workflowCfg.StageConfig(jsonPipeline, s.Stage.Name)
-		nextStage := workflowCfg.NextStage(jsonPipeline, s.Stage.Name)
-		if nextStage != "" {
-			if stageCfg.Advance == "manual" {
-				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
-					s.Ticket, nextStage)
-			} else {
-				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc advance %s --owner <worker-id> --result \"<summary>\"",
-					s.Ticket)
-			}
-		}
-		// Resolve worker using same priority order as runNextAction.
-		var preferred *workers.Worker
-		if nextWorker != "" {
-			preferred = workers.FindByID(allWorkers, nextWorker)
-		}
-		if preferred == nil && s.Stage.Owner != "" {
-			preferred = workers.FindByID(allWorkers, s.Stage.Owner)
-		}
-		if preferred == nil && stageCfg.Worker != "" {
-			preferred = workers.FindByID(allWorkers, stageCfg.Worker)
-		}
-		out := map[string]any{
-			"ticket":   s.Ticket,
+		return printJSON(map[string]any{
+			"ticket":   plan.Ticket,
 			"status":   s.Status,
-			"workflow": jsonPipeline,
-			"stage":    s.Stage.Name,
+			"workflow": plan.Workflow,
+			"stage":    plan.Stage,
 			"owner":    s.Stage.Owner,
-			"cwd":      cwd,
-			"prompt":   jsonPrompt,
-		}
-		if preferred != nil {
-			out["worker"] = preferred.ID
-			out["product"] = preferred.Product
-			out["model"] = preferred.Model
-			out["launch"] = workers.LaunchCommand(preferred, root, cwd, jsonPrompt)
-		}
-		return printJSON(out)
+			"cwd":      plan.CWD,
+			"prompt":   plan.Prompt,
+			"worker":   plan.Worker.ID,
+			"product":  plan.Worker.Product,
+			"model":    plan.Worker.Model,
+			"launch":   plan.LaunchCommand,
+		})
 	}
 
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
@@ -444,77 +410,31 @@ func runNext(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	return runNextAction(root, featureDir, s, nextDry)
-}
-
-// runNextAction resolves the recommended worker and either executes or prints the launch command.
-// When dry is true, it prints the command without executing (preview mode).
-func runNextAction(root, featureDir string, s *state.State, dry bool) error {
-	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+	plan, err := runner.Compute(root, featureDir, nextWorker)
 	if err != nil {
 		return err
 	}
 
-	cwd := s.ResolveCWD(root, featureDir)
-	prompt := s.NextAction.Prompt
-	if prompt == "" {
-		prompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nStage: stages/%s.md",
-			s.Ticket, s.Stage.Name, s.Slug, s.Stage.Name)
-	}
-	preamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
-	prompt = preamble + prompt
-
-	workflowCfg, _ := config.Load(root)
-	pname := resolveWorkflow(root, s.Workflow)
-	stageCfg, _ := workflowCfg.StageConfig(pname, s.Stage.Name)
-	nextStage := workflowCfg.NextStage(pname, s.Stage.Name)
-	if nextStage != "" {
-		var suffix string
-		if stageCfg.Advance == "manual" {
-			suffix = fmt.Sprintf(
-				"\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
-				s.Ticket, nextStage,
-			)
-		} else {
-			suffix = fmt.Sprintf(
-				"\n\nWhen this stage is complete, run:\n  orc advance %s --owner <worker-id> --result \"<summary>\"",
-				s.Ticket,
-			)
+	if nextDry {
+		fmt.Printf("Worker:  %s  (%s)\n", plan.Worker.Name, plan.WorkerReason)
+		fmt.Printf("Product: %s\n", plan.Worker.Product)
+		if plan.Worker.Model != "" {
+			fmt.Printf("Model:   %s\n", plan.Worker.Model)
 		}
-		prompt += suffix
+		fmt.Printf("cwd:     %s\n", plan.CWD)
+		fmt.Println()
+		fmt.Println("Would run:")
+		fmt.Printf("  %s\n", plan.LaunchCommand)
+		fmt.Println()
+		fmt.Printf("Override worker: orc next %s --worker <worker-id>\n", s.Ticket)
+		return nil
 	}
 
-	// Resolve worker: --worker flag > stage.owner > workflow default > fallback match
-	var worker *workers.Worker
-	var matchReason string
-	if nextWorker != "" {
-		worker = workers.FindByID(allWorkers, nextWorker)
-		matchReason = "flag override"
-	}
-	if worker == nil && s.Stage.Owner != "" {
-		worker = workers.FindByID(allWorkers, s.Stage.Owner)
-		matchReason = "stage owner"
-	}
-	if worker == nil && stageCfg.Worker != "" {
-		worker = workers.FindByID(allWorkers, stageCfg.Worker)
-		matchReason = "workflow default"
-	}
-
-	if worker == nil {
-		if stageCfg.Worker != "" {
-			return fmt.Errorf("worker %q assigned to stage %q in orc.yaml not found in workers/", stageCfg.Worker, s.Stage.Name)
-		}
-		return fmt.Errorf("no worker assigned for stage %q — set worker: in orc.yaml", s.Stage.Name)
-	}
-
-	argv := workers.LaunchArgs(worker, root, cwd, prompt)
-
-	// Auto-tmux: create a session if tmux is available and none exists yet, then send there.
-	if !dry && tmux.Available() {
+	// Auto-tmux: create a session if available, fall through to foreground on failure.
+	if tmux.Available() {
 		session := s.Slug
 		window := s.Stage.Name
 
-		// Auto-create session if not already set up.
 		if s.Runtime.Tmux == nil {
 			stages := stageNamesForTicket(root, s)
 			if err := tmux.CreateSession(session, featureDir, stages); err != nil {
@@ -527,7 +447,6 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		} else {
 			session = s.Runtime.Tmux.Session
 			if !tmux.SessionExists(session) {
-				// Session died (reboot etc) — recreate it.
 				stages := stageNamesForTicket(root, s)
 				if err := tmux.CreateSession(session, featureDir, stages); err != nil {
 					fmt.Printf("tmux session recreate failed (%v) — running in foreground\n", err)
@@ -537,7 +456,7 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		}
 
 		fmt.Printf("Sending to tmux session %s:%s...\n", session, window)
-		if err := tmux.SendCommand(session, window, featureDir, cwd, argv); err != nil {
+		if err := tmux.SendCommand(session, window, featureDir, plan.CWD, plan.LaunchArgv); err != nil {
 			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
 		} else {
 			fmt.Printf("Agent launched in background.\n")
@@ -546,29 +465,13 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		}
 	}
 runForeground:
-
-	if dry {
-		fmt.Printf("Worker:  %s  (%s)\n", worker.Name, matchReason)
-		fmt.Printf("Product: %s\n", worker.Product)
-		if worker.Model != "" {
-			fmt.Printf("Model:   %s\n", worker.Model)
-		}
-		fmt.Printf("cwd:     %s\n", cwd)
-		fmt.Println()
-		fmt.Println("Would run:")
-		fmt.Printf("  %s\n", workers.LaunchCommand(worker, root, cwd, prompt))
-		fmt.Println()
-		fmt.Printf("Override worker: orc next %s --worker <worker-id>\n", s.Ticket)
-		return nil
-	}
-
-	fmt.Printf("Launching %s (%s)...\n", worker.Name, worker.Product)
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = cwd
-	return cmd.Run()
+	fmt.Printf("Launching %s (%s)...\n", plan.Worker.Name, plan.Worker.Product)
+	c := exec.Command(plan.LaunchArgv[0], plan.LaunchArgv[1:]...)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	c.Dir = plan.CWD
+	return c.Run()
 }
 
 func runWork(cmd *cobra.Command, args []string) error {
@@ -595,12 +498,12 @@ func runWork(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	s, err := state.Load(result.FeatureDir)
+	plan, err := runner.Compute(root, result.FeatureDir, "")
 	if err != nil {
 		return err
 	}
-
-	return runNextAction(root, result.FeatureDir, s, true)
+	printDryRun(plan, result.Slug)
+	return nil
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -1034,11 +937,12 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nRun `orc next %s` to launch the next worker.\n", s.Ticket)
 	fmt.Println()
 
-	s, err = state.Load(featureDir)
+	plan, err := runner.Compute(root, featureDir, "")
 	if err != nil {
 		return err
 	}
-	return runNextAction(root, featureDir, s, true)
+	printDryRun(plan, s.Ticket)
+	return nil
 }
 
 func runArchive(cmd *cobra.Command, args []string) error {
@@ -1183,22 +1087,16 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	return tmux.Attach(s.Slug + ":" + s.Stage.Name)
 }
 
-// defaultWorkflow returns the workspace default workflow name from orc.yaml settings,
-// falling back to "default" if not configured or the file cannot be read.
-func defaultWorkflow(root string) string {
-	cfg, _ := config.Load(root)
-	if cfg != nil {
-		return cfg.DefaultWorkflow()
-	}
-	return "default"
-}
-
 // resolveWorkflow returns the ticket's workflow name, using the workspace default if unset.
 func resolveWorkflow(root, ticketWorkflow string) string {
 	if ticketWorkflow != "" {
 		return ticketWorkflow
 	}
-	return defaultWorkflow(root)
+	cfg, _ := config.Load(root)
+	if cfg != nil {
+		return cfg.DefaultWorkflow()
+	}
+	return "default"
 }
 
 // stageNamesForTicket returns the ordered stage names for the ticket's workflow pipeline.
@@ -1219,6 +1117,20 @@ func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+func printDryRun(plan *runner.Plan, ticket string) {
+	fmt.Printf("Worker:  %s  (%s)\n", plan.Worker.Name, plan.WorkerReason)
+	fmt.Printf("Product: %s\n", plan.Worker.Product)
+	if plan.Worker.Model != "" {
+		fmt.Printf("Model:   %s\n", plan.Worker.Model)
+	}
+	fmt.Printf("cwd:     %s\n", plan.CWD)
+	fmt.Println()
+	fmt.Println("Would run:")
+	fmt.Printf("  %s\n", plan.LaunchCommand)
+	fmt.Println()
+	fmt.Printf("Override worker: orc next %s --worker <worker-id>\n", ticket)
 }
 
 func resolveRoot(path string) (string, error) {

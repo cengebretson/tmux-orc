@@ -24,7 +24,7 @@ worktree when any worktrees are present. 7 tests added.
 
 ---
 
-## 3. Extract next-action planning from `main.go`
+## ~~3. Extract next-action planning from `main.go`~~ ✓ Done
 
 **What:** `cmd/orc/main.go` owns Cobra wiring, output rendering, workflow
 resolution, prompt construction, worker selection, tmux orchestration, archive
