@@ -613,6 +613,9 @@ func (m Model) viewDashboard() string {
 			}
 		}
 		targetLines := leftHeight - 2
+		if minContent := len(rightLines); targetLines < minContent {
+			targetLines = minContent
+		}
 		for len(rightLines) < targetLines {
 			rightLines = append(rightLines, "")
 		}
