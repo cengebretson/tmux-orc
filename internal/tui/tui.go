@@ -1016,9 +1016,9 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 	const (
 		wTicket   = 12
 		wName     = 22
-		wStatus   = 18
+		wStatus   = 22
 		wWorkflow = 16
-		wWorker   = 18
+		wWorker   = 22
 	)
 
 	header := " " +
@@ -1027,7 +1027,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
 		padRight(styleTableHeader.Render("Stage"), wWorkflow) + "  " +
 		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
-		styleTableHeader.Render("Tmux")
+		styleTableHeader.Render("~")
 
 	div := " " + styleDivider.Render(strings.Repeat("─", w-1))
 
