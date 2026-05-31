@@ -32,6 +32,18 @@ workflows:
         worker: brian-qa
         advance: auto
 
+  hotfix:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: patch
+        worker: bob-developer
+        advance: manual
+      - name: deploy
+        worker: bob-developer
+        advance: auto
+
 repair_stages:
   pr-repair:
     repairs: pr-open
