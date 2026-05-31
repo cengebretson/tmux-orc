@@ -56,4 +56,4 @@ The worktree path for the active ticket is always recorded in `STATE.yaml` under
 ## Stages
 
 Stage definitions live in `stages/<name>.md`. Flow control (order, worker per
-stage, advance mode, repair loops) is declared in `workflows.yaml`.
+stage, advance mode, repair loops) is declared in `orc.yaml`.

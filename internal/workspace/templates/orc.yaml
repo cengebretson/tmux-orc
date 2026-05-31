@@ -1,9 +1,36 @@
 # orc.yaml — workspace configuration
 #
-# Repos this workspace orchestrates. Run `orc health` to verify the workspace.
+# Single config file for repos, workflows, and workspace settings.
+# Run `orc health` to verify the workspace.
 # After editing, the TUI picks up changes on the next auto-refresh.
 
 repos:
   - name: my-app
     path: ../my-app
     purpose: Application code, APIs, tests
+
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: develop
+        worker: bob-developer
+        advance: manual
+      - name: code-review
+        worker: zach-reviewer
+        advance: auto
+      - name: pr-open
+        worker: bob-developer
+        advance: manual
+      - name: qa-automation
+        worker: brian-qa
+        advance: auto
+
+repair_stages:
+  pr-repair:
+    repairs: pr-open
+    worker: bob-developer
+    advance: auto
+    max_retries: 3

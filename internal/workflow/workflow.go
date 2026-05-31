@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const Filename = "workflows.yaml"
+const Filename = "orc.yaml"
 
 // Config holds all named workflows for a workspace.
 type Config struct {
@@ -36,7 +36,7 @@ type RepairStageDef struct {
 	MaxRetries int    `yaml:"max_retries"`
 }
 
-// Load reads workflows.yaml from the workspace root.
+// Load reads the workflows config from orc.yaml at the workspace root.
 // Returns an empty Config (no error) if the file does not exist.
 func Load(workspaceRoot string) (*Config, error) {
 	path := filepath.Join(workspaceRoot, Filename)

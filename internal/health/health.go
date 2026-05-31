@@ -67,11 +67,8 @@ func Run(root string) *Report {
 	// workers/
 	report.Results = append(report.Results, checkDirWithCount(root, "workers", "*.md", "worker"))
 
-	// orc.yaml
+	// orc.yaml (repos + workflows)
 	report.Results = append(report.Results, checkOrcConfig(root))
-
-	// workflows.yaml + stages/
-	report.Results = append(report.Results, checkWorkflowsFile(root))
 	report.Results = append(report.Results, checkDirWithCount(root, "stages", "*.md", "stage"))
 
 	// optional dirs — note presence but don't fail if missing
@@ -193,26 +190,23 @@ func checkOrcConfig(root string) Result {
 		return Result{Name: config.Filename, Status: Missing, Detail: "missing — run `orc init`"}
 	}
 	if len(cfg.Repos) == 0 {
-		return Result{Name: config.Filename, Status: Empty, Detail: "no repos defined — edit orc.yaml to add repos"}
+		return Result{Name: config.Filename, Status: Empty, Detail: "no repos defined — edit orc.yaml"}
 	}
-	names := make([]string, len(cfg.Repos))
+	repoNames := make([]string, len(cfg.Repos))
 	for i, r := range cfg.Repos {
-		names[i] = r.Name
+		repoNames[i] = r.Name
 	}
-	return Result{Name: config.Filename, Status: OK, Detail: fmt.Sprintf("%d repo(s): %s", len(names), strings.Join(names, ", "))}
+	wfCfg, _ := workflow.Load(root)
+	wfNames := wfCfg.Names()
+	detail := fmt.Sprintf("%d repo(s): %s", len(repoNames), strings.Join(repoNames, ", "))
+	if len(wfNames) > 0 {
+		detail += fmt.Sprintf("  ·  %d workflow(s): %s", len(wfNames), strings.Join(wfNames, ", "))
+	} else {
+		detail += "  ·  no workflows defined"
+	}
+	return Result{Name: config.Filename, Status: OK, Detail: detail}
 }
 
-func checkWorkflowsFile(root string) Result {
-	cfg, err := workflow.Load(root)
-	if err != nil {
-		return Result{Name: "workflows.yaml", Status: Missing, Detail: "missing — run `orc init`"}
-	}
-	names := cfg.Names()
-	if len(names) == 0 {
-		return Result{Name: "workflows.yaml", Status: Empty, Detail: "no workflows defined"}
-	}
-	return Result{Name: "workflows.yaml", Status: OK, Detail: fmt.Sprintf("%d workflow(s): %s", len(names), strings.Join(names, ", "))}
-}
 
 func checkDirWithCount(root, dir, pattern, label string) Result {
 	path := filepath.Join(root, dir)

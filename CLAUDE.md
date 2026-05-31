@@ -21,14 +21,13 @@ orc/
     health/                       workspace filesystem health checks
     state/                        STATE.yaml parsing and mutations
     workers/                      worker definition parsing and matching
-    workflow/                     workflows.yaml parsing (stage sequences, repair loops)
+    workflow/                     orc.yaml workflow section parsing (stage sequences, repair loops)
     stage/                        stage markdown file reading
     workspace/                    init, work, and template embedding
       templates/                  embedded workspace scaffold templates
         AGENTS.md, CLAUDE.md, ROUTER.md, TOOLS.md, RULES.md
         ORC.md                    agent state contract
-        orc.yaml                  workspace config — repos, paths, and purposes
-        workflows.yaml            named pipelines with stage sequences
+        orc.yaml                  workspace config — repos, workflows, and settings
         features/_template/       feature context pack template
         workers/                  worker definition templates
           _template.md
@@ -90,14 +89,14 @@ built, what's planned, and where we deliberately diverged from the original plan
 |------|-------------|
 | Workspace scaffold | `orc init` with embedded templates, `--with-sample-workers`, `--dry-run`, `--force` |
 | Configuration | `SETUP.md` — agent-driven setup (not in original design, added improvement) |
-| Health check | `orc health` — filesystem validation, setup status, `orc.yaml` repo check, `workflows.yaml` check, `stages/` count |
+| Health check | `orc health` — filesystem validation, setup status, `orc.yaml` check (repos + workflows), `stages/` count |
 | Feature lifecycle | `orc work`, `orc show`, `orc next`, `orc advance`, `orc wait`, `orc start`, `orc block`, `orc archive` |
 | Status dashboard | `orc status` — active and archived features, table view |
-| Worker routing | `workflows.yaml` owns default worker per stage; overridden by `stage.owner` or `orc next --worker` |
+| Worker routing | `orc.yaml` owns default worker per stage; overridden by `stage.owner` or `orc next --worker` |
 | Multi-product | Claude and Codex launch commands rendered from worker `product` field |
-| Workflows + stages | `workflows.yaml` defines named pipelines with stage sequences, advance mode, and per-stage worker |
-| Stage files | `stages/*.md` — plain markdown, no frontmatter; flow control lives entirely in `workflows.yaml` |
-| Repair loops | `repair_stages` section in `workflows.yaml` with `repairs`, `worker`, `advance`, `max_retries` |
+| Workflows + stages | `orc.yaml` defines named pipelines with stage sequences, advance mode, and per-stage worker |
+| Stage files | `stages/*.md` — plain markdown, no frontmatter; flow control lives entirely in `orc.yaml` |
+| Repair loops | `repair_stages` section in `orc.yaml` with `repairs`, `worker`, `advance`, `max_retries` |
 | Retry tracking | `stage_counts` map in STATE.yaml — incremented by `orc advance` |
 | State mutations | `state.Advance`, `state.Block`, `state.WaitForHuman`, `state.Start`, `state.SetStatus` with history entries |
 | Agent prompt scaffolding | Every `orc next` prompt includes preamble (read AGENTS.md + ORC.md, run `orc start`) and exact end-of-session command |

@@ -10,7 +10,7 @@ import (
 
 func writeWorkflowsYAML(t *testing.T, dir, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "workflows.yaml"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "orc.yaml"), []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
 }

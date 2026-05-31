@@ -498,7 +498,7 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		if stageCfg.Worker != "" {
 			fmt.Printf("Stage default worker %q not found in workers/\n", stageCfg.Worker)
 		}
-		fmt.Println("Set worker: in workflows.yaml or add a matching worker file.")
+		fmt.Println("Set worker: in orc.yaml or add a matching worker file.")
 		return nil
 	}
 

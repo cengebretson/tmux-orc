@@ -27,7 +27,6 @@ func TestInit_CreatesExpectedFiles(t *testing.T) {
 		"features/_template/TICKET.md",
 		"workers/_template.md",
 		"orc.yaml",
-		"workflows.yaml",
 		"ORC.md",
 		"stages/intake.md",
 		"stages/develop.md",

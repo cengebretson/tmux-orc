@@ -190,7 +190,7 @@ flowchart TD
 `manual ●` — agent calls `orc wait`; a human approves before continuing
 
 Most teams start with a manual gate after `develop` and flip everything else to `auto`
-as confidence grows. Advance mode is set per-stage in `workflows.yaml`.
+as confidence grows. Advance mode is set per-stage in `orc.yaml`.
 
 ---
 
@@ -281,10 +281,10 @@ my-workspace/
     pr-open.md       preflight checks, open PR, handoff for review
     pr-repair.md     fix CI failures, review feedback, conflicts
     qa-automation.md implement and run automated tests
-    # plain markdown — no frontmatter; flow control lives in workflows.yaml
+    # plain markdown — no frontmatter; flow control lives in orc.yaml
 
   orc.yaml           workspace config — repos, paths, and purposes
-  workflows.yaml     named pipelines: stage sequence, worker per stage, advance mode
+  orc.yaml     named pipelines: stage sequence, worker per stage, advance mode
   ORC.md             agent state contract — read at session start
 
   worktrees/         git worktrees for ticket branches (gitignored)
@@ -329,13 +329,13 @@ launch_mode: foreground
 Implements features, opens PRs, and repairs CI failures.
 ```
 
-`workflows.yaml` declares the default worker per stage via `worker: <id>` in each
+`orc.yaml` declares the default worker per stage via `worker: <id>` in each
 stage entry. `orc next` looks up that worker, builds the prompt, and launches it.
 
 Worker resolution order:
 1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
 2. `stage.owner` in STATE.yaml — set by a previous `orc advance --owner`
-3. `worker:` for the current stage in `workflows.yaml`
+3. `worker:` for the current stage in `orc.yaml`
 4. Fallback: match by `workflows:` or `stages:` list in worker frontmatter
 
 Use `--dry` to preview the command without launching.
