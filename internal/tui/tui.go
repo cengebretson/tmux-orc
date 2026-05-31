@@ -154,9 +154,9 @@ func New(root string) Model {
 		sectionItems: map[string][]sectionItem{},
 		expanded: map[string]bool{
 			"health":    false,
-			"workflows": false,
+			"workflows": true,
 			"workers":   false,
-			"routes":    false,
+			"routes":    true,
 		},
 		search: ti,
 		quote:  pickQuote(),
@@ -507,7 +507,7 @@ func (m Model) viewDashboard() string {
 	const logoW = 30
 	const rightBoxOuter = logoW + 4 // border (2) + 1-space padding each side (2)
 	const logoGap = 1
-	useLogo := outerW > rightBoxOuter+logoGap+44
+	useLogo := m.width > rightBoxOuter+logoGap+44
 
 	leftW := outerW
 	if useLogo {
@@ -700,7 +700,6 @@ func (m Model) viewDashboard() string {
 			helpItem("/", "search"),
 			helpItem("tab", "focus sections"),
 			helpItem("t", "attach"),
-			helpItem("a", "archived"),
 			helpItem("1-4", "expand/collapse"),
 	
 			helpItem("q", "quit"),
