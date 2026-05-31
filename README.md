@@ -1,7 +1,6 @@
 # orc
 
-Agentic workspace orchestrator. A Go CLI that scaffolds and manages a filesystem-based
-workspace for carrying feature work across agents, repos, and sessions.
+Keep feature work moving across agents, sessions, and repos — without losing context.
 
 ```
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -23,23 +22,49 @@ orc · workspace orchestrator
 
 ## What it is
 
-Agents lose context between sessions. `orc` solves this by keeping all state in
-files — `STATE.yaml`, markdown docs — not in memory or running services.
+Agentic workflows break down at the session boundary. An agent finishes a task,
+the session ends, and the next agent starts cold — no memory of what was decided,
+what was built, or what still needs fixing. You end up re-explaining the same
+context over and over, or the work drifts.
 
-The workspace is the source of truth. Agents read it to know what to do next.
-`orc` reads it to tell you (or an agent) exactly which worker should run and
-what command to use. Policy lives in `RULES.md`, `AGENTS.md`, and worker
-definitions — not in code.
+`orc` fixes this with a **feature folder**: a durable context pack that travels
+with the ticket. Every stage reads what the previous one wrote, then writes its
+own outputs into a named subfolder. The developer's implementation summary lands
+in `develop/HANDOFF.md`. The reviewer's verdict lands in `code-review/REVIEW.md`.
+The PR URL lands in `pr-open/PR.md`. Any agent — or human — can pick up mid-flight
+and know exactly where things stand without asking anyone.
 
-The quality of the system depends on the quality of the stage docs. A
-well-written stage file has clear exit criteria, explicit output definitions,
-unambiguous signals agents can read (like a `verdict:` line), and exact commands
-for every outcome. The sample stages are a starting point — tune them to your
-stack, your review standards, and your team's process. They're just markdown files:
-edit one and the next agent session picks up the new instructions immediately.
+## Why orc?
 
-Works equally well with **Claude** and **Codex**. Every decision that could
-couple the workspace to a single agent product is avoided by design.
+**Context survives everything.** Session ends, agent switches, restarts — the
+feature folder is the source of truth. `orc start` / `orc show --json` gives any
+agent a complete picture in seconds.
+
+**Each stage has one job and clear handoffs.** Stage docs define inputs, outputs,
+exit criteria, and the exact `orc advance` command to run when done. Agents don't
+decide what to do next — the workspace tells them.
+
+**Policy lives in files, not code.** Stage docs are plain markdown. Change the
+review criteria, add a preflight check, swap models — edit the file and the next
+session picks it up immediately. No redeploy, no config flags.
+
+**Right agent for each job.** A fast model for implementation, a smarter one for
+review, a specialist for QA. Each worker is configured independently in a markdown
+file. Use `--worker` to override for a single run.
+
+**Human-in-the-loop where it counts.** `orc wait` creates explicit review gates.
+Agents call it when they need a human decision — not at every step, and not never.
+`orc advance` continues when you're ready.
+
+**Agent-agnostic by design.** Works with Claude, Codex, or anything that can read
+a file and run a shell command. No SDK dependency, no lock-in.
+
+---
+
+The quality of the system depends on the quality of the stage docs. A well-written
+stage file has clear exit criteria, explicit output definitions, and exact commands
+for every outcome. The samples are a starting point — tune them to your stack, your
+review standards, and your team's process.
 
 ## Install
 
