@@ -498,11 +498,11 @@ func runWork(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Created: features/%s/\n\n", result.Slug)
 
+	cfg, _ := config.Load(root)
+
 	useTmux := workTmux
-	if !useTmux {
-		if cfg, err := config.Load(root); err == nil {
-			useTmux = cfg.Settings.AutoTmux
-		}
+	if !useTmux && cfg != nil {
+		useTmux = cfg.Settings.AutoTmux
 	}
 	if useTmux {
 		if err := state.SetRuntime(result.FeatureDir, result.Slug); err != nil {
@@ -515,7 +515,8 @@ func runWork(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if workNext {
+	useNext := workNext || (cfg != nil && cfg.Settings.AutoNext)
+	if useNext {
 		s, err := state.Load(result.FeatureDir)
 		if err != nil {
 			return err

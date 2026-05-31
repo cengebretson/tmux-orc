@@ -8,6 +8,7 @@
 #   default_workflow: default     # workflow used by `orc work` when --workflow is omitted
 #   auto_archive: false           # archive tickets automatically when the last stage completes
 #   auto_tmux: false              # always use tmux for new tickets (same as orc work --tmux)
+#   auto_next: false              # always launch the first stage after orc work (same as orc work --next)
 #   tui_refresh: 60               # TUI auto-refresh interval in seconds (default: 60)
 #   theme: catppuccin-mocha       # TUI color theme (default: catppuccin-mocha)
 

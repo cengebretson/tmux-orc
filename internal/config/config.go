@@ -22,6 +22,7 @@ type Settings struct {
 	DefaultWorkflow string   `yaml:"default_workflow"`
 	AutoArchive     bool     `yaml:"auto_archive"`
 	AutoTmux        bool     `yaml:"auto_tmux"`
+	AutoNext        bool     `yaml:"auto_next"`
 	TuiRefresh      int      `yaml:"tui_refresh"` // seconds; 0 means use default (60)
 	Quotes          []string `yaml:"quotes"`
 	Theme           string   `yaml:"theme"` // e.g. "catppuccin-mocha"; defaults to catppuccin-mocha
