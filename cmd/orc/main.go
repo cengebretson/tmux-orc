@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -44,7 +45,7 @@ var rootCmd = &cobra.Command{
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Scaffold a new orc workspace",
+	Short: "Scaffold a new orc workspace — asks questions interactively when run in a terminal",
 	RunE:  runInit,
 }
 
@@ -210,8 +211,8 @@ var helpAllCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initWorkspace, "workspace", ".", "Workspace root directory (default: current directory)")
-	initCmd.Flags().BoolVar(&initWithSampleWorkers, "with-sample-workers", false, "Include sample worker files")
+	initCmd.Flags().StringVar(&initWorkspace, "workspace", ".", "Workspace root directory (skips the interactive path prompt)")
+	initCmd.Flags().BoolVar(&initWithSampleWorkers, "with-sample-workers", false, "Include sample worker files (skips the interactive prompt)")
 	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Print what would be created without writing files")
 	initCmd.Flags().BoolVar(&initForce, "force", false, "Overwrite existing generated files")
 
@@ -255,8 +256,26 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	if cmd.Parent() != nil {
-		fmt.Print(banner)
+	fmt.Print(banner)
+
+	interactive := isTTY()
+
+	// Workspace path — prompt if not explicitly set and running interactively.
+	if !cmd.Flags().Changed("workspace") && interactive {
+		cwd, _ := os.Getwd()
+		ans := promptLine(fmt.Sprintf("Workspace path [%s]: ", cwd))
+		if ans == "" {
+			initWorkspace = cwd
+		} else {
+			initWorkspace = ans
+		}
+	}
+
+	// Sample workers — prompt if not explicitly set and running interactively.
+	if !cmd.Flags().Changed("with-sample-workers") && interactive {
+		ans := promptLine("Include sample workers? [y/N]: ")
+		ans = strings.ToLower(strings.TrimSpace(ans))
+		initWithSampleWorkers = ans == "y" || ans == "yes"
 	}
 
 	opts := workspace.InitOptions{
@@ -267,6 +286,25 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	return workspace.Init(opts)
+}
+
+// isTTY returns true when stdin is an interactive terminal.
+func isTTY() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// promptLine prints the prompt and reads one line from stdin.
+func promptLine(prompt string) string {
+	fmt.Print(prompt)
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		return strings.TrimSpace(scanner.Text())
+	}
+	return ""
 }
 
 func runHealth(cmd *cobra.Command, args []string) error {
