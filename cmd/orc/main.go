@@ -1074,6 +1074,10 @@ func runTmuxKill(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := state.ClearRuntime(featureDir); err != nil {
+		fmt.Printf("warning: could not clear runtime from STATE.yaml: %v\n", err)
+	}
+
 	fmt.Printf("Killed session: %s\n", s.Slug)
 	return nil
 }
