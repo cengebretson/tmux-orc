@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "→ tidy"
+go mod tidy
+if ! git diff --quiet go.mod go.sum; then
+  echo "go.mod or go.sum was updated by go mod tidy — stage the changes and re-commit"
+  exit 1
+fi
+
 echo "→ lint"
 golangci-lint run ./...
 
