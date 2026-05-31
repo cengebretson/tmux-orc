@@ -42,8 +42,8 @@ func CreateSession(slug, featureDir string, workflows []string) error {
 		}
 	}
 
-	// Select the first window
-	exec.Command("tmux", "select-window", "-t", slug+":"+workflows[0]).Run()
+	// Select the first window — ignore error if focus fails (non-fatal)
+	_ = exec.Command("tmux", "select-window", "-t", slug+":"+workflows[0]).Run()
 	return nil
 }
 
@@ -110,18 +110,20 @@ func writeScript(runDir string, argv []string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("temp script: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	var parts []string
 	for _, arg := range argv {
 		parts = append(parts, shellQuote(arg))
 	}
 	// cd to the right directory, run the command, then self-delete the script.
-	fmt.Fprintf(f, "#!/usr/bin/env bash\ncd %s\n%s\nrm -f %s\n",
+	if _, err := fmt.Fprintf(f, "#!/usr/bin/env bash\ncd %s\n%s\nrm -f %s\n",
 		shellQuote(runDir),
 		strings.Join(parts, " "),
 		shellQuote(f.Name()),
-	)
+	); err != nil {
+		return "", fmt.Errorf("write script: %w", err)
+	}
 	return f.Name(), nil
 }
 

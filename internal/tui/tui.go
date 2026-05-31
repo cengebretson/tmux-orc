@@ -130,7 +130,6 @@ type Model struct {
 	searching bool
 
 	quote string
-	err   error
 }
 
 type detailFile struct {
@@ -594,8 +593,6 @@ func (m Model) viewDashboard() string {
 	if useLogo {
 		leftStr := left.String()
 		leftHeight := lipgloss.Height(leftStr)
-
-		const rightInnerW = logoW + 2
 
 		logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
 		quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(overlay0)).Italic(true)
@@ -1235,7 +1232,7 @@ func tickEvery(d time.Duration) tea.Cmd {
 // in the named workflow chain, or empty strings if it is the last stage.
 func nextStageFor(chains []workflowChain, workflowName, stageName string) (name, advance string) {
 	for _, c := range chains {
-		if c.name != workflowName && !(workflowName == "" || workflowName == "default") {
+		if c.name != workflowName && workflowName != "" && workflowName != "default" {
 			continue
 		}
 		for i, step := range c.steps {

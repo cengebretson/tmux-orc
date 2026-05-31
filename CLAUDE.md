@@ -21,7 +21,6 @@ orc/
     health/                       workspace filesystem health checks
     state/                        STATE.yaml parsing and mutations
     workers/                      worker definition parsing and matching
-    workflow/                     orc.yaml workflow section parsing (stage sequences, repair loops)
     stage/                        stage markdown file reading
     workspace/                    init, work, and template embedding
       templates/                  embedded workspace scaffold templates
@@ -34,6 +33,20 @@ orc/
           sample/                 sample workers (--with-sample-workers)
         stages/                   stage docs (plain markdown, no frontmatter)
   go.mod
+```
+
+## Linting and Dev Workflow
+
+```bash
+make lint    # golangci-lint (errcheck, govet, staticcheck, unused, ineffassign)
+make test    # go test ./...
+make check   # lint + test together
+```
+
+Install the pre-commit hook once after cloning:
+
+```bash
+ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
 ```
 
 ## Build and Run

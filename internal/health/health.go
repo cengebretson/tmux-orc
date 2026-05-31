@@ -135,13 +135,6 @@ func checkFile(root, name string) Result {
 	return Result{Name: name, Status: Missing, Detail: "missing — run `orc init`"}
 }
 
-func checkDir(root, name string) Result {
-	path := filepath.Join(root, name)
-	if info, err := os.Stat(path); err == nil && info.IsDir() {
-		return Result{Name: name + "/", Status: OK}
-	}
-	return Result{Name: name + "/", Status: Missing, Detail: "missing"}
-}
 
 func checkFeatures(root string) Result {
 	path := filepath.Join(root, "features")

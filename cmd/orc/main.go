@@ -795,13 +795,14 @@ func runShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Next")
-	if s.Status == "waiting_for_human" {
+	switch s.Status {
+	case "waiting_for_human":
 		fmt.Printf("  Waiting: %s\n", s.NextAction.Prompt)
 		fmt.Println("  Run `orc next` after resolving to continue.")
-	} else if s.Status == "blocked" {
+	case "blocked":
 		fmt.Printf("  Blocked: %s\n", s.NextAction.Prompt)
 		fmt.Println("  Run `orc next` after resolving to continue.")
-	} else {
+	default:
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
 		wfCfg, _ := config.Load(root)
 		pname := resolveWorkflow(root, s.Workflow)
@@ -1220,15 +1221,6 @@ func printJSON(v any) error {
 	return enc.Encode(v)
 }
 
-func withoutWorker(list []*workers.Worker, id string) []*workers.Worker {
-	var out []*workers.Worker
-	for _, w := range list {
-		if w.ID != id {
-			out = append(out, w)
-		}
-	}
-	return out
-}
 
 func resolveRoot(path string) (string, error) {
 	if path == "." {

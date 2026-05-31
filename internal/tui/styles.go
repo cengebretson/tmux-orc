@@ -49,11 +49,6 @@ const (
 )
 
 var (
-	// Base styles
-	styleBase = lipgloss.NewStyle().
-			Background(lipgloss.Color(base)).
-			Foreground(lipgloss.Color(text))
-
 	styleDim = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(overlay0))
 
@@ -78,9 +73,6 @@ var (
 	styleRowSelected = lipgloss.NewStyle().
 				Background(lipgloss.Color(surface0)).
 				Foreground(lipgloss.Color(text))
-
-	styleRowNormal = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(text))
 
 	// Status colors
 	styleStatusReady = lipgloss.NewStyle().
@@ -112,11 +104,6 @@ var (
 			Foreground(lipgloss.Color(red))
 
 	// Detail view
-	styleDetailBox = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(surface1)).
-			Padding(0, 1)
-
 	styleDetailLabel = lipgloss.NewStyle().
 				Foreground(lipgloss.Color(subtext0))
 
