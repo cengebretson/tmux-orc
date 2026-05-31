@@ -1,0 +1,28 @@
+ticket: STORY-123
+slug: STORY-123-add-user-auth
+status: in_progress
+stage:
+  owner: bob-developer
+  workflow: develop
+repos:
+  app:
+    main: ../../projects/my-app
+    worktree: ../../worktrees/my-app/STORY-123-add-user-auth
+    branch: feature/STORY-123-add-user-auth
+next_action:
+  worker: bob-developer
+  prompt: Implement JWT auth middleware per SPEC.md — token validation and refresh flow are the priority
+  cwd: ../../worktrees/my-app/STORY-123-add-user-auth
+history:
+  - at: "2026-05-28T09:00:00-05:00"
+    workflow: intake
+    owner: fred-documentor
+    result: ticket context loaded, SPEC.md and PLAN.md written
+  - at: "2026-05-29T14:22:00-05:00"
+    workflow: develop
+    owner: bob-developer
+    result: waiting_for_human — auth scope unclear, need product decision on refresh token TTL
+  - at: "2026-05-30T09:10:00-05:00"
+    workflow: develop
+    owner: bob-developer
+    result: resumed after human clarified TTL should be 7 days
