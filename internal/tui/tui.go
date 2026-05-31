@@ -33,8 +33,10 @@ const (
 
 type tickMsg time.Time
 type dataMsg struct {
-	features    []*featureRow
-	healthItems []health.Result
+	features      []*featureRow
+	healthItems   []health.Result
+	workflowNames []string
+	workerNames   []string
 }
 
 // ── data types ───────────────────────────────────────────────────
@@ -53,6 +55,8 @@ type Model struct {
 	view         viewState
 	features     []*featureRow
 	healthItems  []health.Result
+	workflowNames []string
+	workerNames   []string
 	cursor       int
 	showArchived bool
 	lastRefresh  time.Time
@@ -114,8 +118,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dataMsg:
 		m.features = msg.features
 		m.healthItems = msg.healthItems
+		m.workflowNames = msg.workflowNames
+		m.workerNames = msg.workerNames
 		m.lastRefresh = time.Now()
-		// clamp cursor
 		if rows := m.visibleFeatures(); m.cursor >= len(rows) && len(rows) > 0 {
 			m.cursor = len(rows) - 1
 		}
@@ -231,19 +236,16 @@ func (m Model) View() string {
 // ── Dashboard view ────────────────────────────────────────────────
 
 func (m Model) viewDashboard() string {
-	if m.width == 0 {
-		return ""
-	}
-	outerW := m.width - 2 // 1-cell left margin each side
-	innerW := outerW - 2  // subtract the two │ border chars
+	outerW := m.width - 2
+	innerW := outerW - 2
 
 	var b strings.Builder
 
-	// ── Header box: logo left, title + stats right ───────────────────
-	ago := time.Since(m.lastRefresh).Round(time.Second)
-	logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve)).Render(logo)
-	logoW := lipgloss.Width(strings.SplitN(logo, "\n", 2)[0]) // 30
+	// ── Header box: health info left, logo right ──────────────────────
+	const logoW = 32 // logo is 30 wide + 2 gap
+	infoW := innerW - logoW
 
+	ago := time.Since(m.lastRefresh).Round(time.Second)
 	active, blocked := 0, 0
 	for _, f := range m.features {
 		switch f.s.Status {
@@ -254,28 +256,36 @@ func (m Model) viewDashboard() string {
 		}
 	}
 
-	infoW := innerW - logoW - 3
-	infoLines := []string{
-		styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator"),
+	var infoLines []string
+	infoLines = append(infoLines,
+		styleHeader.Render("orc")+styleDim.Render("  workspace orchestrator"),
 		"",
-		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features))) +
-			styleDim.Render("  ·  ") +
-			styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
-			styleDim.Render("  ·  ") +
-			styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)),
+		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features)))+
+			styleDim.Render("  ·  ")+
+			styleHealthOK.Render(fmt.Sprintf("%d active", active))+
+			styleDim.Render("  ·  ")+
+			styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked))+
+			styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago)),
 		"",
-		styleDim.Render(fmt.Sprintf("↺ %s ago", ago)),
-	}
-	infoCol := lipgloss.NewStyle().Width(infoW).Render(strings.Join(infoLines, "\n"))
-	headerContent := lipgloss.JoinHorizontal(lipgloss.Top,
-		logoRendered+strings.Repeat(" ", 3),
-		infoCol,
 	)
-	b.WriteString("\n" + drawBox("", strings.Split(headerContent, "\n"), outerW) + "\n")
+	infoLines = append(infoLines, m.renderHealthLines(infoW)...)
+	if len(m.workflowNames) > 0 {
+		infoLines = append(infoLines, "")
+		infoLines = append(infoLines, renderNameList(
+			styleDetailLabel.Render("workflows"), m.workflowNames, infoW,
+		)...)
+	}
+	if len(m.workerNames) > 0 {
+		infoLines = append(infoLines, renderNameList(
+			styleDetailLabel.Render("workers  "), m.workerNames, infoW,
+		)...)
+	}
 
-	// ── Health box ────────────────────────────────────────────────────
-	healthLines := m.renderHealthLines(innerW - 2)
-	b.WriteString(drawBox(styleSection.Render(" Health "), healthLines, outerW) + "\n")
+	logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve)).Width(logoW).Render(logo)
+	infoCol := lipgloss.NewStyle().Width(infoW).Render(strings.Join(infoLines, "\n"))
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, infoCol, logoRendered)
+
+	b.WriteString("\n" + drawBox("", strings.Split(headerContent, "\n"), outerW) + "\n")
 
 	// ── Features box ─────────────────────────────────────────────────
 	archiveToggle := styleDim.Render("  [a] show archived")
@@ -307,47 +317,30 @@ func (m Model) viewDashboard() string {
 	return b.String()
 }
 
-// drawBox draws a rounded box with an optional title in the top border.
-// title should be a pre-rendered (ANSI) string that starts with a space, e.g. " Section ".
-// lines is the content — each line is padded to fill innerW.
-// outerW is the total width including the two border characters.
-func drawBox(title string, lines []string, outerW int) string {
+// drawBox renders a rounded lipgloss box of outerW total width.
+// If title is non-empty it becomes the first content line, separated from
+// the remaining lines by a full-width divider. This avoids measuring ANSI
+// strings for border placement — lipgloss handles all width management.
+func drawBox(title string, contentLines []string, outerW int) string {
 	innerW := outerW - 2
-	titleW := lipgloss.Width(title)
 
-	// Top border: ╭─ title ──────╮  (or ╭──────────────╮ if no title)
-	var topLine string
-	if title == "" {
-		topLine = styleDivider.Render("╭" + strings.Repeat("─", innerW) + "╮")
-	} else {
-		right := innerW - titleW - 1
-		if right < 1 {
-			right = 1
+	var all []string
+	if title != "" {
+		all = append(all, title)
+		if len(contentLines) > 0 {
+			all = append(all, styleDivider.Render(strings.Repeat("─", innerW)))
 		}
-		topLine = styleDivider.Render("╭─") + title + styleDivider.Render(strings.Repeat("─", right)+"╮")
 	}
+	all = append(all, contentLines...)
 
-	// Content lines with side borders and right-padding
-	bodyLines := make([]string, len(lines))
-	for i, line := range lines {
-		pad := innerW - lipgloss.Width(line)
-		if pad < 0 {
-			pad = 0
-		}
-		bodyLines[i] = styleDivider.Render("│") + line + strings.Repeat(" ", pad) + styleDivider.Render("│")
-	}
-
-	// Bottom border
-	bottomLine := styleDivider.Render("╰" + strings.Repeat("─", innerW) + "╯")
-
-	all := make([]string, 0, len(lines)+2)
-	all = append(all, topLine)
-	all = append(all, bodyLines...)
-	all = append(all, bottomLine)
-	return strings.Join(all, "\n")
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(surface1)).
+		Width(innerW).
+		Render(strings.Join(all, "\n"))
 }
 
-// renderHealthLines returns health items as wrapped rows, fitting within maxW.
+// renderHealthLines wraps health items into rows fitting within maxW.
 func (m Model) renderHealthLines(maxW int) []string {
 	var parts []string
 	for _, item := range m.healthItems {
@@ -372,7 +365,7 @@ func (m Model) renderHealthLines(maxW int) []string {
 	var rows []string
 	row := ""
 	rowW := 0
-	for i, p := range parts {
+	for _, p := range parts {
 		pW := lipgloss.Width(p)
 		if rowW > 0 && rowW+sepW+pW > maxW {
 			rows = append(rows, row)
@@ -385,9 +378,39 @@ func (m Model) renderHealthLines(maxW int) []string {
 		}
 		row += p
 		rowW += pW
-		_ = i
 	}
 	if row != "" {
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// renderNameList renders a labelled list of names as wrapped lines.
+func renderNameList(label string, names []string, maxW int) []string {
+	sep := styleDivider.Render("  ·  ")
+	sepW := lipgloss.Width(sep)
+	labelW := lipgloss.Width(label)
+	indent := strings.Repeat(" ", labelW+2)
+
+	var rows []string
+	row := label + "  "
+	rowW := labelW + 2
+	for _, name := range names {
+		chip := styleSubtext.Render(name)
+		chipW := lipgloss.Width(chip)
+		if rowW > labelW+2 && rowW+sepW+chipW > maxW {
+			rows = append(rows, row)
+			row = indent
+			rowW = labelW + 2
+		}
+		if rowW > labelW+2 {
+			row += sep
+			rowW += sepW
+		}
+		row += chip
+		rowW += chipW
+	}
+	if rowW > labelW+2 {
 		rows = append(rows, row)
 	}
 	return rows
@@ -401,7 +424,7 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 		wWorker   = 20
 	)
 
-	header := fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %s",
+	header := fmt.Sprintf(" %-*s  %-*s  %-*s  %-*s  %s",
 		wTicket, styleTableHeader.Render("Ticket"),
 		wStatus, styleTableHeader.Render("Status"),
 		wWorkflow, styleTableHeader.Render("Workflow"),
@@ -409,7 +432,7 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 		styleTableHeader.Render("Tmux"),
 	)
 
-	div := styleDivider.Render(strings.Repeat("─", w))
+	div := " " + styleDivider.Render(strings.Repeat("─", w-1))
 
 	var lines []string
 	lines = append(lines, header, div)
@@ -437,7 +460,7 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 			worker = styleDim.Render("—")
 		}
 
-		line := fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %s",
+		line := fmt.Sprintf(" %-*s  %-*s  %-*s  %-*s  %s",
 			wTicket, truncate(s.Ticket, wTicket),
 			wStatus+10, statusCell, // +10 for ANSI escape overhead
 			wWorkflow, truncate(s.Stage.Workflow, wWorkflow),
@@ -465,12 +488,10 @@ func (m Model) viewDetail() string {
 	innerW := outerW - 2
 	var b strings.Builder
 
-	// Title bar
-	slugTitle := styleDetailTitle.Render(" " + s.Slug + " ")
-	b.WriteString("\n" + drawBox(slugTitle, nil, outerW) + "\n")
+	b.WriteString("\n" + drawBox(styleDetailTitle.Render(" "+s.Slug+" "), nil, outerW) + "\n")
 
 	// State fields
-	stateLines := []string{}
+	var stateLines []string
 	fields := []struct{ label, value string }{
 		{" Ticket  ", s.Ticket},
 		{" Status  ", statusStyle(s.Status).Render(statusIcon(s.Status) + " " + s.Status)},
@@ -534,18 +555,14 @@ func (m Model) viewDetail() string {
 			}
 			chips += chip + " "
 		}
-		hint := ""
+		fileLines := []string{chips}
 		if m.fileIdx < len(m.detailFiles) {
 			f := m.detailFiles[m.fileIdx]
 			if fileExists(f.path) {
-				hint = " " + styleDim.Render("enter to view "+f.label)
+				fileLines = append(fileLines, " "+styleDim.Render("enter to view "+f.label))
 			} else {
-				hint = " " + styleDim.Render(f.label+" does not exist yet")
+				fileLines = append(fileLines, " "+styleDim.Render(f.label+" does not exist yet"))
 			}
-		}
-		fileLines := []string{chips}
-		if hint != "" {
-			fileLines = append(fileLines, hint)
 		}
 		b.WriteString(drawBox(styleSection.Render(" Files "), fileLines, outerW) + "\n")
 	}
@@ -593,7 +610,35 @@ func loadData(root string) tea.Cmd {
 	return func() tea.Msg {
 		features := collectFeatures(root)
 		report := health.Run(root)
-		return dataMsg{features: features, healthItems: report.Results}
+
+		// workflow names
+		var wfNames []string
+		wfDir := filepath.Join(root, "workflows")
+		if entries, err := os.ReadDir(wfDir); err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					wfNames = append(wfNames, e.Name())
+				}
+			}
+		}
+
+		// worker names
+		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
+		var workerNames []string
+		for _, w := range allWorkers {
+			name := w.Name
+			if name == "" {
+				name = w.ID
+			}
+			workerNames = append(workerNames, name)
+		}
+
+		return dataMsg{
+			features:      features,
+			healthItems:   report.Results,
+			workflowNames: wfNames,
+			workerNames:   workerNames,
+		}
 	}
 }
 
@@ -648,7 +693,6 @@ func collectFeatures(root string) []*featureRow {
 			if err != nil {
 				continue
 			}
-			// resolve worker name
 			workerName := ""
 			wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
 			workerID := s.Stage.Owner
@@ -690,10 +734,7 @@ func buildFileList(featureDir string, s *state.State) []detailFile {
 		{"qa/QA_PLAN.md", filepath.Join(featureDir, "qa", "QA_PLAN.md")},
 		{"qa/QA_RESULT.md", filepath.Join(featureDir, "qa", "QA_RESULT.md")},
 	}
-	// only show files that exist or are "expected" core ones
-	core := map[string]bool{
-		"TICKET.md": true, "SPEC.md": true, "PLAN.md": true,
-	}
+	core := map[string]bool{"TICKET.md": true, "SPEC.md": true, "PLAN.md": true}
 	var out []detailFile
 	for _, f := range candidates {
 		if fileExists(f.path) || core[f.label] {
