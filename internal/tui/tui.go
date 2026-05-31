@@ -238,18 +238,40 @@ func (m Model) viewDashboard() string {
 
 	var b strings.Builder
 
-	// Header bar
-	left := styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator")
+	// Header: logo left, title/stats right — inside a box
 	ago := time.Since(m.lastRefresh).Round(time.Second)
-	right := styleDim.Render(fmt.Sprintf("↺ %s ago", ago))
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 4
-	if gap < 0 {
-		gap = 0
+	logoCol := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(mauve)).
+		MarginRight(2).
+		Render(logo)
+
+	active, blocked := 0, 0
+	for _, f := range m.features {
+		if f.s.Status == "in_progress" || f.s.Status == "ready" || f.s.Status == "waiting_for_human" {
+			active++
+		}
+		if f.s.Status == "blocked" {
+			blocked++
+		}
 	}
-	header := styleHeaderBar.Width(m.width).Render(
-		left + strings.Repeat(" ", gap) + right,
-	)
-	b.WriteString(header + "\n")
+	titleLines := []string{
+		styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator"),
+		"",
+		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features))) +
+			styleDim.Render("  ·  ") +
+			styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
+			styleDim.Render("  ·  ") +
+			styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)),
+		"",
+		styleDim.Render(fmt.Sprintf("↺ refreshed %s ago", ago)),
+	}
+	infoCol := lipgloss.NewStyle().
+		Width(innerW - lipgloss.Width(logoCol) - 4).
+		Render(strings.Join(titleLines, "\n"))
+
+	headerInner := lipgloss.JoinHorizontal(lipgloss.Center, logoCol, infoCol)
+	headerBox := styleBox.Width(innerW).Render(headerInner)
+	b.WriteString("\n" + styleSectionBox("", headerBox, innerW) + "\n")
 
 	// Health box
 	healthTitle := styleSection.Render(" Health ")
