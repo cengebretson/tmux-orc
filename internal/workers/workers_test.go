@@ -44,7 +44,7 @@ func TestLoad_ParsesFrontmatter(t *testing.T) {
 	}
 }
 
-func TestMatch_ByWorkflow(t *testing.T) {
+func TestMatch_ByStage(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
 
 	matched := workers.Match(all, "develop")
@@ -77,9 +77,37 @@ func TestMatch_PRRepair(t *testing.T) {
 func TestMatch_NoMatch(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
 
-	matched := workers.Match(all, "nonexistent-workflow")
+	matched := workers.Match(all, "nonexistent-stage")
 	if len(matched) != 0 {
 		t.Errorf("expected no matches, got %d", len(matched))
+	}
+}
+
+func TestMatch_WorkflowsFieldIgnoredForStageMatching(t *testing.T) {
+	// workflows: in worker frontmatter is reserved for pipeline names.
+	// It must not be used to match stage names — only stages: does that.
+	w := &workers.Worker{
+		ID:        "pipeline-only",
+		Workflows: []string{"develop"}, // "develop" here is a pipeline name, not a stage
+		Stages:    []string{},          // no stage restriction set
+	}
+	// With no stages: restriction, should match any stage including "develop"
+	// (because the worker has no stage filter, not because workflows: matched).
+	matched := workers.Match([]*workers.Worker{w}, "develop")
+	if len(matched) != 1 {
+		t.Errorf("worker with no stages: restriction should match any stage, got %d matches", len(matched))
+	}
+
+	// But a worker whose workflows: lists "develop" and stages: lists something else
+	// should NOT match the "develop" stage.
+	w2 := &workers.Worker{
+		ID:        "stage-filtered",
+		Workflows: []string{"develop"},   // pipeline name
+		Stages:    []string{"qa-automation"}, // only handles qa-automation stage
+	}
+	matched2 := workers.Match([]*workers.Worker{w2}, "develop")
+	if len(matched2) != 0 {
+		t.Errorf("workflows: field must not match stage names; expected 0 matches, got %d", len(matched2))
 	}
 }
 

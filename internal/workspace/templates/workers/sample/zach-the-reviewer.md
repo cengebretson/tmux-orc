@@ -5,10 +5,8 @@ product: claude
 kind: agent
 model: claude-sonnet-4-6
 cost_tier: medium
-workflows:
-  - code-review
 stages:
-  - code_review
+  - code-review
 launch_mode: foreground
 ---
 

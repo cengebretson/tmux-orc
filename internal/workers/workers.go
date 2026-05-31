@@ -47,11 +47,12 @@ func Load(workersDir string) ([]*Worker, error) {
 	return workers, nil
 }
 
-// Match returns workers that support the given workflow.
-func Match(workers []*Worker, workflow string) []*Worker {
+// Match returns workers whose stages: list includes the given stage name,
+// or workers with no stages: restriction (matches any stage).
+func Match(workers []*Worker, stageName string) []*Worker {
 	var matched []*Worker
 	for _, w := range workers {
-		if supportsWorkflow(w, workflow) {
+		if supportsStage(w, stageName) {
 			matched = append(matched, w)
 		}
 	}
@@ -148,17 +149,15 @@ func extractFrontmatter(content string) (string, error) {
 	return strings.TrimSpace(rest[:end]), nil
 }
 
-func supportsWorkflow(w *Worker, stage string) bool {
-	if len(w.Workflows) == 0 && len(w.Stages) == 0 {
+// supportsStage reports whether a worker handles the given stage name.
+// A worker with no stages: list matches any stage (no restriction).
+// workflows: is reserved for pipeline names and is not used for stage matching.
+func supportsStage(w *Worker, stageName string) bool {
+	if len(w.Stages) == 0 {
 		return true // no restriction
 	}
-	for _, wf := range w.Workflows {
-		if wf == stage {
-			return true
-		}
-	}
 	for _, s := range w.Stages {
-		if s == stage {
+		if s == stageName {
 			return true
 		}
 	}

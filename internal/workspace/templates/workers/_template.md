@@ -8,6 +8,10 @@ thinking: medium
 cost_tier: medium
 default_tmux_window: claude
 launch_mode: foreground
+# stages: list of stage names this worker handles (develop, code-review, etc.)
+#   Omit to match any stage. Used by orc next fallback worker selection.
+# workflows: list of pipeline names (default, hotfix, etc.) — reserved for
+#   future pipeline-level routing; not used for stage matching.
 ---
 
 # Worker Display Name
