@@ -46,9 +46,42 @@ stories on worker detail view, interactive stage drill-in from workflow detail
 
 ### Agent completion notification
 
-Terminal bell, tmux alert, or webhook when an agent finishes a stage. Most
-useful in `--tmux` mode where sessions run unattended. Controlled via
-`settings.notify` in `orc.yaml`.
+Fire a user-defined shell command when a ticket transitions state. Most useful
+in `--tmux` mode where sessions run unattended and the user needs a signal that
+work is ready for review or is blocked.
+
+#### Config shape (`orc.yaml`)
+
+```yaml
+settings:
+  notify:
+    on: [blocked, complete]          # events: blocked | complete | error | all
+    command: "notify-send 'orc' '{{ticket}} {{event}}'"
+```
+
+Template variables available in `command`:
+- `{{ticket}}` — ticket ID (e.g. `STORY-123`)
+- `{{slug}}` — full feature slug (e.g. `STORY-123-add-login`)
+- `{{event}}` — event name (`blocked`, `complete`, `error`)
+- `{{stage}}` — stage name at the time of the event
+- `{{workflow}}` — workflow name
+
+#### Events
+
+| Event | When it fires |
+|-------|--------------|
+| `complete` | `orc advance` moves to the next stage (or archives if last) |
+| `blocked` | `orc wait` writes a `waiting_for_human` or `blocked` status |
+| `error` | future — agent explicitly signals failure |
+| `all` | shorthand for all of the above |
+
+#### Implementation notes
+
+- Add `NotifySettings` struct to `internal/config` with `On []string` and `Command string`
+- Add `Notify NotifySettings yaml:"notify"` to `Settings`
+- Add `internal/notify` package: `Fire(cfg *config.NotifySettings, event, ticket, slug, stage, workflow string)` — expands template vars, checks `On` list, runs command via `os/exec` with a short timeout
+- Call `notify.Fire` in `runAdvance` and `runWait` in `cmd/orc/main.go` after state is written
+- No-op when `command` is empty or event not in `on` list
 
 **Effort:** Medium.
 
