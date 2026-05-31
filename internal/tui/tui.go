@@ -17,6 +17,7 @@ import (
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/cengebretson/orc/internal/workflow"
+	"gopkg.in/yaml.v3"
 )
 
 // ── view states ──────────────────────────────────────────────────
@@ -311,7 +312,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				items := m.sectionItems[m.sectionFocus]
 				if m.sectionCursor < len(items) {
 					f := items[m.sectionCursor]
-					content, err := renderFile(f.path)
+					var content string
+					var err error
+					if m.sectionFocus == "workers" {
+						content, err = renderWorkerFile(f.path, m.width-4)
+					} else {
+						content, err = renderFile(f.path)
+					}
 					if err != nil {
 						content = styleHealthErr.Render("could not read: " + err.Error())
 					}
@@ -1331,6 +1338,104 @@ func renderFile(path string) (string, error) {
 		return string(data), nil
 	}
 	return out, nil
+}
+
+// renderWorkerFile renders a worker .md file as a frontmatter info box followed
+// by the markdown body. width is the available viewport width.
+func renderWorkerFile(path string, width int) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	raw := string(data)
+	body := raw
+
+	// Split frontmatter from body.
+	var w workers.Worker
+	hasFM := false
+	if strings.HasPrefix(strings.TrimSpace(raw), "---") {
+		content := strings.TrimSpace(raw)[3:]
+		if end := strings.Index(content, "\n---"); end != -1 {
+			fm := strings.TrimSpace(content[:end])
+			if e := yaml.Unmarshal([]byte(fm), &w); e == nil {
+				hasFM = true
+				rest := content[end+4:]
+				body = strings.TrimSpace(rest)
+			}
+		}
+	}
+
+	var sb strings.Builder
+
+	if hasFM {
+		// Build info rows: label → value pairs.
+		type row struct{ label, value string }
+		var rows []row
+		add := func(label, value string) {
+			if value != "" {
+				rows = append(rows, row{label, value})
+			}
+		}
+		add("id", w.ID)
+		add("product", w.Product)
+		add("model", w.Model)
+		add("cost tier", w.CostTier)
+		add("reasoning", w.ReasoningEffort)
+		add("launch mode", w.LaunchMode)
+		if len(w.Workflows) > 0 {
+			add("workflows", strings.Join(w.Workflows, ", "))
+		}
+
+		// Measure label column width.
+		labelW := 0
+		for _, r := range rows {
+			if len(r.label) > labelW {
+				labelW = len(r.label)
+			}
+		}
+
+		// Render rows as styled lines.
+		innerW := width - 4
+		var lines []string
+		for _, r := range rows {
+			pad := strings.Repeat(" ", labelW-len(r.label))
+			label := styleDetailLabel.Render(r.label+pad) + styleDim.Render("  ")
+			val := styleDetailValue.Render(r.value)
+			lines = append(lines, "  "+label+val)
+		}
+
+		workerName := w.Name
+		if workerName == "" {
+			workerName = w.ID
+		}
+		sb.WriteString(drawBoxLabeledWith(
+			styleHeader.Render(workerName),
+			lines,
+			innerW,
+			mauve,
+		))
+		sb.WriteString("\n")
+	}
+
+	// Render markdown body.
+	if body != "" {
+		r, err := glamour.NewTermRenderer(
+			glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
+			glamour.WithWordWrap(width),
+		)
+		if err == nil {
+			if out, err := r.Render(body); err == nil {
+				sb.WriteString(out)
+			} else {
+				sb.WriteString(body)
+			}
+		} else {
+			sb.WriteString(body)
+		}
+	}
+
+	return sb.String(), nil
 }
 
 func fileExists(path string) bool {
