@@ -404,7 +404,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					var err error
 					switch m.sectionFocus {
 					case "workers":
-						content, err = renderWorkerFile(f.path, m.width-4)
+						content, err = renderWorkerFile(f.path, m.features, m.width-4)
 					case "workflows":
 						content = renderWorkflowDetail(f.label, m.workflows, m.allWorkers, filepath.Join(m.root, "stages"), m.features, m.width-4)
 					default:
@@ -1643,7 +1643,7 @@ func renderFile(path string) (string, error) {
 
 // renderWorkerFile renders a worker .md file as a frontmatter info box followed
 // by the markdown body. width is the available viewport width.
-func renderWorkerFile(path string, width int) (string, error) {
+func renderWorkerFile(path string, features []*featureRow, width int) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -1719,6 +1719,22 @@ func renderWorkerFile(path string, width int) (string, error) {
 			mauve,
 		))
 		sb.WriteString("\n")
+
+		// Active stories for this worker
+		var activeRows []string
+		for _, row := range features {
+			if row.s.Stage.Owner == w.ID && row.s.Status != "archived" {
+				ticket := styleSubtext.Render(padRight(row.s.Ticket, 14))
+				wf := row.s.Workflow
+				if wf == "" {
+					wf = "default"
+				}
+				stage := styleDim.Render(wf + "/" + row.s.Stage.Name)
+				activeRows = append(activeRows, "  "+ticket+"  "+stage)
+			}
+		}
+		label := styleSection.Render(fmt.Sprintf(" Active Stories (%d) ", len(activeRows)))
+		sb.WriteString(drawBox(label, activeRows, width) + "\n")
 	}
 
 	// Render markdown body.
