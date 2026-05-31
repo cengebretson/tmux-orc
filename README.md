@@ -60,6 +60,13 @@ go build -o orc ./cmd/orc/...
 ### 1. Scaffold a workspace
 
 ```bash
+orc init
+```
+
+Run it and answer two questions: workspace path (default: current directory)
+and whether to include sample workers. Or skip the prompts with flags:
+
+```bash
 orc init --workspace ~/my-workspace --with-sample-workers
 ```
 
@@ -87,17 +94,17 @@ orc health
 ### 4. Start working on a ticket
 
 ```bash
-orc work FLYWL-123
+orc work STORY-123
 ```
 
-This creates `features/FLYWL-123/` and immediately prints the intake agent
+This creates `features/STORY-123/` and immediately prints the intake agent
 launch command. Run it — the agent fetches the ticket, populates `TICKET.md`,
 `SPEC.md`, and `PLAN.md`, and updates `STATE.yaml` to `status: ready`.
 
 ### 5. Continue work
 
 ```bash
-orc next FLYWL-123
+orc next STORY-123
 ```
 
 Launches the agent for the current stage. The agent works, updates `STATE.yaml`,
@@ -109,17 +116,15 @@ launch command without executing it.
 ### Ticket lifecycle
 
 ```mermaid
-flowchart LR
+flowchart TD
     W([orc work]) --> intake
 
-    subgraph Workflows
-        intake -->|auto| develop
-        develop -->|manual| code-review
-        code-review -->|auto| pr-open
-        pr-open -->|manual| qa-automation
-        pr-open -->|CI failures| pr-repair
-        pr-repair -->|auto| pr-open
-    end
+    intake -->|auto| develop
+    develop -->|manual| code-review
+    code-review -->|auto| pr-open
+    pr-open -->|manual| qa-automation
+    pr-open -.->|CI failures| pr-repair
+    pr-repair -->|auto| pr-open
 
     qa-automation --> A([orc archive])
 
@@ -240,8 +245,8 @@ Every ticket has one. Agents update it as work progresses. `orc` reads it to
 route work to the right agent.
 
 ```yaml
-ticket: FLYWL-123
-slug: FLYWL-123-add-login
+ticket: STORY-123
+slug: STORY-123-add-login
 status: in_progress
 
 stage:
@@ -251,7 +256,7 @@ stage:
 next_action:
   worker: developer
   prompt: Implement the login feature per SPEC.md and PLAN.md.
-  cwd: worktrees/my-app/FLYWL-123-add-login
+  cwd: worktrees/my-app/STORY-123-add-login
 ```
 
 ## Workers
@@ -283,6 +288,3 @@ Worker resolution order:
 
 Use `--dry` to preview the command without launching.
 
-## Design docs
-
-See `docs/` for the full design documents.
