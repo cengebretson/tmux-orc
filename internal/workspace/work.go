@@ -59,17 +59,22 @@ func Work(opts WorkOptions) (*WorkResult, error) {
 		return nil, fmt.Errorf("loading workspace config: %w", err)
 	}
 	workflowName := opts.Workflow
+	explicitWorkflow := workflowName != ""
 	if workflowName == "" {
 		workflowName = cfg.DefaultWorkflow()
 	}
-	stages := cfg.StageNames(workflowName)
-	if len(stages) == 0 {
+	if _, ok := cfg.Workflows[workflowName]; !ok {
 		known := cfg.Names()
+		suffix := ""
 		if len(known) > 0 {
-			return nil, fmt.Errorf("workflow %q not found in orc.yaml (available: %s)", workflowName, strings.Join(known, ", "))
+			suffix = fmt.Sprintf(" (available: %s)", strings.Join(known, ", "))
 		}
-		return nil, fmt.Errorf("workflow %q not found in orc.yaml", workflowName)
+		if !explicitWorkflow && cfg.Settings.DefaultWorkflow == "" {
+			return nil, fmt.Errorf("no workflow specified and no default_workflow set in orc.yaml%s", suffix)
+		}
+		return nil, fmt.Errorf("workflow %q not found in orc.yaml%s", workflowName, suffix)
 	}
+	stages := cfg.StageNames(workflowName)
 	firstStage := stages[0]
 
 	if err := copyDir(templateDir, featureDir); err != nil {
