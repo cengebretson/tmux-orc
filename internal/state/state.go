@@ -16,11 +16,14 @@ func timeNow() string {
 
 const Filename = "STATE.yaml"
 
+const SchemaVersion = 1
+
 type State struct {
-	Ticket   string `yaml:"ticket"`
-	Slug     string `yaml:"slug"`
-	Status   string `yaml:"status"`
-	Workflow string `yaml:"workflow,omitempty"`
+	SchemaVersion int    `yaml:"schema_version,omitempty"`
+	Ticket        string `yaml:"ticket"`
+	Slug          string `yaml:"slug"`
+	Status        string `yaml:"status"`
+	Workflow      string `yaml:"workflow,omitempty"`
 
 	Stage Stage `yaml:"stage"`
 

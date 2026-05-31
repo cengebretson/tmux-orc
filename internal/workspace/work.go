@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cengebretson/orc/internal/config"
+	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workflow"
 	"gopkg.in/yaml.v3"
 )
@@ -134,10 +135,11 @@ func writeStateYAML(featureDir, ticket, slug, workflowName, firstStage string) e
 		Result string `yaml:"result"`
 	}
 	type stateFile struct {
-		Ticket   string `yaml:"ticket"`
-		Slug     string `yaml:"slug"`
-		Status   string `yaml:"status"`
-		Workflow string `yaml:"workflow,omitempty"`
+		SchemaVersion int    `yaml:"schema_version,omitempty"`
+		Ticket        string `yaml:"ticket"`
+		Slug          string `yaml:"slug"`
+		Status        string `yaml:"status"`
+		Workflow      string `yaml:"workflow,omitempty"`
 
 		Stage stateStage `yaml:"stage"`
 
@@ -147,10 +149,11 @@ func writeStateYAML(featureDir, ticket, slug, workflowName, firstStage string) e
 	}
 
 	s := stateFile{
-		Ticket:   ticket,
-		Slug:     slug,
-		Status:   "pending",
-		Workflow: workflowName,
+		SchemaVersion: state.SchemaVersion,
+		Ticket:        ticket,
+		Slug:          slug,
+		Status:        "pending",
+		Workflow:      workflowName,
 		Stage: stateStage{
 			Owner: "agent",
 			Name:  firstStage,
