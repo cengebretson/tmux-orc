@@ -1,3 +1,9 @@
+---
+next_workflow: qa-automation
+advance: manual
+worker: bob-developer
+---
+
 # Workflow: pr-open
 
 > Before starting: read `workflows/REQUIREMENTS.md` for state update rules and error handling.

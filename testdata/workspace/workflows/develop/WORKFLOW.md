@@ -1,3 +1,9 @@
+---
+next_workflow: pr-open
+advance: manual
+worker: bob-developer
+---
+
 # Workflow: develop
 
 > Before starting: read `workflows/REQUIREMENTS.md` for state update rules and error handling.

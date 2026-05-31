@@ -12,7 +12,7 @@ repos:
 next_action:
   worker: fred-documentor
   prompt: Write QA plan and source context for the CSV export endpoint — cover pagination, encoding edge cases, and large dataset limits
-  cwd: ../../worktrees/my-app/STORY-456-export-api
+  cwd: "."
 history:
   - at: "2026-05-27T10:00:00-05:00"
     workflow: intake

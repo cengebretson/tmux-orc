@@ -15,15 +15,15 @@ func fixtureWorkspace() string {
 
 func TestLoad(t *testing.T) {
 	ws := fixtureWorkspace()
-	featureDir := filepath.Join(ws, "features", "FLYWL-123-backend-feature")
+	featureDir := filepath.Join(ws, "features", "STORY-123-add-user-auth")
 
 	s, err := state.Load(featureDir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if s.Ticket != "FLYWL-123" {
-		t.Errorf("ticket = %q, want FLYWL-123", s.Ticket)
+	if s.Ticket != "STORY-123" {
+		t.Errorf("ticket = %q, want STORY-123", s.Ticket)
 	}
 	if s.Status != "in_progress" {
 		t.Errorf("status = %q, want in_progress", s.Status)
@@ -48,23 +48,23 @@ func TestLoad_Missing(t *testing.T) {
 
 func TestFindFeatureDir_ExactSlug(t *testing.T) {
 	ws := fixtureWorkspace()
-	dir, err := state.FindFeatureDir(ws, "FLYWL-123-backend-feature")
+	dir, err := state.FindFeatureDir(ws, "STORY-123-add-user-auth")
 	if err != nil {
 		t.Fatalf("FindFeatureDir: %v", err)
 	}
-	if filepath.Base(dir) != "FLYWL-123-backend-feature" {
-		t.Errorf("dir = %q, want FLYWL-123-backend-feature", filepath.Base(dir))
+	if filepath.Base(dir) != "STORY-123-add-user-auth" {
+		t.Errorf("dir = %q, want STORY-123-add-user-auth", filepath.Base(dir))
 	}
 }
 
 func TestFindFeatureDir_TicketPrefix(t *testing.T) {
 	ws := fixtureWorkspace()
-	dir, err := state.FindFeatureDir(ws, "FLYWL-456")
+	dir, err := state.FindFeatureDir(ws, "STORY-456")
 	if err != nil {
 		t.Fatalf("FindFeatureDir: %v", err)
 	}
-	if filepath.Base(dir) != "FLYWL-456-qa-plan" {
-		t.Errorf("dir = %q, want FLYWL-456-qa-plan", filepath.Base(dir))
+	if filepath.Base(dir) != "STORY-456-export-api" {
+		t.Errorf("dir = %q, want STORY-456-export-api", filepath.Base(dir))
 	}
 }
 
@@ -78,8 +78,8 @@ func TestFindFeatureDir_NotFound(t *testing.T) {
 
 func TestFindFeatureDir_Ambiguous(t *testing.T) {
 	ws := fixtureWorkspace()
-	// "FLYWL" matches both FLYWL-123 and FLYWL-456
-	_, err := state.FindFeatureDir(ws, "FLYWL")
+	// "STORY" matches STORY-123, STORY-456, and STORY-789
+	_, err := state.FindFeatureDir(ws, "STORY")
 	if err == nil {
 		t.Fatal("expected error for ambiguous slug, got nil")
 	}
@@ -87,7 +87,7 @@ func TestFindFeatureDir_Ambiguous(t *testing.T) {
 
 func TestResolveCWD_Dot(t *testing.T) {
 	ws := fixtureWorkspace()
-	featureDir := filepath.Join(ws, "features", "FLYWL-456-qa-plan")
+	featureDir := filepath.Join(ws, "features", "STORY-456-export-api")
 	s, _ := state.Load(featureDir)
 
 	cwd := s.ResolveCWD(ws, featureDir)
@@ -98,11 +98,11 @@ func TestResolveCWD_Dot(t *testing.T) {
 
 func TestResolveCWD_Relative(t *testing.T) {
 	ws := fixtureWorkspace()
-	featureDir := filepath.Join(ws, "features", "FLYWL-123-backend-feature")
+	featureDir := filepath.Join(ws, "features", "STORY-123-add-user-auth")
 	s, _ := state.Load(featureDir)
 
 	cwd := s.ResolveCWD(ws, featureDir)
-	// cwd in fixture is ../../worktrees/my-app/FLYWL-123-backend-feature
+	// cwd in fixture is ../../worktrees/my-app/STORY-123-add-user-auth
 	// resolved from featureDir that should produce a path ending in worktrees/...
 	if cwd == "" || cwd == "." {
 		t.Errorf("expected resolved path, got %q", cwd)

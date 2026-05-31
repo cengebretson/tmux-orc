@@ -1,3 +1,9 @@
+---
+next_workflow: develop
+advance: auto
+worker: fred-documentor
+---
+
 # Workflow: intake
 
 > Before starting: read `workflows/REQUIREMENTS.md` for state update rules and error handling.
