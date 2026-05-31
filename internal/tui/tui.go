@@ -38,11 +38,17 @@ type dataMsg struct {
 	workflowNames []string
 	workerNames   []string
 	routeChain    []routeStep
+	repos         []repoEntry
 }
 
 type routeStep struct {
 	name    string
 	advance string // "auto" or "manual"
+}
+
+type repoEntry struct {
+	name    string
+	purpose string
 }
 
 // ── data types ───────────────────────────────────────────────────
@@ -64,6 +70,7 @@ type Model struct {
 	workflowNames []string
 	workerNames   []string
 	routeChain    []routeStep
+	repos         []repoEntry
 	expanded      map[string]bool
 	cursor        int
 	showArchived  bool
@@ -93,10 +100,10 @@ func New(root string) Model {
 		root:        root,
 		lastRefresh: time.Now(),
 		expanded: map[string]bool{
-			"health":    true,
-			"workflows": true,
-			"workers":   true,
-			"routes":    true,
+			"health":    false,
+			"workflows": false,
+			"workers":   false,
+			"routes":    false,
 		},
 	}
 }
@@ -135,6 +142,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workflowNames = msg.workflowNames
 		m.workerNames = msg.workerNames
 		m.routeChain = msg.routeChain
+		m.repos = msg.repos
 		m.lastRefresh = time.Now()
 		if rows := m.visibleFeatures(); m.cursor >= len(rows) && len(rows) > 0 {
 			m.cursor = len(rows) - 1
@@ -304,8 +312,8 @@ func (m Model) viewDashboard() string {
 		renderNameList(infoW, m.workerNames))...)
 
 	infoLines = append(infoLines, m.sectionLines("routes", "4 Routes",
-		fmt.Sprintf("%d steps", len(m.routeChain)),
-		renderRouteChain(m.routeChain, infoW))...)
+		fmt.Sprintf("%d repos", len(m.repos)),
+		renderRepoList(m.repos, infoW))...)
 
 	logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve)).Width(logoW).Render(logo)
 	infoCol := lipgloss.NewStyle().Width(infoW).Render(strings.Join(infoLines, "\n"))
@@ -460,6 +468,66 @@ func renderNameList(maxW int, names []string) []string {
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+// parseRouterRepos reads ROUTER.md and extracts the ## Repos table.
+// Rows where the name starts/ends with _ (placeholder rows) are skipped.
+func parseRouterRepos(path string) []repoEntry {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(string(data), "\n")
+	inRepos := false
+	var repos []repoEntry
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## Repos") {
+			inRepos = true
+			continue
+		}
+		if inRepos && strings.HasPrefix(trimmed, "## ") {
+			break
+		}
+		if !inRepos || !strings.HasPrefix(trimmed, "|") {
+			continue
+		}
+		// skip header and separator rows
+		if strings.Contains(trimmed, "---") || strings.Contains(trimmed, "Name") {
+			continue
+		}
+		cols := strings.Split(trimmed, "|")
+		if len(cols) < 4 {
+			continue
+		}
+		name := strings.Trim(strings.TrimSpace(cols[1]), "_*` ")
+		purpose := strings.Trim(strings.TrimSpace(cols[3]), "_*` ")
+		if name == "" || strings.HasPrefix(cols[1], " _") {
+			continue
+		}
+		repos = append(repos, repoEntry{name: name, purpose: purpose})
+	}
+	return repos
+}
+
+// renderRepoList renders repos as "name — purpose" lines.
+func renderRepoList(repos []repoEntry, maxW int) []string {
+	if len(repos) == 0 {
+		return []string{styleDim.Render("No repos configured. Run SETUP.md to populate ROUTER.md.")}
+	}
+	var lines []string
+	for _, r := range repos {
+		name := styleSubtext.Render(r.name)
+		sep := styleDivider.Render("  —  ")
+		purpose := styleDim.Render(r.purpose)
+		line := name + sep + purpose
+		if lipgloss.Width(line) > maxW {
+			purpose = styleDim.Render(truncate(r.purpose, maxW-lipgloss.Width(name+sep)))
+			line = name + sep + purpose
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // renderRouteChain renders the workflow pipeline with colored arrows.
@@ -743,12 +811,15 @@ func loadData(root string) tea.Cmd {
 			workerNames = append(workerNames, name)
 		}
 
+		repos := parseRouterRepos(filepath.Join(root, "ROUTER.md"))
+
 		return dataMsg{
 			features:      features,
 			healthItems:   report.Results,
 			workflowNames: wfNames,
 			workerNames:   workerNames,
 			routeChain:    chain,
+			repos:         repos,
 		}
 	}
 }
