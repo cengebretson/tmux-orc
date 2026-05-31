@@ -611,7 +611,8 @@ func (m Model) viewDashboard() string {
 		rightLines = append(rightLines, "")
 		if m.quote != "" {
 			for _, l := range strings.Split(wrapText(m.quote, logoW), "\n") {
-				rightLines = append(rightLines, " "+quoteStyle.Render(l))
+				centered := lipgloss.PlaceHorizontal(logoW, lipgloss.Center, quoteStyle.Render(l))
+				rightLines = append(rightLines, " "+centered)
 			}
 		}
 		targetLines := leftHeight - 2
