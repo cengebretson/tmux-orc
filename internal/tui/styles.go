@@ -64,8 +64,7 @@ var (
 	// Section titles
 	styleSection = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(lavender)).
-			Bold(true).
-			MarginTop(1)
+			Bold(true)
 
 	// Table
 	styleTableHeader = lipgloss.NewStyle().

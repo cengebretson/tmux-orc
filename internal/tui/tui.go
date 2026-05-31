@@ -272,10 +272,7 @@ func (m Model) viewDashboard() string {
 
 	var b strings.Builder
 
-	// ── Header: title + stats left, logo right ───────────────────────
-	const logoW = 32
-	infoW := innerW - logoW
-
+	// ── Header: compact labeled box ─────────────────────────────────
 	ago := time.Since(m.lastRefresh).Round(time.Second)
 	active, blocked := 0, 0
 	for _, f := range m.features {
@@ -287,20 +284,15 @@ func (m Model) viewDashboard() string {
 		}
 	}
 
-	infoContent := strings.Join([]string{
-		styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator"),
-		"",
+	headerTitle := styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator")
+	statsLine := "  " +
 		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features))) +
-			styleDim.Render("  ·  ") +
-			styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
-			styleDim.Render("  ·  ") +
-			styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)) +
-			styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago)),
-	}, "\n")
-	infoCol := lipgloss.NewStyle().Width(infoW).Render(infoContent)
-	logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve)).Width(logoW).Render(logo)
-	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, infoCol, logoRendered)
-	b.WriteString("\n" + drawBox("", strings.Split(headerContent, "\n"), outerW) + "\n")
+		styleDim.Render("  ·  ") +
+		styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
+		styleDim.Render("  ·  ") +
+		styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)) +
+		styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
+	b.WriteString("\n" + drawBoxLabeled(headerTitle, []string{statsLine}, outerW) + "\n")
 
 	// ── Collapsible section boxes ─────────────────────────────────────
 	b.WriteString(m.sectionBox("health", "1", "Health",
