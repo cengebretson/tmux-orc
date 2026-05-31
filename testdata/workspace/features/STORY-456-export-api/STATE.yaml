@@ -1,9 +1,10 @@
 ticket: STORY-456
 slug: STORY-456-export-api
 status: ready
+workflow: default
 stage:
   owner: fred-documentor
-  workflow: qa-automation
+  name: qa-automation
 repos:
   app:
     main: ../../projects/my-app
@@ -15,14 +16,14 @@ next_action:
   cwd: "."
 history:
   - at: "2026-05-27T10:00:00-05:00"
-    workflow: intake
+    stage: intake
     owner: fred-documentor
     result: ticket loaded, spec written
   - at: "2026-05-28T11:30:00-05:00"
-    workflow: develop
+    stage: develop
     owner: bob-developer
     result: implementation complete, PR opened
   - at: "2026-05-29T15:50:00-05:00"
-    workflow: code-review
+    stage: code-review
     owner: bob-developer
     result: review passed, QA handoff written

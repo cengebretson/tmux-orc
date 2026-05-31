@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -53,7 +54,7 @@ type dataMsg struct {
 	healthItems   []health.Result
 	workflowNames []string
 	workerNames   []string
-	routeChain    []routeStep
+	workflows     []workflowChain
 	repos         []repoEntry
 	sectionItems  map[string][]sectionItem
 }
@@ -61,6 +62,17 @@ type dataMsg struct {
 type routeStep struct {
 	name    string
 	advance string // "auto" or "manual"
+}
+
+type repairLoop struct {
+	name   string
+	target string // stage in main chain it loops back to
+}
+
+type workflowChain struct {
+	name   string
+	steps  []routeStep
+	loops  []repairLoop
 }
 
 type repoEntry struct {
@@ -91,7 +103,7 @@ type Model struct {
 	healthItems   []health.Result
 	workflowNames []string
 	workerNames   []string
-	routeChain    []routeStep
+	workflows     []workflowChain
 	repos         []repoEntry
 	expanded      map[string]bool
 	cursor        int
@@ -187,7 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.healthItems = msg.healthItems
 		m.workflowNames = msg.workflowNames
 		m.workerNames = msg.workerNames
-		m.routeChain = msg.routeChain
+		m.workflows = msg.workflows
 		m.repos = msg.repos
 		m.sectionItems = msg.sectionItems
 		m.lastRefresh = time.Now()
@@ -362,7 +374,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.cursor < len(rows) {
 					row := rows[m.cursor]
 					if row.s.Runtime.Tmux != nil && row.tmuxLive {
-						return m, attachTmux(row.s.Slug, row.s.Stage.Workflow)
+						return m, attachTmux(row.s.Slug, row.s.Stage.Name)
 					}
 				}
 			}
@@ -419,7 +431,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "t":
 			if m.detail.s.Runtime.Tmux != nil && m.detail.tmuxLive {
-				return m, attachTmux(m.detail.s.Slug, m.detail.s.Stage.Workflow)
+				return m, attachTmux(m.detail.s.Slug, m.detail.s.Stage.Name)
 			}
 		case "enter":
 			if m.fileIdx < len(m.detailFiles) {
@@ -542,7 +554,19 @@ func (m Model) viewDashboard() string {
 	if wfFocused {
 		wfContent = renderNavigableList(m.sectionItems["workflows"], m.sectionCursor)
 	} else {
-		wfContent = renderRouteChain(m.routeChain, leftInnerW-4)
+		for _, pc := range m.workflows {
+			lines := renderRouteChain(pc.steps, pc.loops, leftInnerW-4)
+			if pc.name != "" && pc.name != "default" {
+				label := styleDim.Render(pc.name + ":")
+				wfContent = append(wfContent, label)
+			}
+			wfContent = append(wfContent, lines...)
+			wfContent = append(wfContent, "")
+		}
+		// trim trailing blank
+		for len(wfContent) > 0 && wfContent[len(wfContent)-1] == "" {
+			wfContent = wfContent[:len(wfContent)-1]
+		}
 	}
 	left.WriteString(m.sectionBox("workflows", "2", "Workflows",
 		fmt.Sprintf("%d", len(m.workflowNames)),
@@ -939,13 +963,16 @@ func renderRepoList(repos []repoEntry, maxW int) []string {
 	return lines
 }
 
-// renderRouteChain renders the workflow pipeline with colored arrows.
-func renderRouteChain(chain []routeStep, maxW int) []string {
+// renderRouteChain renders the workflow stage sequence with colored arrows and repair loop annotations.
+func renderRouteChain(chain []routeStep, loops []repairLoop, maxW int) []string {
 	if len(chain) == 0 {
 		return nil
 	}
 	sep := styleDivider.Render("  ")
 	sepW := lipgloss.Width(sep)
+
+	// build index: workflow name → x-offset in rendered row
+	chipOffsets := map[string]int{}
 
 	var rows []string
 	row := ""
@@ -971,6 +998,7 @@ func renderRouteChain(chain []routeStep, maxW int) []string {
 			row = ""
 			rowW = 0
 		}
+		chipOffsets[step.name] = rowW
 		row += chip
 		rowW += chipW
 		if arrow != "" {
@@ -981,6 +1009,45 @@ func renderRouteChain(chain []routeStep, maxW int) []string {
 	if row != "" {
 		rows = append(rows, row)
 	}
+
+	// repair loop annotations: ↺ name positioned under target chip
+	if len(loops) > 0 {
+		// group loops by target for layout
+		type loopAnnotation struct {
+			offset int
+			label  string
+		}
+		var annotations []loopAnnotation
+		for _, lp := range loops {
+			offset, ok := chipOffsets[lp.target]
+			if !ok {
+				continue
+			}
+			label := styleStatusWaiting.Render("↺ ") + styleSubtext.Render(lp.name)
+			annotations = append(annotations, loopAnnotation{offset: offset, label: label})
+		}
+		// sort by offset so we build the line left-to-right
+		sort.Slice(annotations, func(i, j int) bool {
+			return annotations[i].offset < annotations[j].offset
+		})
+		if len(annotations) > 0 {
+			loopLine := ""
+			loopW := 0
+			for _, ann := range annotations {
+				if ann.offset > loopW {
+					loopLine += strings.Repeat(" ", ann.offset-loopW)
+					loopW = ann.offset
+				}
+				connector := styleDivider.Render("└╴")
+				full := connector + ann.label
+				w := lipgloss.Width(full)
+				loopLine += full
+				loopW += w
+			}
+			rows = append(rows, loopLine)
+		}
+	}
+
 	return rows
 }
 
@@ -1032,7 +1099,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
 				padRight(truncate(name, wName), wName) + "  " +
 				padRight(truncate(icon+" "+s.Status, wStatus), wStatus) + "  " +
-				padRight(truncate(s.Stage.Workflow, wWorkflow), wWorkflow) + "  " +
+				padRight(truncate(s.Stage.Name, wWorkflow), wWorkflow) + "  " +
 				padRight(truncate(plainWorker, wWorker), wWorker) + "  " +
 				plainTmux
 			lines = append(lines, styleRowSelected.Width(w).Render(line))
@@ -1054,7 +1121,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
 				padRight(nameCell, wName) + "  " +
 				padRight(statusCell, wStatus) + "  " +
-				padRight(truncate(s.Stage.Workflow, wWorkflow), wWorkflow) + "  " +
+				padRight(truncate(s.Stage.Name, wWorkflow), wWorkflow) + "  " +
 				padRight(workerCell, wWorker) + "  " +
 				tmuxCell
 			lines = append(lines, line)
@@ -1082,7 +1149,7 @@ func (m Model) viewDetail() string {
 	fields := []struct{ label, value string }{
 		{" Ticket  ", s.Ticket},
 		{" Status  ", statusStyle(s.Status).Render(statusIcon(s.Status) + " " + s.Status)},
-		{" Workflow", s.Stage.Workflow},
+		{" Workflow", s.Stage.Name},
 		{" Owner   ", s.Stage.Owner},
 	}
 	for _, f := range fields {
@@ -1091,7 +1158,7 @@ func (m Model) viewDetail() string {
 	}
 	if s.Runtime.Tmux != nil {
 		if m.detail.tmuxLive {
-			hint := styleTmuxLive.Render("tmux attach -t " + s.Runtime.Tmux.Session + ":" + s.Stage.Workflow)
+			hint := styleTmuxLive.Render("tmux attach -t " + s.Runtime.Tmux.Session + ":" + s.Stage.Name)
 			stateLines = append(stateLines, fmt.Sprintf("%s  %s", styleDetailLabel.Render(" Session "), hint))
 		} else {
 			stateLines = append(stateLines, fmt.Sprintf("%s  %s",
@@ -1119,7 +1186,7 @@ func (m Model) viewDetail() string {
 			}
 			histLines = append(histLines, fmt.Sprintf(" %s  %-20s  %-18s  %s",
 				styleDim.Render(ts),
-				styleSubtext.Render(truncate(h.Workflow, 20)),
+				styleSubtext.Render(truncate(h.Stage, 20)),
 				styleDim.Render(truncate(h.Owner, 18)),
 				styleSubtext.Render(truncate(h.Result, innerW-72)),
 			))
@@ -1198,34 +1265,51 @@ func loadData(root string) tea.Cmd {
 		features := collectFeatures(root)
 		report := health.Run(root)
 
-		wfDir := filepath.Join(root, "workflows")
-
-		// workflow names (all dirs)
-		var wfNames []string
-		if entries, err := os.ReadDir(wfDir); err == nil {
-			for _, e := range entries {
-				if e.IsDir() {
-					wfNames = append(wfNames, e.Name())
+		// build workflow chains from workflows.yaml
+		workflowCfg, _ := workflow.Load(root)
+		var chains []workflowChain
+		allStages := map[string]bool{}
+		for _, pname := range workflowCfg.Names() {
+			stages := workflowCfg.StageNames(pname)
+			var steps []routeStep
+			inThisChain := map[string]bool{}
+			for _, stageName := range stages {
+				sc, _ := workflowCfg.StageConfig(pname, stageName)
+				steps = append(steps, routeStep{name: stageName, advance: sc.Advance})
+				inThisChain[stageName] = true
+				allStages[stageName] = true
+			}
+			// repair loops from repair_stages section
+			var loops []repairLoop
+			for rname, rdef := range workflowCfg.RepairStages {
+				if inThisChain[rdef.Repairs] {
+					loops = append(loops, repairLoop{name: rname, target: rdef.Repairs})
 				}
 			}
+			chains = append(chains, workflowChain{name: pname, steps: steps, loops: loops})
+		}
+		// fallback: flat list of all stage files
+		if len(chains) == 0 {
+			stagesDir := filepath.Join(root, "stages")
+			entries, _ := os.ReadDir(stagesDir)
+			var steps []routeStep
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+					steps = append(steps, routeStep{name: strings.TrimSuffix(e.Name(), ".md")})
+				}
+			}
+			chains = []workflowChain{{name: "", steps: steps}}
+		}
+		// first chain used for single-chain references
+		var chain []routeStep
+		if len(chains) > 0 {
+			chain = chains[0].steps
 		}
 
-		// route chain — follow next_workflow links from intake
-		var chain []routeStep
-		seen := map[string]bool{}
-		cur := "intake"
-		for cur != "" && !seen[cur] {
-			seen[cur] = true
-			cfg, _ := workflow.Load(wfDir, cur)
-			advance := ""
-			if cfg != nil {
-				advance = cfg.Advance
-			}
-			chain = append(chain, routeStep{name: cur, advance: advance})
-			if cfg == nil {
-				break
-			}
-			cur = cfg.NextWorkflow
+		// collect all stage names for display
+		var wfNames []string
+		for stageName := range allStages {
+			wfNames = append(wfNames, stageName)
 		}
 
 		// worker names
@@ -1244,22 +1328,27 @@ func loadData(root string) tea.Cmd {
 		// section items for navigable file viewer
 		si := map[string][]sectionItem{}
 
-		// workflows: in pipeline order (follow next_workflow chain), then any remaining dirs
-		inChain := map[string]bool{}
+		// stages: in workflow order first
+		stagesDir := filepath.Join(root, "stages")
+		seenStages := map[string]bool{}
 		for _, step := range chain {
-			p := filepath.Join(wfDir, step.name, "WORKFLOW.md")
+			p := filepath.Join(stagesDir, step.name+".md")
 			if _, err := os.Stat(p); err == nil {
 				si["workflows"] = append(si["workflows"], sectionItem{label: step.name, path: p})
+				seenStages[step.name] = true
 			}
-			inChain[step.name] = true
 		}
-		for _, name := range wfNames {
-			if inChain[name] {
-				continue
-			}
-			p := filepath.Join(wfDir, name, "WORKFLOW.md")
-			if _, err := os.Stat(p); err == nil {
-				si["workflows"] = append(si["workflows"], sectionItem{label: name, path: p})
+		// any remaining stage files not in the chain
+		if entries, err := os.ReadDir(stagesDir); err == nil {
+			for _, e := range entries {
+				if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+					continue
+				}
+				name := strings.TrimSuffix(e.Name(), ".md")
+				if seenStages[name] {
+					continue
+				}
+				si["workflows"] = append(si["workflows"], sectionItem{label: name, path: filepath.Join(stagesDir, e.Name())})
 			}
 		}
 
@@ -1294,7 +1383,7 @@ func loadData(root string) tea.Cmd {
 			healthItems:   report.Results,
 			workflowNames: wfNames,
 			workerNames:   workerNames,
-			routeChain:    chain,
+			workflows:     chains,
 			repos:         repos,
 			sectionItems:  si,
 		}
@@ -1360,10 +1449,13 @@ func collectFeatures(root string) []*featureRow {
 				continue
 			}
 			workerName := ""
-			wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
 			workerID := s.Stage.Owner
-			if workerID == "" && wfCfg != nil {
-				workerID = wfCfg.Worker
+			if workerID == "" {
+				if wfCfg, _ := workflow.Load(root); wfCfg != nil {
+					if sc, ok := wfCfg.StageConfig(s.Workflow, s.Stage.Name); ok {
+						workerID = sc.Worker
+					}
+				}
 			}
 			if workerID != "" {
 				if w := workers.FindByID(allWorkers, workerID); w != nil {
@@ -1392,7 +1484,6 @@ func buildFileList(featureDir string, s *state.State) []detailFile {
 		{"TICKET.md", filepath.Join(featureDir, "TICKET.md")},
 		{"SPEC.md", filepath.Join(featureDir, "SPEC.md")},
 		{"PLAN.md", filepath.Join(featureDir, "PLAN.md")},
-		{"WORKLOG.md", filepath.Join(featureDir, "WORKLOG.md")},
 		{"DECISIONS.md", filepath.Join(featureDir, "DECISIONS.md")},
 		{"impl/QA_HANDOFF.md", filepath.Join(featureDir, "impl", "QA_HANDOFF.md")},
 		{"impl/REVIEW.md", filepath.Join(featureDir, "impl", "REVIEW.md")},
@@ -1593,114 +1684,28 @@ func renderWorkerFile(path string, width int) (string, error) {
 	return sb.String(), nil
 }
 
-// renderWorkflowFile renders a WORKFLOW.md as a frontmatter info box followed
-// by the markdown body. width is the available viewport width.
+// renderWorkflowFile renders a stage markdown file. width is the available viewport width.
 func renderWorkflowFile(path string, width int) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-
-	raw := string(data)
-	body := raw
-
-	var cfg workflow.Config
-	hasFM := false
-	if strings.HasPrefix(strings.TrimSpace(raw), "---") {
-		content := strings.TrimSpace(raw)[3:]
-		if end := strings.Index(content, "\n---"); end != -1 {
-			fm := strings.TrimSpace(content[:end])
-			if e := yaml.Unmarshal([]byte(fm), &cfg); e == nil {
-				hasFM = true
-				rest := content[end+4:]
-				body = strings.TrimSpace(rest)
-			}
-		}
+	body := strings.TrimSpace(string(data))
+	if body == "" {
+		return "", nil
 	}
-
-	// Derive workflow name from the parent directory name.
-	wfName := filepath.Base(filepath.Dir(path))
-
-	var sb strings.Builder
-
-	if hasFM {
-		type row struct{ label, value string }
-		var rows []row
-		add := func(label, value string) {
-			if value != "" {
-				rows = append(rows, row{label, value})
-			}
-		}
-		add("worker", cfg.Worker)
-
-		// advance shown with color hint
-		if cfg.Advance != "" {
-			var advVal string
-			switch cfg.Advance {
-			case "auto":
-				advVal = styleHealthOK.Render("auto") + styleDim.Render("  agent advances when done")
-			case "manual":
-				advVal = styleStatusWaiting.Render("manual") + styleDim.Render("  human approves before next stage")
-			default:
-				advVal = cfg.Advance
-			}
-			rows = append(rows, row{"advance", advVal})
-		}
-
-		// next_workflow shown with arrow
-		if cfg.NextWorkflow != "" {
-			rows = append(rows, row{"next", styleDim.Render("→ ") + styleSection.Render(cfg.NextWorkflow)})
-		} else {
-			rows = append(rows, row{"next", styleDim.Render("(end of pipeline)")})
-		}
-
-		add("", "") // ignored — using rows directly
-
-		// measure label column (plain text widths only)
-		labelW := 0
-		for _, r := range rows {
-			if lipgloss.Width(r.label) > labelW {
-				labelW = lipgloss.Width(r.label)
-			}
-		}
-
-		innerW := width - 4
-		var lines []string
-		for _, r := range rows {
-			if r.label == "" {
-				continue
-			}
-			pad := strings.Repeat(" ", labelW-lipgloss.Width(r.label))
-			label := styleDetailLabel.Render(r.label+pad) + styleDim.Render("  ")
-			lines = append(lines, "  "+label+r.value)
-		}
-
-		sb.WriteString(drawBoxLabeledWith(
-			styleHeader.Render(wfName),
-			lines,
-			innerW,
-			mauve,
-		))
-		sb.WriteString("\n")
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return body, nil
 	}
-
-	if body != "" {
-		r, err := glamour.NewTermRenderer(
-			glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
-			glamour.WithWordWrap(width),
-		)
-		if err == nil {
-			if out, err := r.Render(body); err == nil {
-				sb.WriteString(out)
-			} else {
-				sb.WriteString(body)
-			}
-		} else {
-			sb.WriteString(body)
-		}
+	out, err := r.Render(body)
+	if err != nil {
+		return body, nil
 	}
-
-	return sb.String(), nil
+	return out, nil
 }
 
 // wrapText wraps s to fit within maxW columns, breaking on word boundaries.

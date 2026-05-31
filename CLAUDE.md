@@ -20,15 +20,18 @@ orc/
     health/                       workspace filesystem health checks
     state/                        STATE.yaml parsing and mutations
     workers/                      worker definition parsing and matching
-    workflow/                     WORKFLOW.md frontmatter parsing
+    workflow/                     workflows.yaml parsing (stage sequences, repair loops)
+    stage/                        stage markdown file reading
     workspace/                    init, work, and template embedding
       templates/                  embedded workspace scaffold templates
         AGENTS.md, CLAUDE.md, ROUTER.md, TOOLS.md, RULES.md
+        ORC.md                    agent state contract
+        workflows.yaml            named pipelines with stage sequences
         features/_template/       feature context pack template
         workers/                  worker definition templates
           _template.md
           sample/                 sample workers (--with-sample-workers)
-        workflows/                workflow docs, REQUIREMENTS.md, commands.yaml
+        stages/                   stage docs (plain markdown, no frontmatter)
   docs/                           design documentation (HTML)
   assets/                         roles and skills reference files
   go.mod
@@ -69,7 +72,7 @@ go test ./...
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
 | `orc start <ticket>` | Mark a ticket in_progress — called by the agent at the start of each session (hidden from help) |
-| `orc advance <ticket> [--workflow <wf>]` | Mark current workflow complete and move to the next (called by agents, hidden from help) |
+| `orc advance <ticket> [--stage <stage>]` | Mark current stage complete and move to the next (called by agents, hidden from help) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
 | `orc block <ticket> <reason>` | Mark a ticket as blocked |
 | `orc archive <ticket>` | Archive a completed feature, remove worktrees |
@@ -85,32 +88,41 @@ built, what's planned, and where we deliberately diverged from the original plan
 |------|-------------|
 | Workspace scaffold | `orc init` with embedded templates, `--with-sample-workers`, `--dry-run`, `--force` |
 | Configuration | `SETUP.md` — agent-driven setup (not in original design, added improvement) |
-| Health check | `orc health` — filesystem validation, setup status, required workflow check, frontmatter validation |
+| Health check | `orc health` — filesystem validation, setup status, `workflows.yaml` check, `stages/` count |
 | Feature lifecycle | `orc work`, `orc show`, `orc next`, `orc advance`, `orc wait`, `orc start`, `orc block`, `orc archive` |
 | Status dashboard | `orc status` — active and archived features, table view |
-| Worker routing | Workflow owns default worker via `worker:` in WORKFLOW.md frontmatter; overridden by `stage.owner` or `orc next --worker` |
+| Worker routing | `workflows.yaml` owns default worker per stage; overridden by `stage.owner` or `orc next --worker` |
 | Multi-product | Claude and Codex launch commands rendered from worker `product` field |
-| Workflows | intake, develop, code-review, pr-open, pr-repair, qa-automation — each with WORKFLOW.md frontmatter |
-| Workflow frontmatter | `next_workflow`, `advance` (auto/manual), `worker` (default worker ID) |
-| Cross-workflow transitions | `orc advance --workflow` updates `stage.workflow`; worker resolved from new workflow's frontmatter |
+| Workflows + stages | `workflows.yaml` defines named pipelines with stage sequences, advance mode, and per-stage worker |
+| Stage files | `stages/*.md` — plain markdown, no frontmatter; flow control lives entirely in `workflows.yaml` |
+| Repair loops | `repair_stages` section in `workflows.yaml` with `repairs`, `worker`, `advance`, `max_retries` |
+| Retry tracking | `stage_counts` map in STATE.yaml — incremented by `orc advance` |
 | State mutations | `state.Advance`, `state.Block`, `state.WaitForHuman`, `state.Start`, `state.SetStatus` with history entries |
-| Agent prompt scaffolding | Every `orc next` prompt includes preamble (read AGENTS.md, run `orc start`) and exact end-of-session command |
+| Agent prompt scaffolding | Every `orc next` prompt includes preamble (read AGENTS.md + ORC.md, run `orc start`) and exact end-of-session command |
 | JSON output | `orc show --json`, `orc next --json`, `orc status --json` — machine-readable for agent parsing and CI |
-| Session contract | `REQUIREMENTS.md` shared workflow contract; `AGENTS.md` Session Start section enforces state updates |
+| Session contract | `ORC.md` at workspace root (replaces `REQUIREMENTS.md`); `AGENTS.md` Session Start section enforces state updates |
 | Worktree cleanup | `orc archive` removes git worktrees, moves feature to `_archive/` |
-| tmux integration | `orc work --tmux` opts in; `orc next` auto-creates session, sends agent to workflow window; `orc attach` to jump in; runtime persisted in STATE.yaml |
-| Tests | health, state, workers, workspace packages all covered |
+| tmux integration | `orc work --tmux` opts in; `orc next` auto-creates session, sends agent to stage window; `orc attach` to jump in; runtime persisted in STATE.yaml |
+| Tests | health, state, workers, workspace, workflow packages all covered |
 
 ### Planned
 
 | Feature | Notes |
 |---------|-------|
-| ~~`orc tmux create/attach/list/kill`~~ | Done — `orc attach <ticket>`; sessions auto-created by `orc next`, one window per workflow |
+| ~~`orc tmux create/attach/list/kill`~~ | Done — `orc attach <ticket>`; sessions auto-created by `orc next`, one window per stage |
 | `orc tui` | Bubble Tea dashboard — color-coded status, click to show/launch |
 | ~~`orc run-next`~~ | Done — `orc next` now executes the agent directly; `--dry` to preview |
 | ~~`--json` flag on `orc status`~~ | Done — `orc status --json` returns `{ active: [...], archived: [...] }` with full state objects |
 | Banner suppression | Auto-suppress when stdout is not a TTY; `--no-banner` flag |
 | `reasoning_effort` / `service_tier` in workers | Codex reasoning effort and priority tier in worker frontmatter, rendered in launch command |
+
+### Future Enhancements
+
+Ideas worth revisiting when the core is stable.
+
+| Idea | Notes |
+|------|-------|
+| Resume prompt | When a session ends mid-stage without advancing, generate a recovery prompt summarizing what was done so far — reads existing output files, STATE.yaml history, and DECISIONS.md to reconstruct context for the next agent. Could live in `orc next` output or a dedicated `orc resume <ticket>` command. `next_action.prompt` in STATE.yaml is the natural place to write it. |
 
 ### Deliberate divergences from original design
 
@@ -121,7 +133,7 @@ built, what's planned, and where we deliberately diverged from the original plan
 | `orc workon` command | `orc work` | Shorter, cleaner |
 | `orc done` command | `orc archive` with `_archive/` folder | Preserves history, keeps workspace clean, reversible |
 | No first-run config | `SETUP.md` agent-driven setup | Cleaner than hand-editing files; works with Claude or Codex |
-| Intake bundled into main workflow | Separate `intake` workflow | Cleaner separation — every ticket goes through intake first, then routes to the right workflow |
+| Intake bundled into main workflow | Separate `intake` stage | Cleaner separation — every ticket goes through intake first, then routes to the right stage |
 | `backend/` subfolder | `impl/` subfolder | Generic — not coupled to backend/frontend distinction |
 
 ## Template System
@@ -155,7 +167,7 @@ This is a non-negotiable design constraint. Concretely:
 - Durable state. `STATE.yaml` survives restarts, session changes, and agent switches.
 - Human-in-the-loop first. Background execution comes last, after logging and recovery
   are solid.
-- Workflow-assigned workers by default. Override with `--worker` for a single run or
+- Stage-assigned workers by default. Override with `--worker` for a single run or
   set `stage.owner` via `orc advance --owner` to persist across sessions.
 - Product-agnostic by default. Every decision that could couple `orc` or the workspace
   to a single agent product should be reconsidered.

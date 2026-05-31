@@ -1,10 +1,11 @@
 ticket: TICKET-0000
 slug: TICKET-0000-short-description
 status: ready
+workflow: default
 
 stage:
   owner: human
-  workflow: intake
+  name: intake
 
 repos: {}
 
@@ -22,7 +23,6 @@ next_action:
 
 history:
   - at: YYYY-MM-DDTHH:MM:SS-00:00
-    workflow: intake
+    stage: intake
     owner: human
     result: feature context created
-

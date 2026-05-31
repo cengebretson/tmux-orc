@@ -1,12 +1,6 @@
----
-next_workflow: code-review
-advance: manual
-worker: bob-developer
----
-
 # Workflow: develop
 
-> Before starting: read `workflows/REQUIREMENTS.md` for state update rules and error handling.
+> Before starting: read `ORC.md` for state update rules and error handling.
 
 ## Purpose
 

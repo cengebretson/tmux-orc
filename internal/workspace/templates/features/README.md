@@ -21,7 +21,6 @@ features/
     TICKET.md           ticket description and acceptance criteria
     SPEC.md             context, scope, and open questions
     PLAN.md             implementation approach and steps
-    WORKLOG.md          running session log
     DECISIONS.md        significant decisions and rationale
     impl/
       PR.md             PR URL and status

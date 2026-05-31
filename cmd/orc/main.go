@@ -100,6 +100,7 @@ var (
 	workWorkspace string
 	workSlug      string
 	workTmux      bool
+	workWorkflow  string
 )
 
 var showCmd = &cobra.Command{
@@ -156,7 +157,7 @@ var (
 	advanceWorkspace string
 	advanceOwner     string
 	advanceResult    string
-	advanceWorkflow  string
+	advanceStage  string
 )
 
 var archiveCmd = &cobra.Command{
@@ -226,6 +227,7 @@ func init() {
 	workCmd.Flags().StringVar(&workWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	workCmd.Flags().StringVar(&workSlug, "slug", "", "Optional slug suffix (e.g. add-user-export → TICKET-123-add-user-export)")
 	workCmd.Flags().BoolVar(&workTmux, "tmux", false, "Enable tmux session for this ticket — session created automatically on first orc next")
+	workCmd.Flags().StringVar(&workWorkflow, "workflow", "default", "Workflow to use for this ticket")
 	showCmd.Flags().StringVar(&showWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
 	startCmd.Flags().StringVar(&startWorkspace, "workspace", ".", "Workspace root (default: current directory)")
@@ -234,7 +236,7 @@ func init() {
 	advanceCmd.Flags().StringVar(&advanceWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	advanceCmd.Flags().StringVar(&advanceOwner, "owner", "", "Worker or role that owns the new stage")
 	advanceCmd.Flags().StringVar(&advanceResult, "result", "", "Summary of what was accomplished in the previous stage")
-	advanceCmd.Flags().StringVar(&advanceWorkflow, "workflow", "", "New workflow name (required when crossing workflow boundaries)")
+	advanceCmd.Flags().StringVar(&advanceStage, "stage", "", "New stage name (required when crossing workflow boundaries)")
 	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	attachCmd.Flags().StringVar(&attachWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	tuiCmd.Flags().StringVar(&tuiWorkspace, "workspace", ".", "Workspace root (default: current directory)")
@@ -340,21 +342,27 @@ func runNext(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		cwd := s.ResolveCWD(root, featureDir)
-		wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
 		jsonPrompt := s.NextAction.Prompt
 		if jsonPrompt == "" {
-			jsonPrompt = fmt.Sprintf("Continue %s — workflow: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
-				s.Ticket, s.Stage.Workflow, s.Slug, s.Stage.Workflow)
+			jsonPrompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nStage: stages/%s.md",
+				s.Ticket, s.Stage.Name, s.Slug, s.Stage.Name)
 		}
-		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and workflows/REQUIREMENTS.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
+		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 		jsonPrompt = jsonPreamble + jsonPrompt
-		if wfCfg != nil && wfCfg.NextWorkflow != "" {
-			if wfCfg.Advance == "auto" {
-				jsonPrompt += fmt.Sprintf("\n\nWhen this workflow is complete, run:\n  orc advance %s --workflow %s --owner <worker-id> --result \"<summary>\"",
-					s.Ticket, wfCfg.NextWorkflow)
+		workflowCfg, _ := workflow.Load(root)
+		jsonPipeline := s.Workflow
+		if jsonPipeline == "" {
+			jsonPipeline = "default"
+		}
+		stageCfg, _ := workflowCfg.StageConfig(jsonPipeline, s.Stage.Name)
+		nextStage := workflowCfg.NextStage(jsonPipeline, s.Stage.Name)
+		if nextStage != "" {
+			if stageCfg.Advance == "manual" {
+				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
+					s.Ticket, nextStage)
 			} else {
-				jsonPrompt += fmt.Sprintf("\n\nWhen this workflow is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
-					s.Ticket, wfCfg.NextWorkflow)
+				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc advance %s --owner <worker-id> --result \"<summary>\"",
+					s.Ticket)
 			}
 		}
 		// Resolve worker using same priority order as runNextAction.
@@ -365,11 +373,11 @@ func runNext(cmd *cobra.Command, args []string) error {
 		if preferred == nil && s.Stage.Owner != "" {
 			preferred = workers.FindByID(allWorkers, s.Stage.Owner)
 		}
-		if preferred == nil && wfCfg != nil && wfCfg.Worker != "" {
-			preferred = workers.FindByID(allWorkers, wfCfg.Worker)
+		if preferred == nil && stageCfg.Worker != "" {
+			preferred = workers.FindByID(allWorkers, stageCfg.Worker)
 		}
 		if preferred == nil {
-			matched := workers.Match(allWorkers, s.Stage.Workflow)
+			matched := workers.Match(allWorkers, s.Stage.Name)
 			if len(matched) > 0 {
 				preferred = matched[0]
 			}
@@ -377,7 +385,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 		out := map[string]any{
 			"ticket":   s.Ticket,
 			"status":   s.Status,
-			"workflow": s.Stage.Workflow,
+			"workflow": s.Stage.Name,
 			"owner":    s.Stage.Owner,
 			"cwd":      cwd,
 			"prompt":   jsonPrompt,
@@ -393,7 +401,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Status:   %s\n", s.Status)
-	fmt.Printf("Workflow: %s\n", s.Stage.Workflow)
+	fmt.Printf("Workflow: %s\n", s.Stage.Name)
 	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 
 	switch s.Status {
@@ -434,23 +442,29 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	prompt := s.NextAction.Prompt
 	if prompt == "" {
 		prompt = fmt.Sprintf("Continue %s — workflow: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
-			s.Ticket, s.Stage.Workflow, s.Slug, s.Stage.Workflow)
+			s.Ticket, s.Stage.Name, s.Slug, s.Stage.Name)
 	}
-	preamble := fmt.Sprintf("Before starting: read AGENTS.md and workflows/REQUIREMENTS.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
+	preamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 	prompt = preamble + prompt
 
-	wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
-	if wfCfg.NextWorkflow != "" {
+	workflowCfg, _ := workflow.Load(root)
+	pname := s.Workflow
+	if pname == "" {
+		pname = "default"
+	}
+	stageCfg, _ := workflowCfg.StageConfig(pname, s.Stage.Name)
+	nextStage := workflowCfg.NextStage(pname, s.Stage.Name)
+	if nextStage != "" {
 		var suffix string
-		if wfCfg.Advance == "auto" {
+		if stageCfg.Advance == "manual" {
 			suffix = fmt.Sprintf(
-				"\n\nWhen this workflow is complete, run:\n  orc advance %s --workflow %s --owner <worker-id> --result \"<summary>\"",
-				s.Ticket, wfCfg.NextWorkflow,
+				"\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
+				s.Ticket, nextStage,
 			)
 		} else {
 			suffix = fmt.Sprintf(
-				"\n\nWhen this workflow is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
-				s.Ticket, wfCfg.NextWorkflow,
+				"\n\nWhen this stage is complete, run:\n  orc advance %s --owner <worker-id> --result \"<summary>\"",
+				s.Ticket,
 			)
 		}
 		prompt += suffix
@@ -467,12 +481,12 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		worker = workers.FindByID(allWorkers, s.Stage.Owner)
 		matchReason = "stage owner"
 	}
-	if worker == nil && wfCfg.Worker != "" {
-		worker = workers.FindByID(allWorkers, wfCfg.Worker)
+	if worker == nil && stageCfg.Worker != "" {
+		worker = workers.FindByID(allWorkers, stageCfg.Worker)
 		matchReason = "workflow default"
 	}
 	if worker == nil {
-		matched := workers.Match(allWorkers, s.Stage.Workflow)
+		matched := workers.Match(allWorkers, s.Stage.Name)
 		if len(matched) > 0 {
 			worker = matched[0]
 			matchReason = "best match for workflow"
@@ -480,11 +494,11 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	}
 
 	if worker == nil {
-		fmt.Printf("No worker found for workflow %q\n", s.Stage.Workflow)
-		if wfCfg.Worker != "" {
-			fmt.Printf("Workflow default worker %q not found in workers/\n", wfCfg.Worker)
+		fmt.Printf("No worker found for stage %q\n", s.Stage.Name)
+		if stageCfg.Worker != "" {
+			fmt.Printf("Stage default worker %q not found in workers/\n", stageCfg.Worker)
 		}
-		fmt.Println("Set worker: in the workflow's WORKFLOW.md or add a matching worker file.")
+		fmt.Println("Set worker: in workflows.yaml or add a matching worker file.")
 		return nil
 	}
 
@@ -493,7 +507,7 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	// Auto-tmux: create a session if tmux is available and none exists yet, then send there.
 	if !dry && tmux.Available() {
 		session := s.Slug
-		window := s.Stage.Workflow
+		window := s.Stage.Name
 
 		// Auto-create session if not already set up.
 		if s.Runtime.Tmux == nil {
@@ -561,9 +575,10 @@ func runWork(cmd *cobra.Command, args []string) error {
 	}
 
 	result, err := workspace.Work(workspace.WorkOptions{
-		Root:   root,
-		Ticket: args[0],
-		Slug:   workSlug,
+		Root:     root,
+		Ticket:   args[0],
+		Slug:     workSlug,
+		Workflow: workWorkflow,
 	})
 	if err != nil {
 		return err
@@ -637,7 +652,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			rows = append(rows, row{
 				ticket:   s.Ticket,
 				status:   s.Status,
-				workflow: s.Stage.Workflow,
+				workflow: s.Stage.Name,
 				owner:    s.Stage.Owner,
 				next:     next,
 				session:  session,
@@ -735,7 +750,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 	if s.Runtime.Tmux != nil {
 		session := s.Runtime.Tmux.Session
 		if tmux.Available() && tmux.SessionExists(session) {
-			fmt.Printf("Session:  %s\n", tmux.AttachHint(session, s.Stage.Workflow))
+			fmt.Printf("Session:  %s\n", tmux.AttachHint(session, s.Stage.Name))
 		} else {
 			fmt.Printf("Session:  %s  (not running — run `orc next %s` to restart)\n", session, s.Ticket)
 		}
@@ -743,7 +758,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Stage")
-	fmt.Printf("  Workflow:  %s\n", s.Stage.Workflow)
+	fmt.Printf("  Workflow:  %s\n", s.Stage.Name)
 	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
 
 	if len(s.Inputs.Ready)+len(s.Inputs.Required)+len(s.Inputs.Completed) > 0 {
@@ -784,7 +799,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	} else {
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
-		matched := workers.Match(allWorkers, s.Stage.Workflow)
+		matched := workers.Match(allWorkers, s.Stage.Name)
 		preferred := workers.Preferred(matched, s.Stage.Owner)
 		if preferred == nil && len(matched) > 0 {
 			preferred = matched[0]
@@ -802,7 +817,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		fmt.Println("History")
 		for _, h := range s.History {
-			fmt.Printf("  %s  %-24s  %-20s  %s\n", h.At, h.Workflow, h.Owner, h.Result)
+			fmt.Printf("  %s  %-24s  %-20s  %s\n", h.At, h.Stage, h.Owner, h.Result)
 		}
 	}
 
@@ -838,7 +853,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Status:   in_progress\n")
-	fmt.Printf("Workflow: %s\n", s.Stage.Workflow)
+	fmt.Printf("Workflow: %s\n", s.Stage.Name)
 	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 	return nil
 }
@@ -867,7 +882,7 @@ func runWait(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Ticket:  %s\n", s.Ticket)
 	fmt.Printf("Status:  waiting_for_human\n")
 	fmt.Printf("Needs:   %s\n", reason)
-	fmt.Printf("\nRun `orc advance %s --workflow <next-workflow>` to continue once resolved.\n", s.Ticket)
+	fmt.Printf("\nRun `orc advance %s` to continue once resolved.\n", s.Ticket)
 	return nil
 }
 
@@ -895,7 +910,7 @@ func runBlock(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Ticket:  %s\n", s.Ticket)
 	fmt.Printf("Status:  blocked\n")
 	fmt.Printf("Reason:  %s\n", reason)
-	fmt.Printf("\nRun `orc advance %s --workflow <next-workflow>` to unblock when resolved.\n", s.Ticket)
+	fmt.Printf("\nRun `orc advance %s` to unblock when resolved.\n", s.Ticket)
 	return nil
 }
 
@@ -915,25 +930,37 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	prevWorkflow := s.Stage.Workflow
+	prevStage := s.Stage.Name
+
+	// If --workflow not provided, auto-advance to next stage in the feature's pipeline.
+	targetWorkflow := advanceStage
+	if targetWorkflow == "" {
+		workflowCfg, _ := workflow.Load(root)
+		pname := s.Workflow
+		if pname == "" {
+			pname = "default"
+		}
+		targetWorkflow = workflowCfg.NextStage(pname, prevStage)
+	}
+
 	result := advanceResult
 	if result == "" {
-		if advanceWorkflow != "" {
-			result = fmt.Sprintf("advanced from %s to %s", prevWorkflow, advanceWorkflow)
+		if targetWorkflow != "" && targetWorkflow != prevStage {
+			result = fmt.Sprintf("advanced from %s to %s", prevStage, targetWorkflow)
 		} else {
-			result = fmt.Sprintf("completed %s", prevWorkflow)
+			result = fmt.Sprintf("completed %s", prevStage)
 		}
 	}
 
-	if err := state.Advance(featureDir, advanceWorkflow, advanceOwner, result); err != nil {
+	if err := state.Advance(featureDir, targetWorkflow, advanceOwner, result); err != nil {
 		return err
 	}
 
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
-	if advanceWorkflow != "" {
-		fmt.Printf("Workflow: %s → %s\n", prevWorkflow, advanceWorkflow)
+	if targetWorkflow != "" && targetWorkflow != prevStage {
+		fmt.Printf("Workflow: %s → %s\n", prevStage, targetWorkflow)
 	} else {
-		fmt.Printf("Workflow: %s  (unchanged)\n", prevWorkflow)
+		fmt.Printf("Workflow: %s  (unchanged)\n", prevStage)
 	}
 	if advanceOwner != "" {
 		fmt.Printf("Owner:    %s\n", advanceOwner)
@@ -1044,19 +1071,17 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no tmux session for %s — run `orc next %s` to start one", s.Ticket, s.Ticket)
 	}
 
-	return tmux.Attach(s.Slug + ":" + s.Stage.Workflow)
+	return tmux.Attach(s.Slug + ":" + s.Stage.Name)
 }
 
-// listWorkflowNames returns workflow directory names ordered by the next_workflow
-// chain defined in each WORKFLOW.md frontmatter. Workflows not reachable from
-// a chain start (e.g. repair branches) are appended at the end.
+// listWorkflowNames returns workflow directory names in pipeline order,
+// with any workflows not in any pipeline appended at the end.
 func listWorkflowNames(root string) []string {
 	workflowsDir := filepath.Join(root, "workflows")
 	entries, err := os.ReadDir(workflowsDir)
 	if err != nil {
 		return nil
 	}
-
 	var all []string
 	for _, e := range entries {
 		if e.IsDir() {
@@ -1064,70 +1089,22 @@ func listWorkflowNames(root string) []string {
 		}
 	}
 
-	// Build next_workflow map and track which names are referenced.
-	next := make(map[string]string)
-	referenced := make(map[string]bool)
-	for _, name := range all {
-		cfg, _ := workflow.Load(workflowsDir, name)
-		if cfg != nil && cfg.NextWorkflow != "" {
-			next[name] = cfg.NextWorkflow
-			referenced[cfg.NextWorkflow] = true
-		}
-	}
-
-	// Starting points: workflows not referenced as anyone's next_workflow.
-	var starts []string
-	for _, name := range all {
-		if !referenced[name] {
-			starts = append(starts, name)
-		}
-	}
-
-	// Walk each chain from its start. Skip starts whose next_workflow target is
-	// already visited — those are branch workflows (e.g. pr-repair → pr-open)
-	// and will be inserted adjacent to their target in the next pass.
-	visited := make(map[string]bool)
+	workflowCfg, _ := workflow.Load(root)
+	seen := make(map[string]bool)
 	var ordered []string
-	var walk func(name string)
-	walk = func(name string) {
-		if name == "" || visited[name] {
-			return
-		}
-		visited[name] = true
-		ordered = append(ordered, name)
-		walk(next[name])
-	}
-	for _, s := range starts {
-		if visited[next[s]] {
-			continue // branch start — handle in insertion pass
-		}
-		walk(s)
-	}
-
-	// Insert unvisited workflows immediately after the workflow they point to,
-	// so pr-repair appears right after pr-open rather than at the end.
-	for _, name := range all {
-		if visited[name] {
-			continue
-		}
-		target := next[name]
-		pos := -1
-		for i, n := range ordered {
-			if n == target {
-				pos = i
-				break
+	for _, pname := range workflowCfg.Names() {
+		for _, stageName := range workflowCfg.StageNames(pname) {
+			if !seen[stageName] {
+				ordered = append(ordered, stageName)
+				seen[stageName] = true
 			}
 		}
-		if pos >= 0 {
-			tail := make([]string, len(ordered[pos+1:]))
-			copy(tail, ordered[pos+1:])
-			ordered = append(ordered[:pos+1], append([]string{name}, tail...)...)
-		} else {
+	}
+	for _, name := range all {
+		if !seen[name] {
 			ordered = append(ordered, name)
 		}
-		visited[name] = true
 	}
-
 	return ordered
 }
 

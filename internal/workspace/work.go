@@ -8,13 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cengebretson/orc/internal/workflow"
 	"gopkg.in/yaml.v3"
 )
 
 type WorkOptions struct {
-	Root   string
-	Ticket string // e.g. FLYWL-123
-	Slug   string // optional override suffix, e.g. "add-user-export"
+	Root     string
+	Ticket   string // e.g. FLYWL-123
+	Slug     string // optional override suffix, e.g. "add-user-export"
+	Workflow string // pipeline name, defaults to "default"
 }
 
 type WorkResult struct {
@@ -55,7 +57,17 @@ func Work(opts WorkOptions) (*WorkResult, error) {
 		return nil, fmt.Errorf("creating feature folder: %w", err)
 	}
 
-	if err := writeStateYAML(featureDir, ticket, slug); err != nil {
+	workflowName := opts.Workflow
+	if workflowName == "" {
+		workflowName = "default"
+	}
+	workflowCfg, _ := workflow.Load(root)
+	firstStage := "intake"
+	if stages := workflowCfg.StageNames(workflowName); len(stages) > 0 {
+		firstStage = stages[0]
+	}
+
+	if err := writeStateYAML(featureDir, ticket, slug, workflowName, firstStage); err != nil {
 		return nil, fmt.Errorf("writing STATE.yaml: %w", err)
 	}
 
@@ -92,10 +104,10 @@ func buildSlug(ticket, suffix string) string {
 }
 
 // writeStateYAML stamps STATE.yaml with real ticket/slug values.
-func writeStateYAML(featureDir, ticket, slug string) error {
+func writeStateYAML(featureDir, ticket, slug, workflowName, firstStage string) error {
 	type stateStage struct {
-		Owner    string `yaml:"owner"`
-		Workflow string `yaml:"workflow"`
+		Owner string `yaml:"owner"`
+		Name  string `yaml:"name"`
 	}
 	type stateNextAction struct {
 		Worker string `yaml:"worker"`
@@ -103,15 +115,16 @@ func writeStateYAML(featureDir, ticket, slug string) error {
 		CWD    string `yaml:"cwd"`
 	}
 	type stateHistory struct {
-		At       string `yaml:"at"`
-		Workflow string `yaml:"workflow"`
-		Owner    string `yaml:"owner"`
-		Result   string `yaml:"result"`
+		At     string `yaml:"at"`
+		Stage  string `yaml:"stage"`
+		Owner  string `yaml:"owner"`
+		Result string `yaml:"result"`
 	}
 	type stateFile struct {
-		Ticket string `yaml:"ticket"`
-		Slug   string `yaml:"slug"`
-		Status string `yaml:"status"`
+		Ticket   string `yaml:"ticket"`
+		Slug     string `yaml:"slug"`
+		Status   string `yaml:"status"`
+		Workflow string `yaml:"workflow,omitempty"`
 
 		Stage stateStage `yaml:"stage"`
 
@@ -121,23 +134,24 @@ func writeStateYAML(featureDir, ticket, slug string) error {
 	}
 
 	s := stateFile{
-		Ticket: ticket,
-		Slug:   slug,
-		Status: "pending",
+		Ticket:   ticket,
+		Slug:     slug,
+		Status:   "pending",
+		Workflow: workflowName,
 		Stage: stateStage{
-			Owner:    "agent",
-			Workflow: "intake",
+			Owner: "agent",
+			Name:  firstStage,
 		},
 		NextAction: stateNextAction{
-			Worker: "intake",
+			Worker: firstStage,
 			Prompt: fmt.Sprintf("Load ticket %s and populate TICKET.md, SPEC.md, and PLAN.md. Update STATE.yaml when complete.", ticket),
 			CWD:    ".",
 		},
 		History: []stateHistory{
 			{
-				At:       time.Now().Format(time.RFC3339),
-				Workflow: "intake",
-				Owner:    "agent",
+				At:    time.Now().Format(time.RFC3339),
+				Stage: firstStage,
+				Owner: "agent",
 				Result:   "feature context created by orc work",
 			},
 		},

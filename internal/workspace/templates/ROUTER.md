@@ -52,12 +52,12 @@ background. Do not reconstruct state from memory — always read the files.
 
 ---
 
-## Workflows
+## Stages
 
-Workflow definitions live in `workflows/<name>/WORKFLOW.md`. Each file includes
-frontmatter declaring the next workflow, advance mode, and model hints.
+Stage definitions live in `stages/<name>.md`. Flow control (order, worker per
+stage, advance mode, repair loops) is declared in `workflows.yaml`.
 
-| Workflow       | Purpose                           |
+| Stage          | Purpose                           |
 |----------------|-----------------------------------|
 | intake         | Load ticket context               |
 | develop        | Feature implementation            |

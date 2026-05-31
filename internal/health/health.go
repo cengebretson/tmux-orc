@@ -66,8 +66,9 @@ func Run(root string) *Report {
 	// workers/
 	report.Results = append(report.Results, checkDirWithCount(root, "workers", "*.md", "worker"))
 
-	// workflows/
-	report.Results = append(report.Results, checkDirWithCount(root, "workflows", "*/WORKFLOW.md", "workflow"))
+	// workflows.yaml + stages/
+	report.Results = append(report.Results, checkWorkflowsFile(root))
+	report.Results = append(report.Results, checkDirWithCount(root, "stages", "*.md", "stage"))
 
 	// optional dirs — note presence but don't fail if missing
 	report.Results = append(report.Results, checkOptionalDir(root, "worktrees"))
@@ -182,47 +183,16 @@ func checkOptionalDir(root, name string) Result {
 	return Result{Name: name + "/", Status: Empty, Detail: "not created yet"}
 }
 
-func checkWorkflowDetails(root string) []Result {
-	workflowsDir := filepath.Join(root, "workflows")
-	entries, err := os.ReadDir(workflowsDir)
+func checkWorkflowsFile(root string) Result {
+	cfg, err := workflow.Load(root)
 	if err != nil {
-		return []Result{{Name: "workflows/", Status: Missing, Detail: "workflows/ not found"}}
+		return Result{Name: "workflows.yaml", Status: Missing, Detail: "missing — run `orc init`"}
 	}
-
-	var results []Result
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		cfg, _ := workflow.Load(workflowsDir, name)
-
-		if cfg.Advance == "" && cfg.NextWorkflow == "" && cfg.Worker == "" {
-			results = append(results, Result{
-				Name:   "  " + name,
-				Status: Empty,
-				Detail: "no frontmatter",
-			})
-			continue
-		}
-
-		var parts []string
-		if cfg.NextWorkflow != "" {
-			parts = append(parts, fmt.Sprintf("%s → %s", cfg.Advance, cfg.NextWorkflow))
-		} else {
-			parts = append(parts, "end of chain")
-		}
-		if cfg.Worker != "" {
-			parts = append(parts, cfg.Worker)
-		}
-
-		results = append(results, Result{
-			Name:   "  " + name,
-			Status: OK,
-			Detail: strings.Join(parts, "  "),
-		})
+	names := cfg.Names()
+	if len(names) == 0 {
+		return Result{Name: "workflows.yaml", Status: Empty, Detail: "no workflows defined"}
 	}
-	return results
+	return Result{Name: "workflows.yaml", Status: OK, Detail: fmt.Sprintf("%d workflow(s): %s", len(names), strings.Join(names, ", "))}
 }
 
 func checkDirWithCount(root, dir, pattern, label string) Result {
@@ -233,18 +203,6 @@ func checkDirWithCount(root, dir, pattern, label string) Result {
 	}
 
 	matches, _ := filepath.Glob(filepath.Join(path, pattern))
-
-	// for nested patterns like */WORKFLOW.md, count subdirs instead
-	if len(matches) == 0 && pattern == "*/WORKFLOW.md" {
-		entries, _ := os.ReadDir(path)
-		var count int
-		for _, e := range entries {
-			if e.IsDir() {
-				count++
-			}
-		}
-		matches = make([]string, count)
-	}
 
 	switch len(matches) {
 	case 0:

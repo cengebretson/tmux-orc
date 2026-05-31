@@ -26,11 +26,13 @@ func TestInit_CreatesExpectedFiles(t *testing.T) {
 		"features/_template/STATE.yaml",
 		"features/_template/TICKET.md",
 		"workers/_template.md",
-		"workflows/intake/WORKFLOW.md",
-		"workflows/develop/WORKFLOW.md",
-		"workflows/pr-open/WORKFLOW.md",
-		"workflows/pr-repair/WORKFLOW.md",
-		"workflows/qa-automation/WORKFLOW.md",
+		"workflows.yaml",
+		"ORC.md",
+		"stages/intake.md",
+		"stages/develop.md",
+		"stages/pr-open.md",
+		"stages/pr-repair.md",
+		"stages/qa-automation.md",
 	}
 
 	for _, rel := range required {

@@ -15,8 +15,8 @@ to see what still needs to be done before starting.
 
 ## Status
 
-shared: complete
-claude: complete
+shared: pending
+claude: pending
 codex:  pending
 
 <!-- orc health checks these lines — do not remove them. -->
@@ -27,7 +27,7 @@ codex:  pending
 ## Instructions for the Agent
 
 1. Read the Status block above.
-2. If `shared: complete` — complete the Shared sections first, then mark `shared: complete`.
+2. If `shared: pending` — complete the Shared sections first, then mark `shared: complete`.
 3. If `shared: complete` — skip to your own agent section (Claude or Codex).
 4. Complete your agent section and mark it `complete` in the Status block.
 5. Print a summary of every file you created or updated.
@@ -42,7 +42,7 @@ Do not re-run sections already marked complete.
 > What system do you use for tickets or stories?
 > (1) Jira  (2) GitHub Issues  (3) Linear  (4) Local markdown files  (5) None / manual
 
-**Then update `workflows/intake/WORKFLOW.md`:**
+**Then update `stages/intake.md`:**
 - Remove the option blocks that do not apply, keep only the chosen one
 - If Jira: ask for the project key, fill it in
 - If GitHub Issues: ask for the repo (owner/name), fill it in
@@ -123,7 +123,7 @@ launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.
-Reads workflows/intake/WORKFLOW.md for source system instructions.
+Reads stages/intake.md for source system instructions.
 ```
 
 - Update `TOOLS.md` — in the Claude section, list the MCP server names the user provided
@@ -162,7 +162,7 @@ launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.
-Reads workflows/intake/WORKFLOW.md for source system instructions.
+Reads stages/intake.md for source system instructions.
 ```
 
 - Update `TOOLS.md` — in the Codex section, list any tools or MCP servers the user provided

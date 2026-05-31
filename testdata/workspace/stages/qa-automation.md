@@ -1,11 +1,6 @@
----
-advance: manual
-worker: fred-documentor
----
-
 # Workflow: qa-automation
 
-> Before starting: read `workflows/REQUIREMENTS.md` for state update rules and error handling.
+> Before starting: read `ORC.md` for state update rules and error handling.
 
 ## Purpose
 

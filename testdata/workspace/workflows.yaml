@@ -1,0 +1,25 @@
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: develop
+        worker: bob-developer
+        advance: manual
+      - name: pr-open
+        worker: bob-developer
+        advance: auto
+      - name: code-review
+        worker: zach-reviewer
+        advance: auto
+      - name: qa-automation
+        worker: fred-documentor
+        advance: manual
+
+repair_stages:
+  pr-repair:
+    repairs: pr-open
+    worker: bob-developer
+    advance: auto
+    max_retries: 3

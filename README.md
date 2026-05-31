@@ -31,10 +31,10 @@ The workspace is the source of truth. Agents read it to know what to do next.
 what command to use. Policy lives in `RULES.md`, `AGENTS.md`, and worker
 definitions — not in code.
 
-The quality of the system depends on the quality of the workflow docs. A
-well-written `WORKFLOW.md` has clear exit criteria, explicit output definitions,
+The quality of the system depends on the quality of the stage docs. A
+well-written stage file has clear exit criteria, explicit output definitions,
 unambiguous signals agents can read (like a `verdict:` line), and exact commands
-for every outcome. The sample workflows are a starting point — tune them to your
+for every outcome. The sample stages are a starting point — tune them to your
 stack, your review standards, and your team's process. They're just markdown files:
 edit one and the next agent session picks up the new instructions immediately.
 
@@ -83,7 +83,7 @@ claude "Read SETUP.md and follow the setup instructions"
 
 The agent will ask about your ticket system (Jira, GitHub Issues, etc.), repos,
 and which Claude/Codex model to use for each stage. It creates worker files and
-updates `workflows/intake/WORKFLOW.md` with the right source system instructions.
+updates `stages/intake.md` with the right source system instructions.
 
 ### 3. Check health
 
@@ -186,7 +186,7 @@ or human picks up exactly where the last one left off.
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
 | `orc start <ticket>` | Mark a ticket in_progress — called by agents (hidden from help) |
-| `orc advance <ticket> [--workflow <wf>]` | Mark current workflow complete and move to the next (called by agents) |
+| `orc advance <ticket> [--stage <stage>]` | Mark current stage complete and move to the next (called by agents) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
 | `orc block <ticket> <reason>` | Mark a ticket as blocked |
 | `orc archive <ticket>` | Archive a completed feature, remove worktrees |
@@ -209,7 +209,6 @@ my-workspace/
       TICKET.md      ticket summary and acceptance criteria
       SPEC.md        context, scope, and open questions
       PLAN.md        approach and steps
-      WORKLOG.md     running log of work done
       DECISIONS.md   decisions and rationale
       impl/
         PR.md        PR URL and status
@@ -224,17 +223,19 @@ my-workspace/
   workers/
     _template.md     worker definition template
     intake-agent.md  fetches tickets, populates feature folder
-    # add more workers per stage and workflow
+    # add more workers per stage
 
-  workflows/
-    REQUIREMENTS.md  shared contract — status values, state update rules, error handling
-    intake/          load ticket context — runs first for every ticket
-    develop/         implementation
-    code-review/     review implementation before opening PR
-    pr-open/         preflight checks, open PR, handoff for review
-    pr-repair/       fix CI failures, review feedback, conflicts
-    qa-automation/   implement and run automated tests
-    # each WORKFLOW.md has frontmatter: next_workflow, advance, worker
+  stages/
+    intake.md        load ticket context — runs first for every ticket
+    develop.md       implementation
+    code-review.md   review implementation before opening PR
+    pr-open.md       preflight checks, open PR, handoff for review
+    pr-repair.md     fix CI failures, review feedback, conflicts
+    qa-automation.md implement and run automated tests
+    # plain markdown — no frontmatter; flow control lives in workflows.yaml
+
+  workflows.yaml     named pipelines: stage sequence, worker per stage, advance mode
+  ORC.md             agent state contract — read at session start
 
   worktrees/         git worktrees for ticket branches (gitignored)
 ```
@@ -248,13 +249,14 @@ route work to the right agent.
 ticket: STORY-123
 slug: STORY-123-add-login
 status: in_progress
+workflow: default
 
 stage:
-  owner: developer
-  workflow: develop
+  owner: bob-developer
+  name: develop
 
 next_action:
-  worker: developer
+  worker: bob-developer
   prompt: Implement the login feature per SPEC.md and PLAN.md.
   cwd: worktrees/my-app/STORY-123-add-login
 ```
@@ -277,13 +279,13 @@ launch_mode: foreground
 Implements features, opens PRs, and repairs CI failures.
 ```
 
-Workflows declare their default worker via `worker: <id>` in `WORKFLOW.md`
-frontmatter. `orc next` looks up that worker, builds the prompt, and launches it.
+`workflows.yaml` declares the default worker per stage via `worker: <id>` in each
+stage entry. `orc next` looks up that worker, builds the prompt, and launches it.
 
 Worker resolution order:
 1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
 2. `stage.owner` in STATE.yaml — set by a previous `orc advance --owner`
-3. `worker:` in the current workflow's WORKFLOW.md
+3. `worker:` for the current stage in `workflows.yaml`
 4. Fallback: match by `workflows:` list in worker frontmatter
 
 Use `--dry` to preview the command without launching.

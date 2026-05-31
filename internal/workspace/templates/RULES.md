@@ -42,7 +42,7 @@ Every agent or script that performs work for a feature must keep
 Update `STATE.yaml` whenever any of these change:
 
 - `status`
-- `stage.workflow`
+- `stage.name`
 - `stage.owner`
 - `next_action`
 - required or completed outputs
@@ -74,16 +74,16 @@ requires it. Record the active worktree path in `features/<ticket-slug>/STATE.ya
 
 ---
 
-## Workflow Quality
+## Stage Quality
 
-The workflows in `workflows/` are the intelligence of the system — they define
+The stage files in `stages/` are the intelligence of the system — they define
 what agents do, when they're done, and how they hand off to the next step.
 
-A workflow doc should have:
+A stage doc should have:
 - **Clear exit criteria** — the agent knows exactly when it's done
 - **Explicit output definitions** — which files get written and where
 - **Unambiguous signals** — structured fields like `verdict:` that downstream
-  workflows can read without interpretation
+  stages can read without interpretation
 - **Exact commands** — `orc advance`, `orc wait`, or `orc block` for every outcome,
   with no ambiguity about which to use
 

@@ -8,98 +8,180 @@ import (
 	"github.com/cengebretson/orc/internal/workflow"
 )
 
-func writeWorkflow(t *testing.T, dir, name, content string) {
+func writeWorkflowsYAML(t *testing.T, dir, content string) {
 	t.Helper()
-	wfDir := filepath.Join(dir, name)
-	if err := os.MkdirAll(wfDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(wfDir, "WORKFLOW.md"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workflows.yaml"), []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestLoad_MissingFile(t *testing.T) {
 	dir := t.TempDir()
-	cfg, err := workflow.Load(dir, "nonexistent")
+	cfg, err := workflow.Load(dir)
 	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+		t.Fatalf("expected no error for missing file, got %v", err)
 	}
-	if cfg.NextWorkflow != "" || cfg.Advance != "" || cfg.Worker != "" {
-		t.Errorf("expected empty config, got %+v", cfg)
+	if len(cfg.Names()) != 0 {
+		t.Errorf("expected empty config, got %d workflows", len(cfg.Names()))
 	}
 }
 
-func TestLoad_NoFrontmatter(t *testing.T) {
+func TestLoad_BasicWorkflow(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "intake", "# Workflow: intake\n\nSome content here.\n")
-
-	cfg, err := workflow.Load(dir, "intake")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if cfg.NextWorkflow != "" || cfg.Advance != "" {
-		t.Errorf("expected empty config for file without frontmatter, got %+v", cfg)
-	}
-}
-
-func TestLoad_FullFrontmatter(t *testing.T) {
-	dir := t.TempDir()
-	writeWorkflow(t, dir, "intake", `---
-next_workflow: develop
-advance: auto
-worker: fred-documentor
----
-
-# Workflow: intake
+	writeWorkflowsYAML(t, dir, `
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: develop
+        worker: bob-developer
+        advance: manual
 `)
 
-	cfg, err := workflow.Load(dir, "intake")
+	cfg, err := workflow.Load(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.NextWorkflow != "develop" {
-		t.Errorf("NextWorkflow: got %q, want %q", cfg.NextWorkflow, "develop")
+
+	names := cfg.Names()
+	if len(names) != 1 || names[0] != "default" {
+		t.Errorf("Names() = %v, want [default]", names)
 	}
-	if cfg.Advance != "auto" {
-		t.Errorf("Advance: got %q, want %q", cfg.Advance, "auto")
-	}
-	if cfg.Worker != "fred-documentor" {
-		t.Errorf("Worker: got %q, want %q", cfg.Worker, "fred-documentor")
+
+	stages := cfg.StageNames("default")
+	if len(stages) != 2 || stages[0] != "intake" || stages[1] != "develop" {
+		t.Errorf("StageNames(default) = %v, want [intake develop]", stages)
 	}
 }
 
-func TestLoad_PartialFrontmatter(t *testing.T) {
+func TestLoad_StageConfig(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "qa-automation", `---
-advance: manual
-worker: fred-documentor
----
-
-# Workflow: qa-automation
+	writeWorkflowsYAML(t, dir, `
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: develop
+        worker: bob-developer
+        advance: manual
 `)
 
-	cfg, err := workflow.Load(dir, "qa-automation")
+	cfg, err := workflow.Load(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Advance != "manual" {
-		t.Errorf("Advance: got %q, want %q", cfg.Advance, "manual")
+
+	sc, ok := cfg.StageConfig("default", "intake")
+	if !ok {
+		t.Fatal("StageConfig(default, intake) not found")
 	}
-	if cfg.NextWorkflow != "" {
-		t.Errorf("expected empty NextWorkflow, got %q", cfg.NextWorkflow)
+	if sc.Worker != "fred-documentor" {
+		t.Errorf("Worker = %q, want fred-documentor", sc.Worker)
+	}
+	if sc.Advance != "auto" {
+		t.Errorf("Advance = %q, want auto", sc.Advance)
 	}
 }
 
-func TestLoad_MalformedYAML(t *testing.T) {
+func TestLoad_NextStage(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "broken", "---\n: : : invalid yaml\n---\n\n# Workflow: broken\n")
+	writeWorkflowsYAML(t, dir, `
+workflows:
+  default:
+    stages:
+      - name: intake
+        advance: auto
+      - name: develop
+        advance: manual
+      - name: pr-open
+        advance: auto
+`)
 
-	cfg, err := workflow.Load(dir, "broken")
+	cfg, err := workflow.Load(dir)
 	if err != nil {
-		t.Fatalf("expected no error on malformed YAML, got %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.NextWorkflow != "" || cfg.Advance != "" {
-		t.Errorf("expected empty config on malformed YAML, got %+v", cfg)
+
+	if next := cfg.NextStage("default", "intake"); next != "develop" {
+		t.Errorf("NextStage(intake) = %q, want develop", next)
+	}
+	if next := cfg.NextStage("default", "develop"); next != "pr-open" {
+		t.Errorf("NextStage(develop) = %q, want pr-open", next)
+	}
+	if next := cfg.NextStage("default", "pr-open"); next != "" {
+		t.Errorf("NextStage(pr-open) = %q, want empty (last stage)", next)
+	}
+}
+
+func TestLoad_RepairStages(t *testing.T) {
+	dir := t.TempDir()
+	writeWorkflowsYAML(t, dir, `
+workflows:
+  default:
+    stages:
+      - name: pr-open
+        advance: auto
+
+repair_stages:
+  pr-repair:
+    repairs: pr-open
+    worker: bob-developer
+    advance: auto
+    max_retries: 3
+`)
+
+	cfg, err := workflow.Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rd, ok := cfg.RepairStage("pr-repair")
+	if !ok {
+		t.Fatal("RepairStage(pr-repair) not found")
+	}
+	if rd.Repairs != "pr-open" {
+		t.Errorf("Repairs = %q, want pr-open", rd.Repairs)
+	}
+	if rd.MaxRetries != 3 {
+		t.Errorf("MaxRetries = %d, want 3", rd.MaxRetries)
+	}
+	if !cfg.IsRepairStage("pr-repair") {
+		t.Error("IsRepairStage(pr-repair) = false, want true")
+	}
+	if cfg.IsRepairStage("pr-open") {
+		t.Error("IsRepairStage(pr-open) = true, want false")
+	}
+}
+
+func TestLoad_MultipleWorkflows(t *testing.T) {
+	dir := t.TempDir()
+	writeWorkflowsYAML(t, dir, `
+workflows:
+  default:
+    stages:
+      - name: intake
+      - name: develop
+  hotfix:
+    stages:
+      - name: develop
+      - name: pr-open
+`)
+
+	cfg, err := workflow.Load(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	names := cfg.Names()
+	if len(names) != 2 {
+		t.Errorf("Names() = %v, want 2 workflows", names)
+	}
+
+	if stages := cfg.StageNames("hotfix"); len(stages) != 2 || stages[0] != "develop" {
+		t.Errorf("StageNames(hotfix) = %v, want [develop pr-open]", stages)
 	}
 }

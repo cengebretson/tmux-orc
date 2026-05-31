@@ -1,12 +1,6 @@
----
-next_workflow: pr-open
-advance: auto
-worker: zach-reviewer
----
-
 # Workflow: code-review
 
-> Before starting: read `workflows/REQUIREMENTS.md` for state update rules and error handling.
+> Before starting: read `ORC.md` for state update rules and error handling.
 
 ## Purpose
 

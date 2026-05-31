@@ -42,7 +42,7 @@ Do not re-run sections already marked complete.
 > What system do you use for tickets or stories?
 > (1) Jira  (2) GitHub Issues  (3) Linear  (4) Local markdown files  (5) None / manual
 
-**Then update `workflows/intake/WORKFLOW.md`:**
+**Then update `stages/intake.md`:**
 - Remove the option blocks that do not apply, keep only the chosen one
 - If Jira: ask for the project key, fill it in
 - If GitHub Issues: ask for the repo (owner/name), fill it in
@@ -123,7 +123,7 @@ launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.
-Reads workflows/intake/WORKFLOW.md for source system instructions.
+Reads stages/intake.md for source system instructions.
 ```
 
 - Update `TOOLS.md` — in the Claude section, list the MCP server names the user provided
@@ -162,7 +162,7 @@ launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.
-Reads workflows/intake/WORKFLOW.md for source system instructions.
+Reads stages/intake.md for source system instructions.
 ```
 
 - Update `TOOLS.md` — in the Codex section, list any tools or MCP servers the user provided

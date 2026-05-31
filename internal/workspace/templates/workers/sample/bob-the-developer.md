@@ -52,7 +52,7 @@ codex --model {{model}} --cd {{cwd}} "{{prompt}}"
 Continue {{ticket}} using:
 
 - Feature state: `features/{{slug}}/STATE.yaml`
-- Workflow: `workflows/{{workflow}}/WORKFLOW.md`
+- Stage: `stages/{{stage}}.md`
 - Current stage: `{{stage}}`
 - Expected outputs: {{outputs}}
 

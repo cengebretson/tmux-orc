@@ -17,11 +17,14 @@ func timeNow() string {
 const Filename = "STATE.yaml"
 
 type State struct {
-	Ticket string `yaml:"ticket"`
-	Slug   string `yaml:"slug"`
-	Status string `yaml:"status"`
+	Ticket   string `yaml:"ticket"`
+	Slug     string `yaml:"slug"`
+	Status   string `yaml:"status"`
+	Workflow string `yaml:"workflow,omitempty"`
 
 	Stage Stage `yaml:"stage"`
+
+	StageCounts map[string]int `yaml:"stage_counts,omitempty"`
 
 	Runtime Runtime `yaml:"runtime,omitempty"`
 
@@ -44,8 +47,8 @@ type TmuxRuntime struct {
 }
 
 type Stage struct {
-	Owner    string `yaml:"owner"`
-	Workflow string `yaml:"workflow"`
+	Owner string `yaml:"owner"`
+	Name  string `yaml:"name"`
 }
 
 type Repo struct {
@@ -67,10 +70,10 @@ type NextAction struct {
 }
 
 type HistoryEntry struct {
-	At       string `yaml:"at"`
-	Workflow string `yaml:"workflow"`
-	Owner    string `yaml:"owner"`
-	Result   string `yaml:"result"`
+	At    string `yaml:"at"`
+	Stage string `yaml:"stage"`
+	Owner string `yaml:"owner"`
+	Result string `yaml:"result"`
 }
 
 // Load reads STATE.yaml from the given feature directory.
@@ -104,7 +107,7 @@ func Start(featureDir string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Workflow: s.Stage.Workflow,
+		Stage:   s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: "started",
 	})
@@ -133,7 +136,7 @@ func WaitForHuman(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Workflow: s.Stage.Workflow,
+		Stage:   s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: "waiting_for_human — " + reason,
 	})
@@ -165,7 +168,7 @@ func Block(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Workflow: s.Stage.Workflow,
+		Stage:   s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: "blocked — " + reason,
 	})
@@ -197,13 +200,17 @@ func Advance(featureDir, workflow, owner, result string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Workflow: s.Stage.Workflow,
+		Stage:   s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: result,
 	})
 
 	if workflow != "" {
-		s.Stage.Workflow = workflow
+		s.Stage.Name = workflow
+		if s.StageCounts == nil {
+			s.StageCounts = map[string]int{}
+		}
+		s.StageCounts[workflow]++
 	}
 	if owner != "" {
 		s.Stage.Owner = owner
