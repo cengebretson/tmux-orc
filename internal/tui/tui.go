@@ -1,7 +1,10 @@
 package tui
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +22,17 @@ import (
 	"github.com/cengebretson/orc/internal/workflow"
 	"gopkg.in/yaml.v3"
 )
+
+//go:embed quotes.json
+var quotesJSON []byte
+
+func pickQuote() string {
+	var quotes []string
+	if err := json.Unmarshal(quotesJSON, &quotes); err != nil || len(quotes) == 0 {
+		return ""
+	}
+	return quotes[rand.Intn(len(quotes))]
+}
 
 // ── view states ──────────────────────────────────────────────────
 
@@ -102,7 +116,8 @@ type Model struct {
 	viewerContext string // label shown in file viewer title bar
 	viewerReturn  viewState
 
-	err error
+	quote string
+	err   error
 }
 
 type detailFile struct {
@@ -122,6 +137,7 @@ func New(root string) Model {
 			"workers":   false,
 			"routes":    false,
 		},
+		quote: pickQuote(),
 	}
 }
 
@@ -509,11 +525,21 @@ func (m Model) viewDashboard() string {
 		fmt.Sprintf("%d repos", len(m.repos)),
 		rtContent, leftW, rtFocused))
 
-	// ── Top block: left column beside logo ───────────────────────────
+	// ── Top block: left column beside logo + quote ───────────────────
 	var b strings.Builder
 	if useLogo {
 		logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1)).Render(logo)
-		b.WriteString("\n" + lipgloss.JoinHorizontal(lipgloss.Top, left.String(), strings.Repeat(" ", logoGap), logoRendered) + "\n")
+		right := logoRendered
+		if m.quote != "" {
+			wrapped := wrapText(m.quote, logoW)
+			quoteRendered := lipgloss.NewStyle().
+				Foreground(lipgloss.Color(overlay0)).
+				Italic(true).
+				Width(logoW).
+				Render(wrapped)
+			right = lipgloss.JoinVertical(lipgloss.Left, logoRendered, "", quoteRendered)
+		}
+		b.WriteString("\n" + lipgloss.JoinHorizontal(lipgloss.Top, left.String(), strings.Repeat(" ", logoGap), right) + "\n")
 	} else {
 		b.WriteString("\n" + left.String() + "\n")
 	}
@@ -1556,6 +1582,26 @@ func renderWorkflowFile(path string, width int) (string, error) {
 	}
 
 	return sb.String(), nil
+}
+
+// wrapText wraps s to fit within maxW columns, breaking on word boundaries.
+func wrapText(s string, maxW int) string {
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return ""
+	}
+	var lines []string
+	line := words[0]
+	for _, w := range words[1:] {
+		if len(line)+1+len(w) <= maxW {
+			line += " " + w
+		} else {
+			lines = append(lines, line)
+			line = w
+		}
+	}
+	lines = append(lines, line)
+	return strings.Join(lines, "\n")
 }
 
 func fileExists(path string) bool {
