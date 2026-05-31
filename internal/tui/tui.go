@@ -1016,10 +1016,17 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 	const (
 		wTicket   = 12
 		wName     = 22
-		wStatus   = 22
 		wWorkflow = 16
-		wWorker   = 22
+		wTmux     = 4
 	)
+	// fixed overhead: leading space + columns + separators (5 × "  ")
+	fixed := 1 + wTicket + wName + wWorkflow + wTmux + 5*2
+	flex := w - fixed
+	if flex < 20 {
+		flex = 20
+	}
+	wStatus := flex * 2 / 5
+	wWorker := flex - wStatus
 
 	header := " " +
 		padRight(styleTableHeader.Render("Ticket"), wTicket) + "  " +
@@ -1027,7 +1034,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
 		padRight(styleTableHeader.Render("Stage"), wWorkflow) + "  " +
 		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
-		styleTableHeader.Render("~")
+		styleTableHeader.Render("Tmux")
 
 	div := " " + styleDivider.Render(strings.Repeat("─", w-1))
 

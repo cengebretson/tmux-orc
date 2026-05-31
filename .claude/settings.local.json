@@ -113,7 +113,8 @@
       "Bash(make build *)",
       "Bash(make check *)",
       "Bash(codex --help)",
-      "Bash(rg *)"
+      "Bash(rg *)",
+      "Bash(make install *)"
     ]
   }
 }
