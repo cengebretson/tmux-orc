@@ -614,14 +614,16 @@ func renderRouteChain(chain []routeStep, maxW int) []string {
 
 func (m Model) renderTable(rows []*featureRow, w int) string {
 	const (
-		wTicket   = 16
+		wTicket   = 12
+		wName     = 22
 		wStatus   = 18
-		wWorkflow = 20
-		wWorker   = 20
+		wWorkflow = 16
+		wWorker   = 18
 	)
 
 	header := " " +
 		padRight(styleTableHeader.Render("Ticket"), wTicket) + "  " +
+		padRight(styleTableHeader.Render("Name"), wName) + "  " +
 		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
 		padRight(styleTableHeader.Render("Workflow"), wWorkflow) + "  " +
 		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
@@ -655,8 +657,12 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 			worker = styleDim.Render("—")
 		}
 
+		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
+		nameCell := styleDim.Render(truncate(name, wName))
+
 		line := " " +
 			padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
+			padRight(nameCell, wName) + "  " +
 			padRight(statusCell, wStatus) + "  " +
 			padRight(truncate(s.Stage.Workflow, wWorkflow), wWorkflow) + "  " +
 			padRight(truncate(worker, wWorker), wWorker) + "  " +
