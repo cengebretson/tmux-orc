@@ -8,7 +8,6 @@ import (
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/workers"
-	"github.com/cengebretson/orc/internal/workflow"
 )
 
 type Status int
@@ -199,7 +198,7 @@ func checkOrcConfig(root string) Result {
 	for i, r := range cfg.Repos {
 		repoNames[i] = r.Name
 	}
-	wfCfg, _ := workflow.Load(root)
+	wfCfg, _ := config.Load(root)
 	wfNames := wfCfg.Names()
 	detail := fmt.Sprintf("%d repo(s): %s", len(repoNames), strings.Join(repoNames, ", "))
 	if len(wfNames) > 0 {
@@ -252,7 +251,7 @@ func checkRepoPaths(root string) Result {
 }
 
 func checkWorkflowRefs(root string) Result {
-	wfCfg, err := workflow.Load(root)
+	wfCfg, err := config.Load(root)
 	if err != nil || len(wfCfg.Names()) == 0 {
 		return Result{Name: "workflow refs", Status: Empty, Detail: "no workflows to check"}
 	}

@@ -10,7 +10,6 @@ import (
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
-	"github.com/cengebretson/orc/internal/workflow"
 	"gopkg.in/yaml.v3"
 )
 
@@ -63,13 +62,9 @@ func Work(opts WorkOptions) (*WorkResult, error) {
 	if workflowName == "" {
 		workflowName = cfg.DefaultWorkflow()
 	}
-	workflowCfg, err := workflow.Load(root)
-	if err != nil {
-		return nil, fmt.Errorf("loading workflow config: %w", err)
-	}
-	stages := workflowCfg.StageNames(workflowName)
+	stages := cfg.StageNames(workflowName)
 	if len(stages) == 0 {
-		known := workflowCfg.Names()
+		known := cfg.Names()
 		if len(known) > 0 {
 			return nil, fmt.Errorf("workflow %q not found in orc.yaml (available: %s)", workflowName, strings.Join(known, ", "))
 		}

@@ -22,7 +22,6 @@ import (
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/workers"
-	"github.com/cengebretson/orc/internal/workflow"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1255,7 +1254,7 @@ func loadData(root string) tea.Cmd {
 		report := health.Run(root)
 
 		// build workflow chains from workflows.yaml
-		workflowCfg, _ := workflow.Load(root)
+		workflowCfg, _ := config.Load(root)
 		var chains []workflowChain
 		allStages := map[string]bool{}
 		for _, pname := range workflowCfg.Names() {
@@ -1443,7 +1442,7 @@ func collectFeatures(root string) []*featureRow {
 			workerName := ""
 			workerID := s.Stage.Owner
 			if workerID == "" {
-				if wfCfg, _ := workflow.Load(root); wfCfg != nil {
+				if wfCfg, _ := config.Load(root); wfCfg != nil {
 					if sc, ok := wfCfg.StageConfig(s.Workflow, s.Stage.Name); ok {
 						workerID = sc.Worker
 					}

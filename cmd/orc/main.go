@@ -17,7 +17,6 @@ import (
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/tui"
 	"github.com/cengebretson/orc/internal/workers"
-	"github.com/cengebretson/orc/internal/workflow"
 	"github.com/cengebretson/orc/internal/workspace"
 	"github.com/spf13/cobra"
 )
@@ -374,7 +373,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 		}
 		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 		jsonPrompt = jsonPreamble + jsonPrompt
-		workflowCfg, _ := workflow.Load(root)
+		workflowCfg, _ := config.Load(root)
 		jsonPipeline := resolveWorkflow(root, s.Workflow)
 		stageCfg, _ := workflowCfg.StageConfig(jsonPipeline, s.Stage.Name)
 		nextStage := workflowCfg.NextStage(jsonPipeline, s.Stage.Name)
@@ -465,7 +464,7 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	preamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 	prompt = preamble + prompt
 
-	workflowCfg, _ := workflow.Load(root)
+	workflowCfg, _ := config.Load(root)
 	pname := resolveWorkflow(root, s.Workflow)
 	stageCfg, _ := workflowCfg.StageConfig(pname, s.Stage.Name)
 	nextStage := workflowCfg.NextStage(pname, s.Stage.Name)
@@ -804,7 +803,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	} else {
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
-		wfCfg, _ := workflow.Load(root)
+		wfCfg, _ := config.Load(root)
 		pname := resolveWorkflow(root, s.Workflow)
 		sc, _ := wfCfg.StageConfig(pname, s.Stage.Name)
 		workerID := s.Stage.Owner
@@ -951,7 +950,7 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ticket %s is archived — cannot advance", s.Ticket)
 	}
 
-	workflowCfg, _ := workflow.Load(root)
+	workflowCfg, _ := config.Load(root)
 	pname := resolveWorkflow(root, s.Workflow)
 	prevStage := s.Stage.Name
 
@@ -1196,7 +1195,7 @@ func resolveWorkflow(root, ticketWorkflow string) string {
 
 // stageNamesForTicket returns the ordered stage names for the ticket's workflow pipeline.
 func stageNamesForTicket(root string, s *state.State) []string {
-	workflowCfg, _ := workflow.Load(root)
+	workflowCfg, _ := config.Load(root)
 	return workflowCfg.StageNames(resolveWorkflow(root, s.Workflow))
 }
 

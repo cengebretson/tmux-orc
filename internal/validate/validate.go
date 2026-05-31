@@ -9,7 +9,6 @@ import (
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/workers"
-	"github.com/cengebretson/orc/internal/workflow"
 )
 
 type Status int
@@ -80,7 +79,7 @@ func Run(root, featureDir string) *Report {
 	}
 
 	// Workflow exists in orc.yaml.
-	wfCfg, _ := workflow.Load(root)
+	wfCfg, _ := config.Load(root)
 	stageNames := wfCfg.StageNames(pname)
 	if len(stageNames) == 0 {
 		r.Checks = append(r.Checks, fail("workflow", fmt.Sprintf("%q not found in orc.yaml", pname)))

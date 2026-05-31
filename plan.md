@@ -6,19 +6,12 @@ has been intentionally omitted.
 
 ---
 
-## 1. Unify config parsing
+## ~~1. Unify config parsing~~ ✓ Done
 
-**What:** Both `internal/config` and `internal/workflow` independently parse
-`orc.yaml`. This works today because YAML ignores unknown keys, but it will
-drift as `settings` grows and makes it harder to validate the file as a whole.
-
-**Fix:** Move all `orc.yaml` parsing into `internal/config`. The `Config`
-struct gains `Workflows` and `RepairStages` fields. The `internal/workflow`
-package either imports `internal/config` and delegates, or gets folded in
-entirely. All `workflow.Load(root)` call sites in `main.go` switch to
-`cfg.WorkflowConfig()` or equivalent.
-
-**Effort:** Medium. Touches every command in `main.go` but is mechanical.
+`internal/workflow` deleted. All workflow types (`WorkflowDef`, `StageDef`,
+`RepairStageDef`) and methods (`Names`, `Stages`, `StageNames`, `NextStage`,
+`StageConfig`, `IsRepairStage`, `RepairStage`) now live in `internal/config`.
+All callers use a single `config.Load` call.
 
 ---
 
