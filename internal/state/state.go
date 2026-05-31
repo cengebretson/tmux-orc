@@ -355,6 +355,8 @@ func ValidateRepos(s *State, workspaceRoot string) error {
 			rel, err := filepath.Rel(worktreesRoot, abs)
 			if err != nil || strings.HasPrefix(rel, "..") {
 				errs = append(errs, fmt.Sprintf("repos.%s.worktree %q is not under worktrees/ in the workspace", name, r.Worktree))
+			} else if _, err := os.Stat(abs); os.IsNotExist(err) {
+				errs = append(errs, fmt.Sprintf("repos.%s.worktree %q does not exist", name, r.Worktree))
 			}
 
 			// branch must be non-empty when a worktree is recorded

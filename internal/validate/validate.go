@@ -68,10 +68,17 @@ func Run(root, featureDir string) *Report {
 	r.Ticket = s.Ticket
 	r.Checks = append(r.Checks, ok("STATE.yaml"))
 
+	// Load orc.yaml — fail early if unreadable.
+	cfg, err := config.Load(root)
+	if err != nil {
+		r.Checks = append(r.Checks, fail("orc.yaml", fmt.Sprintf("cannot load: %v", err)))
+		return r
+	}
+	r.Checks = append(r.Checks, ok("orc.yaml"))
+
 	// Resolve pipeline name.
-	cfg, _ := config.Load(root)
 	pname := s.Workflow
-	if pname == "" && cfg != nil {
+	if pname == "" {
 		pname = cfg.DefaultWorkflow()
 	}
 	if pname == "" {
@@ -79,8 +86,7 @@ func Run(root, featureDir string) *Report {
 	}
 
 	// Workflow exists in orc.yaml.
-	wfCfg, _ := config.Load(root)
-	stageNames := wfCfg.StageNames(pname)
+	stageNames := cfg.StageNames(pname)
 	if len(stageNames) == 0 {
 		r.Checks = append(r.Checks, fail("workflow", fmt.Sprintf("%q not found in orc.yaml", pname)))
 	} else {
@@ -98,7 +104,7 @@ func Run(root, featureDir string) *Report {
 	}
 	// Also check repair stages.
 	if !stageInWorkflow {
-		if _, ok := wfCfg.RepairStages[stageName]; ok {
+		if _, ok := cfg.RepairStages[stageName]; ok {
 			stageInWorkflow = true
 		}
 	}
@@ -117,7 +123,7 @@ func Run(root, featureDir string) *Report {
 	}
 
 	// Worker exists.
-	sc, _ := wfCfg.StageConfig(pname, stageName)
+	sc, _ := cfg.StageConfig(pname, stageName)
 	workerID := s.Stage.Owner
 	if workerID == "" {
 		workerID = sc.Worker

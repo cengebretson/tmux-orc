@@ -665,7 +665,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Stage")
-	fmt.Printf("  Workflow:  %s\n", s.Stage.Name)
+	fmt.Printf("  Name:      %s\n", s.Stage.Name)
 	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
 
 	if len(s.Inputs.Ready)+len(s.Inputs.Required)+len(s.Inputs.Completed) > 0 {
@@ -861,7 +861,10 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	workflowCfg, _ := config.Load(root)
+	workflowCfg, err := config.Load(root)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
 	pname := resolveWorkflow(root, s.Workflow)
 	prevStage := s.Stage.Name
 
