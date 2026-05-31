@@ -39,8 +39,8 @@ func TestLoad_ParsesFrontmatter(t *testing.T) {
 	if bob.CostTier != "medium" {
 		t.Errorf("cost_tier = %q, want medium", bob.CostTier)
 	}
-	if len(bob.Workflows) == 0 {
-		t.Error("expected workflows to be populated")
+	if len(bob.Stages) == 0 {
+		t.Error("expected stages to be populated")
 	}
 }
 

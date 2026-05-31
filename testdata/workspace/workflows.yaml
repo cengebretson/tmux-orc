@@ -1,3 +1,8 @@
+# workflows.yaml — define named pipelines and their stage sequences
+#
+# Each workflow is an ordered list of stages. Stages reference files in stages/.
+# repair_stages declare optional loops (e.g. pr-repair loops back to pr-open).
+
 workflows:
   default:
     stages:
@@ -7,12 +12,12 @@ workflows:
       - name: develop
         worker: bob-developer
         advance: manual
-      - name: pr-open
-        worker: bob-developer
-        advance: auto
       - name: code-review
         worker: zach-reviewer
         advance: auto
+      - name: pr-open
+        worker: bob-developer
+        advance: manual
       - name: qa-automation
         worker: brian-qa
         advance: auto
