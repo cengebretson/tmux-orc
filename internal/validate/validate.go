@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
@@ -76,22 +77,22 @@ func Run(root, featureDir string) *Report {
 	}
 	r.Checks = append(r.Checks, ok("orc.yaml"))
 
-	// Resolve pipeline name.
+	// Resolve workflow name and verify it exists in orc.yaml.
 	pname := s.Workflow
 	if pname == "" {
 		pname = cfg.DefaultWorkflow()
 	}
-	if pname == "" {
-		pname = "default"
+	if _, ok := cfg.Workflows[pname]; !ok {
+		known := cfg.Names()
+		detail := fmt.Sprintf("%q not found in orc.yaml", pname)
+		if len(known) > 0 {
+			detail += fmt.Sprintf(" (available: %s)", strings.Join(known, ", "))
+		}
+		r.Checks = append(r.Checks, fail("workflow", detail))
+		return r
 	}
-
-	// Workflow exists in orc.yaml.
+	r.Checks = append(r.Checks, okd("workflow", pname))
 	stageNames := cfg.StageNames(pname)
-	if len(stageNames) == 0 {
-		r.Checks = append(r.Checks, fail("workflow", fmt.Sprintf("%q not found in orc.yaml", pname)))
-	} else {
-		r.Checks = append(r.Checks, okd("workflow", pname))
-	}
 
 	// Current stage exists in the workflow.
 	stageName := s.Stage.Name
