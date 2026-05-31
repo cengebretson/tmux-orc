@@ -97,6 +97,7 @@ var workCmd = &cobra.Command{
 var (
 	workWorkspace string
 	workSlug      string
+	workTmux      bool
 )
 
 var showCmd = &cobra.Command{
@@ -213,6 +214,7 @@ func init() {
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Output as JSON")
 	workCmd.Flags().StringVar(&workWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	workCmd.Flags().StringVar(&workSlug, "slug", "", "Optional slug suffix (e.g. add-user-export → TICKET-123-add-user-export)")
+	workCmd.Flags().BoolVar(&workTmux, "tmux", false, "Enable tmux session for this ticket — session created automatically on first orc next")
 	showCmd.Flags().StringVar(&showWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
 	startCmd.Flags().StringVar(&startWorkspace, "workspace", ".", "Workspace root (default: current directory)")
@@ -518,6 +520,12 @@ func runWork(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Created: features/%s/\n\n", result.Slug)
+
+	if workTmux {
+		if err := state.SetRuntime(result.FeatureDir, result.Slug); err != nil {
+			fmt.Printf("warning: could not write tmux runtime to STATE.yaml: %v\n", err)
+		}
+	}
 
 	s, err := state.Load(result.FeatureDir)
 	if err != nil {
