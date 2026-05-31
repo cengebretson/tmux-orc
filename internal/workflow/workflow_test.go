@@ -47,7 +47,6 @@ func TestLoad_FullFrontmatter(t *testing.T) {
 	dir := t.TempDir()
 	writeWorkflow(t, dir, "intake", `---
 next_workflow: develop
-next_stage: implementation
 advance: auto
 worker: fred-documentor
 ---
@@ -61,9 +60,6 @@ worker: fred-documentor
 	}
 	if cfg.NextWorkflow != "develop" {
 		t.Errorf("NextWorkflow: got %q, want %q", cfg.NextWorkflow, "develop")
-	}
-	if cfg.NextStage != "implementation" {
-		t.Errorf("NextStage: got %q, want %q", cfg.NextStage, "implementation")
 	}
 	if cfg.Advance != "auto" {
 		t.Errorf("Advance: got %q, want %q", cfg.Advance, "auto")
@@ -92,9 +88,6 @@ worker: fred-documentor
 	}
 	if cfg.NextWorkflow != "" {
 		t.Errorf("expected empty NextWorkflow, got %q", cfg.NextWorkflow)
-	}
-	if cfg.NextStage != "" {
-		t.Errorf("expected empty NextStage, got %q", cfg.NextStage)
 	}
 }
 

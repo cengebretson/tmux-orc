@@ -3,7 +3,6 @@ slug: TICKET-0000-short-description
 status: ready
 
 stage:
-  current: intake
   owner: human
   workflow: intake
 
@@ -26,3 +25,4 @@ history:
     stage: intake
     owner: human
     result: feature context created
+

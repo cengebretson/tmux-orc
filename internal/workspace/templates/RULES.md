@@ -42,7 +42,7 @@ Every agent or script that performs work for a feature must keep
 Update `STATE.yaml` whenever any of these change:
 
 - `status`
-- `stage.current`
+- `stage.workflow`
 - `stage.owner`
 - `next_action`
 - required or completed outputs

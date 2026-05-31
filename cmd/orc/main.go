@@ -142,9 +142,9 @@ var blockCmd = &cobra.Command{
 var blockWorkspace string
 
 var advanceCmd = &cobra.Command{
-	Use:    "advance <ticket> <stage>",
-	Short:  "Mark current stage complete and move to the next — writes STATE.yaml",
-	Args:   cobra.ExactArgs(2),
+	Use:    "advance <ticket>",
+	Short:  "Mark current workflow complete and move to the next — writes STATE.yaml",
+	Args:   cobra.ExactArgs(1),
 	RunE:   runAdvance,
 	Hidden: true,
 }
@@ -322,18 +322,18 @@ func runNext(cmd *cobra.Command, args []string) error {
 		wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
 		jsonPrompt := s.NextAction.Prompt
 		if jsonPrompt == "" {
-			jsonPrompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
-				s.Ticket, s.Stage.Current, s.Slug, s.Stage.Workflow)
+			jsonPrompt = fmt.Sprintf("Continue %s — workflow: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
+				s.Ticket, s.Stage.Workflow, s.Slug, s.Stage.Workflow)
 		}
 		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and workflows/REQUIREMENTS.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 		jsonPrompt = jsonPreamble + jsonPrompt
-		if wfCfg != nil && wfCfg.NextWorkflow != "" && wfCfg.NextStage != "" {
+		if wfCfg != nil && wfCfg.NextWorkflow != "" {
 			if wfCfg.Advance == "auto" {
-				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc advance %s %s --workflow %s --owner <worker-id> --result \"<summary>\"",
-					s.Ticket, wfCfg.NextStage, wfCfg.NextWorkflow)
+				jsonPrompt += fmt.Sprintf("\n\nWhen this workflow is complete, run:\n  orc advance %s --workflow %s --owner <worker-id> --result \"<summary>\"",
+					s.Ticket, wfCfg.NextWorkflow)
 			} else {
-				jsonPrompt += fmt.Sprintf("\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s/%s>\"",
-					s.Ticket, wfCfg.NextWorkflow, wfCfg.NextStage)
+				jsonPrompt += fmt.Sprintf("\n\nWhen this workflow is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
+					s.Ticket, wfCfg.NextWorkflow)
 			}
 		}
 		// Resolve worker using same priority order as runNextAction.
@@ -348,18 +348,18 @@ func runNext(cmd *cobra.Command, args []string) error {
 			preferred = workers.FindByID(allWorkers, wfCfg.Worker)
 		}
 		if preferred == nil {
-			matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+			matched := workers.Match(allWorkers, s.Stage.Workflow)
 			if len(matched) > 0 {
 				preferred = matched[0]
 			}
 		}
 		out := map[string]any{
-			"ticket": s.Ticket,
-			"status": s.Status,
-			"stage":  s.Stage.Current,
-			"owner":  s.Stage.Owner,
-			"cwd":    cwd,
-			"prompt": jsonPrompt,
+			"ticket":   s.Ticket,
+			"status":   s.Status,
+			"workflow": s.Stage.Workflow,
+			"owner":    s.Stage.Owner,
+			"cwd":      cwd,
+			"prompt":   jsonPrompt,
 		}
 		if preferred != nil {
 			out["worker"] = preferred.ID
@@ -370,10 +370,10 @@ func runNext(cmd *cobra.Command, args []string) error {
 		return printJSON(out)
 	}
 
-	fmt.Printf("Ticket:  %s\n", s.Ticket)
-	fmt.Printf("Status:  %s\n", s.Status)
-	fmt.Printf("Stage:   %s\n", s.Stage.Current)
-	fmt.Printf("Owner:   %s\n", s.Stage.Owner)
+	fmt.Printf("Ticket:   %s\n", s.Ticket)
+	fmt.Printf("Status:   %s\n", s.Status)
+	fmt.Printf("Workflow: %s\n", s.Stage.Workflow)
+	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 
 	switch s.Status {
 	case "pending":
@@ -412,24 +412,24 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	cwd := s.ResolveCWD(root, featureDir)
 	prompt := s.NextAction.Prompt
 	if prompt == "" {
-		prompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
-			s.Ticket, s.Stage.Current, s.Slug, s.Stage.Workflow)
+		prompt = fmt.Sprintf("Continue %s — workflow: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
+			s.Ticket, s.Stage.Workflow, s.Slug, s.Stage.Workflow)
 	}
 	preamble := fmt.Sprintf("Before starting: read AGENTS.md and workflows/REQUIREMENTS.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 	prompt = preamble + prompt
 
 	wfCfg, _ := workflow.Load(filepath.Join(root, "workflows"), s.Stage.Workflow)
-	if wfCfg.NextWorkflow != "" && wfCfg.NextStage != "" {
+	if wfCfg.NextWorkflow != "" {
 		var suffix string
 		if wfCfg.Advance == "auto" {
 			suffix = fmt.Sprintf(
-				"\n\nWhen this stage is complete, run:\n  orc advance %s %s --workflow %s --owner <worker-id> --result \"<summary>\"",
-				s.Ticket, wfCfg.NextStage, wfCfg.NextWorkflow,
+				"\n\nWhen this workflow is complete, run:\n  orc advance %s --workflow %s --owner <worker-id> --result \"<summary>\"",
+				s.Ticket, wfCfg.NextWorkflow,
 			)
 		} else {
 			suffix = fmt.Sprintf(
-				"\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s/%s>\"",
-				s.Ticket, wfCfg.NextWorkflow, wfCfg.NextStage,
+				"\n\nWhen this workflow is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
+				s.Ticket, wfCfg.NextWorkflow,
 			)
 		}
 		prompt += suffix
@@ -451,15 +451,15 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		matchReason = "workflow default"
 	}
 	if worker == nil {
-		matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+		matched := workers.Match(allWorkers, s.Stage.Workflow)
 		if len(matched) > 0 {
 			worker = matched[0]
-			matchReason = "best match for stage"
+			matchReason = "best match for workflow"
 		}
 	}
 
 	if worker == nil {
-		fmt.Printf("No worker found for workflow %q stage %q\n", s.Stage.Workflow, s.Stage.Current)
+		fmt.Printf("No worker found for workflow %q\n", s.Stage.Workflow)
 		if wfCfg.Worker != "" {
 			fmt.Printf("Workflow default worker %q not found in workers/\n", wfCfg.Worker)
 		}
@@ -540,12 +540,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	type row struct {
-		ticket  string
-		status  string
-		stage   string
-		owner   string
-		next    string
-		session string
+		ticket   string
+		status   string
+		workflow string
+		owner    string
+		next     string
+		session  string
 	}
 
 	// Fetch active tmux sessions once for cross-referencing.
@@ -579,12 +579,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				session = "✓"
 			}
 			rows = append(rows, row{
-				ticket:  s.Ticket,
-				status:  s.Status,
-				stage:   s.Stage.Current,
-				owner:   s.Stage.Owner,
-				next:    next,
-				session: session,
+				ticket:   s.Ticket,
+				status:   s.Status,
+				workflow: s.Stage.Workflow,
+				owner:    s.Stage.Owner,
+				next:     next,
+				session:  session,
 			})
 		}
 		return rows
@@ -592,16 +592,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	printTable := func(rows []row) {
 		if showTmux {
-			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "Ticket", "Status", "Stage", "Owner", "Tmux", "Next")
-			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "------", "------", "-----", "-----", "----", "----")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "Ticket", "Status", "Workflow", "Owner", "Tmux", "Next")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "------", "------", "--------", "-----", "----", "----")
 			for _, r := range rows {
-				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", r.ticket, r.status, r.stage, r.owner, r.session, r.next)
+				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", r.ticket, r.status, r.workflow, r.owner, r.session, r.next)
 			}
 		} else {
-			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "Ticket", "Status", "Stage", "Owner", "Next")
-			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "------", "------", "-----", "-----", "----")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "Ticket", "Status", "Workflow", "Owner", "Next")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "------", "------", "--------", "-----", "----")
 			for _, r := range rows {
-				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", r.ticket, r.status, r.stage, r.owner, r.next)
+				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", r.ticket, r.status, r.workflow, r.owner, r.next)
 			}
 		}
 	}
@@ -682,9 +682,8 @@ func runShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Stage")
-	fmt.Printf("  Current:   %s\n", s.Stage.Current)
-	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
 	fmt.Printf("  Workflow:  %s\n", s.Stage.Workflow)
+	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
 
 	if len(s.Inputs.Ready)+len(s.Inputs.Required)+len(s.Inputs.Completed) > 0 {
 		fmt.Println()
@@ -724,7 +723,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	} else {
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
-		matched := workers.Match(allWorkers, s.Stage.Workflow, s.Stage.Current)
+		matched := workers.Match(allWorkers, s.Stage.Workflow)
 		preferred := workers.Preferred(matched, s.Stage.Owner)
 		if preferred == nil && len(matched) > 0 {
 			preferred = matched[0]
@@ -776,10 +775,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Ticket:  %s\n", s.Ticket)
-	fmt.Printf("Status:  in_progress\n")
-	fmt.Printf("Stage:   %s\n", s.Stage.Current)
-	fmt.Printf("Owner:   %s\n", s.Stage.Owner)
+	fmt.Printf("Ticket:   %s\n", s.Ticket)
+	fmt.Printf("Status:   in_progress\n")
+	fmt.Printf("Workflow: %s\n", s.Stage.Workflow)
+	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 	return nil
 }
 
@@ -807,7 +806,7 @@ func runWait(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Ticket:  %s\n", s.Ticket)
 	fmt.Printf("Status:  waiting_for_human\n")
 	fmt.Printf("Needs:   %s\n", reason)
-	fmt.Printf("\nRun `orc advance %s <stage>` to continue once resolved.\n", s.Ticket)
+	fmt.Printf("\nRun `orc advance %s --workflow <next-workflow>` to continue once resolved.\n", s.Ticket)
 	return nil
 }
 
@@ -835,7 +834,7 @@ func runBlock(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Ticket:  %s\n", s.Ticket)
 	fmt.Printf("Status:  blocked\n")
 	fmt.Printf("Reason:  %s\n", reason)
-	fmt.Printf("\nRun `orc advance %s <stage>` to unblock when resolved.\n", s.Ticket)
+	fmt.Printf("\nRun `orc advance %s --workflow <next-workflow>` to unblock when resolved.\n", s.Ticket)
 	return nil
 }
 
@@ -855,21 +854,28 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	prevStage := s.Stage.Current
-	newStage := args[1]
+	prevWorkflow := s.Stage.Workflow
 	result := advanceResult
 	if result == "" {
-		result = fmt.Sprintf("advanced from %s to %s", prevStage, newStage)
+		if advanceWorkflow != "" {
+			result = fmt.Sprintf("advanced from %s to %s", prevWorkflow, advanceWorkflow)
+		} else {
+			result = fmt.Sprintf("completed %s", prevWorkflow)
+		}
 	}
 
-	if err := state.Advance(featureDir, newStage, advanceWorkflow, advanceOwner, result); err != nil {
+	if err := state.Advance(featureDir, advanceWorkflow, advanceOwner, result); err != nil {
 		return err
 	}
 
-	fmt.Printf("Ticket:  %s\n", s.Ticket)
-	fmt.Printf("Stage:   %s → %s\n", prevStage, newStage)
+	fmt.Printf("Ticket:   %s\n", s.Ticket)
+	if advanceWorkflow != "" {
+		fmt.Printf("Workflow: %s → %s\n", prevWorkflow, advanceWorkflow)
+	} else {
+		fmt.Printf("Workflow: %s  (unchanged)\n", prevWorkflow)
+	}
 	if advanceOwner != "" {
-		fmt.Printf("Owner:   %s\n", advanceOwner)
+		fmt.Printf("Owner:    %s\n", advanceOwner)
 	}
 	fmt.Printf("\nRun `orc next %s` to launch the next worker.\n", s.Ticket)
 	fmt.Println()

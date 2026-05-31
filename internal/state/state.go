@@ -34,7 +34,6 @@ type State struct {
 }
 
 type Stage struct {
-	Current  string `yaml:"current"`
 	Owner    string `yaml:"owner"`
 	Workflow string `yaml:"workflow"`
 }
@@ -95,7 +94,7 @@ func Start(featureDir string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Current,
+		Stage:  s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: "started",
 	})
@@ -124,7 +123,7 @@ func WaitForHuman(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Current,
+		Stage:  s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: "waiting_for_human — " + reason,
 	})
@@ -156,7 +155,7 @@ func Block(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Current,
+		Stage:  s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: "blocked — " + reason,
 	})
@@ -173,9 +172,8 @@ func Block(featureDir, reason string) error {
 	return os.WriteFile(path, out, 0644)
 }
 
-// Advance moves the feature to a new stage, records a history entry, and saves STATE.yaml.
-// If workflow is non-empty, stage.workflow is updated to the new workflow.
-func Advance(featureDir, stage, workflow, owner, result string) error {
+// Advance moves the feature to the next workflow, records a history entry, and saves STATE.yaml.
+func Advance(featureDir, workflow, owner, result string) error {
 	path := filepath.Join(featureDir, Filename)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -189,12 +187,11 @@ func Advance(featureDir, stage, workflow, owner, result string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Current,
+		Stage:  s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: result,
 	})
 
-	s.Stage.Current = stage
 	if workflow != "" {
 		s.Stage.Workflow = workflow
 	}

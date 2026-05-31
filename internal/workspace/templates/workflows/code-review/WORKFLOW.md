@@ -1,6 +1,5 @@
 ---
 next_workflow: pr-open
-next_stage: pr_preflight
 advance: auto
 worker: zach-reviewer
 ---
@@ -15,19 +14,12 @@ Review the implementation for correctness, spec compliance, and code quality bef
 a PR is opened. Runs after `develop` completes and hands off to `pr-open` when the
 review passes.
 
-## Stages
-
-```
-code_review
-```
-
-### code_review
+## Steps
 
 **Owner:** zach-reviewer agent  
 **Inputs:** feature branch code in worktree, `PLAN.md`, `SPEC.md`, `impl/QA_HANDOFF.md`  
 **Outputs:** `impl/REVIEW.md`
 
-Steps:
 1. Read `SPEC.md` and `PLAN.md` to understand the intended design.
 2. Read `impl/QA_HANDOFF.md` for the implementation summary and known risks.
 3. Review the code changes in the worktree (`git diff main` or the feature branch).
@@ -40,7 +32,7 @@ Steps:
 
 **If approved** — run:
 ```
-orc advance <ticket> pr_preflight --workflow pr-open --owner <worker-id> --result "Code review passed"
+orc advance <ticket> --workflow pr-open --owner <worker-id> --result "Code review passed"
 ```
 
 **If changes needed** — run:

@@ -215,8 +215,8 @@ func checkWorkflowDetails(root string) []Result {
 		}
 
 		var parts []string
-		if cfg.NextWorkflow != "" && cfg.NextStage != "" {
-			parts = append(parts, fmt.Sprintf("%s → %s/%s", cfg.Advance, cfg.NextWorkflow, cfg.NextStage))
+		if cfg.NextWorkflow != "" {
+			parts = append(parts, fmt.Sprintf("%s → %s", cfg.Advance, cfg.NextWorkflow))
 		} else {
 			parts = append(parts, "end of chain")
 		}

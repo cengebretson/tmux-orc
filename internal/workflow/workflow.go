@@ -12,10 +12,8 @@ import (
 type Config struct {
 	// NextWorkflow is the workflow name to transition to after this one completes.
 	NextWorkflow string `yaml:"next_workflow"`
-	// NextStage is the stage name within NextWorkflow to advance to.
-	NextStage string `yaml:"next_stage"`
 	// Advance controls how the transition happens.
-	// "auto"   — agent calls orc advance when the stage is done.
+	// "auto"   — agent calls orc advance when done.
 	// "manual" — agent calls orc wait; a human approves before advancing.
 	Advance string `yaml:"advance"`
 	// Worker is the default worker ID assigned to this workflow.

@@ -21,7 +21,6 @@ type Worker struct {
 	CostTier        string `yaml:"cost_tier"`
 
 	Workflows         []string `yaml:"workflows"`
-	Stages            []string `yaml:"stages"`
 	DefaultTmuxWindow string   `yaml:"default_tmux_window"`
 	LaunchMode        string   `yaml:"launch_mode"`
 }
@@ -47,11 +46,11 @@ func Load(workersDir string) ([]*Worker, error) {
 	return workers, nil
 }
 
-// Match returns workers that support the given workflow and stage.
-func Match(workers []*Worker, workflow, stage string) []*Worker {
+// Match returns workers that support the given workflow.
+func Match(workers []*Worker, workflow string) []*Worker {
 	var matched []*Worker
 	for _, w := range workers {
-		if supportsWorkflow(w, workflow) && supportsStage(w, stage) {
+		if supportsWorkflow(w, workflow) {
 			matched = append(matched, w)
 		}
 	}
@@ -160,14 +159,3 @@ func supportsWorkflow(w *Worker, workflow string) bool {
 	return false
 }
 
-func supportsStage(w *Worker, stage string) bool {
-	if len(w.Stages) == 0 {
-		return true // no restriction
-	}
-	for _, s := range w.Stages {
-		if s == stage {
-			return true
-		}
-	}
-	return false
-}

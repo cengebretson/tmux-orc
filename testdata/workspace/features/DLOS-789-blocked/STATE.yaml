@@ -3,9 +3,8 @@ slug: DLOS-789-blocked
 status: blocked
 
 stage:
-  current: pr_repair
   owner: bob-developer
-  workflow: develop
+  workflow: pr-repair
 
 blocker:
   reason: staging environment unavailable

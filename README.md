@@ -172,7 +172,7 @@ or human picks up exactly where the last one left off.
 | `orc next <ticket> --dry` | Preview the launch command without running it |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc start <ticket>` | Mark a ticket in_progress — called by agents (hidden from help) |
-| `orc advance <ticket> <stage>` | Mark current stage complete and move to the next (called by agents) |
+| `orc advance <ticket> [--workflow <wf>]` | Mark current workflow complete and move to the next (called by agents) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
 | `orc block <ticket> <reason>` | Mark a ticket as blocked |
 | `orc archive <ticket>` | Archive a completed feature, remove worktrees |
@@ -220,7 +220,7 @@ my-workspace/
     pr-open/         preflight checks, open PR, handoff for review
     pr-repair/       fix CI failures, review feedback, conflicts
     qa-automation/   implement and run automated tests
-    # each WORKFLOW.md has frontmatter: next_workflow, next_stage, advance, worker
+    # each WORKFLOW.md has frontmatter: next_workflow, advance, worker
 
   worktrees/         git worktrees for ticket branches (gitignored)
   user-overrides/    local preferences, never committed

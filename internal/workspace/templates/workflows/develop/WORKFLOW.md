@@ -1,6 +1,5 @@
 ---
 next_workflow: code-review
-next_stage: code_review
 advance: manual
 worker: bob-developer
 ---
@@ -11,23 +10,15 @@ worker: bob-developer
 
 ## Purpose
 
-Implement the feature in a repo worktree and prepare it for a pull request.
-Runs after the `intake` workflow has completed and `STATE.yaml` is `status: ready`.
-Hands off to `pr-open` when implementation is done.
+Implement the feature in a repo worktree and prepare it for code review.
+Runs after the `intake` workflow completes.
 
-## Stages
-
-```
-implementation
-```
-
-### implementation
+## Steps
 
 **Owner:** developer agent  
 **Inputs:** `PLAN.md`, `SPEC.md`, repo worktree (see `STATE.yaml` → `next_action.cwd`)  
 **Outputs:** `impl/QA_HANDOFF.md`, committed code on feature branch
 
-Steps:
 1. Read `SPEC.md` and `PLAN.md` for context.
 2. Implement the feature in the repo worktree.
 3. Write and run local tests for changed files.

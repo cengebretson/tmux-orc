@@ -67,7 +67,7 @@ go test ./...
 | `orc next <ticket> --dry` | Preview the launch command without executing |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc start <ticket>` | Mark a ticket in_progress — called by the agent at the start of each session (hidden from help) |
-| `orc advance <ticket> <stage>` | Mark current stage complete and move to the next (called by agents, hidden from help) |
+| `orc advance <ticket> [--workflow <wf>]` | Mark current workflow complete and move to the next (called by agents, hidden from help) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
 | `orc block <ticket> <reason>` | Mark a ticket as blocked |
 | `orc archive <ticket>` | Archive a completed feature, remove worktrees |
@@ -89,7 +89,7 @@ built, what's planned, and where we deliberately diverged from the original plan
 | Worker routing | Workflow owns default worker via `worker:` in WORKFLOW.md frontmatter; overridden by `stage.owner` or `orc next --worker` |
 | Multi-product | Claude and Codex launch commands rendered from worker `product` field |
 | Workflows | intake, develop, code-review, pr-open, pr-repair, qa-automation — each with WORKFLOW.md frontmatter |
-| Workflow frontmatter | `next_workflow`, `next_stage`, `advance` (auto/manual), `worker` (default worker ID) |
+| Workflow frontmatter | `next_workflow`, `advance` (auto/manual), `worker` (default worker ID) |
 | Cross-workflow transitions | `orc advance --workflow` updates `stage.workflow`; worker resolved from new workflow's frontmatter |
 | State mutations | `state.Advance`, `state.Block`, `state.WaitForHuman`, `state.Start`, `state.SetStatus` with history entries |
 | Agent prompt scaffolding | Every `orc next` prompt includes preamble (read AGENTS.md, run `orc start`) and exact end-of-session command |

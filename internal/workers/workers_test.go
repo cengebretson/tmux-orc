@@ -39,39 +39,45 @@ func TestLoad_ParsesFrontmatter(t *testing.T) {
 	if bob.CostTier != "medium" {
 		t.Errorf("cost_tier = %q, want medium", bob.CostTier)
 	}
-	if len(bob.Stages) == 0 {
-		t.Error("expected stages to be populated")
+	if len(bob.Workflows) == 0 {
+		t.Error("expected workflows to be populated")
 	}
 }
 
-func TestMatch_ByWorkflowAndStage(t *testing.T) {
+func TestMatch_ByWorkflow(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
 
-	matched := workers.Match(all, "develop", "implementation")
+	matched := workers.Match(all, "develop")
+	if len(matched) != 2 {
+		t.Fatalf("matched %d workers, want 2 (both support develop)", len(matched))
+	}
+}
+
+func TestMatch_QAAutomation(t *testing.T) {
+	all, _ := workers.Load(fixtureWorkersDir())
+
+	matched := workers.Match(all, "qa-automation")
+	if len(matched) != 2 {
+		t.Fatalf("matched %d workers for qa-automation, want 2", len(matched))
+	}
+}
+
+func TestMatch_PRRepair(t *testing.T) {
+	all, _ := workers.Load(fixtureWorkersDir())
+
+	matched := workers.Match(all, "pr-repair")
 	if len(matched) != 1 {
-		t.Fatalf("matched %d workers, want 1", len(matched))
+		t.Fatalf("matched %d workers for pr-repair, want 1", len(matched))
 	}
 	if matched[0].ID != "bob-developer" {
 		t.Errorf("matched worker = %q, want bob-developer", matched[0].ID)
 	}
 }
 
-func TestMatch_QAPlan(t *testing.T) {
-	all, _ := workers.Load(fixtureWorkersDir())
-
-	matched := workers.Match(all, "develop", "qa_plan")
-	if len(matched) != 1 {
-		t.Fatalf("matched %d workers, want 1", len(matched))
-	}
-	if matched[0].ID != "fred-documentor" {
-		t.Errorf("matched worker = %q, want fred-documentor", matched[0].ID)
-	}
-}
-
 func TestMatch_NoMatch(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
 
-	matched := workers.Match(all, "nonexistent-workflow", "nonexistent-stage")
+	matched := workers.Match(all, "nonexistent-workflow")
 	if len(matched) != 0 {
 		t.Errorf("expected no matches, got %d", len(matched))
 	}
@@ -79,7 +85,7 @@ func TestMatch_NoMatch(t *testing.T) {
 
 func TestPreferred_Found(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
-	matched := workers.Match(all, "develop", "implementation")
+	matched := workers.Match(all, "develop")
 
 	preferred := workers.Preferred(matched, "bob-developer")
 	if preferred == nil {
@@ -92,7 +98,7 @@ func TestPreferred_Found(t *testing.T) {
 
 func TestPreferred_NotFound(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
-	matched := workers.Match(all, "develop", "implementation")
+	matched := workers.Match(all, "develop")
 
 	preferred := workers.Preferred(matched, "nonexistent-worker")
 	if preferred != nil {
@@ -108,7 +114,6 @@ func TestLaunchCommand_Codex(t *testing.T) {
 	if cmd == "" {
 		t.Error("expected non-empty launch command")
 	}
-	// codex command should include the model and cwd
 	if bob.Product != "codex" {
 		t.Skip("bob is not codex in this fixture")
 	}

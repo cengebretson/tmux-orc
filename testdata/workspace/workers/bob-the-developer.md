@@ -9,10 +9,6 @@ workflows:
   - develop
   - qa-automation
   - pr-repair
-stages:
-  - implementation
-  - qa_implementation
-  - pr_repair
 default_tmux_window: app-codex
 launch_mode: foreground
 ---

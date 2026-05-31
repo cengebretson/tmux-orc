@@ -3,7 +3,6 @@ slug: TICKET-0000-short-description
 status: ready
 
 stage:
-  current: intake
   owner: human
   workflow: intake
 

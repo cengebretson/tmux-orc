@@ -33,7 +33,7 @@ Every feature has a `status` field in `STATE.yaml`. Keep it current at all times
 Update `STATE.yaml` whenever any of the following change:
 
 - `status` — any transition
-- `stage.current` or `stage.owner` — when advancing to a new stage
+- `stage.workflow` or `stage.owner` — when advancing to the next workflow
 - `next_action` — what the next agent or human should do
 - `repos` — when a worktree is created or removed
 - `outputs` — when a required output is completed
@@ -70,7 +70,7 @@ Common triggers:
 - A decision has high cost-of-mistakes and the agent is not confident
 - The human needs to review and sign off before the next external action (open PR, post comment)
 
-The human will resolve the issue and run `orc advance <ticket> <stage>` to continue.
+The human will resolve the issue and run `orc advance <ticket> --workflow <next-workflow>` to continue.
 
 ---
 
@@ -120,7 +120,7 @@ Also run `orc show <ticket> --json` to read current state:
 orc show <ticket> --json
 ```
 
-Returns structured JSON with ticket, slug, status, stage, inputs, outputs, and
+Returns structured JSON with ticket, slug, status, workflow, inputs, outputs, and
 next action — easier to parse than the display output.
 
 To see the recommended next worker and launch command as JSON:
@@ -129,20 +129,20 @@ To see the recommended next worker and launch command as JSON:
 orc next <ticket> --json
 ```
 
-Returns ticket, status, stage, cwd, prompt, worker id, product, model, and the
+Returns ticket, status, workflow, cwd, prompt, worker id, product, model, and the
 full launch command string.
 
 ---
 
-## Advancing to the Next Stage
+## Advancing to the Next Workflow
 
-When a stage completes successfully:
+When a workflow completes successfully:
 
-1. Confirm all required outputs for the stage are written
+1. Confirm all required outputs are written
 2. Run:
    ```
-   orc advance <ticket> <next-stage> --owner <next-owner> --result "<what was accomplished>"
+   orc advance <ticket> --workflow <next-workflow> --owner <next-owner> --result "<what was accomplished>"
    ```
-   This updates `stage.current`, `stage.owner`, sets `status: ready`, clears `next_action`,
+   This updates `stage.workflow`, `stage.owner`, sets `status: ready`, clears `next_action`,
    and writes a history entry automatically.
-3. Do not hand-edit STATE.yaml for stage transitions — use `orc advance`
+3. Do not hand-edit STATE.yaml for workflow transitions — use `orc advance`

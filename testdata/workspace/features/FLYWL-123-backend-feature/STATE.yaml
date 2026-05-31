@@ -2,7 +2,6 @@ ticket: FLYWL-123
 slug: FLYWL-123-backend-feature
 status: in_progress
 stage:
-  current: implementation
   owner: bob-developer
   workflow: develop
 repos:

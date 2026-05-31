@@ -28,8 +28,8 @@ func TestLoad(t *testing.T) {
 	if s.Status != "in_progress" {
 		t.Errorf("status = %q, want in_progress", s.Status)
 	}
-	if s.Stage.Current != "implementation" {
-		t.Errorf("stage.current = %q, want implementation", s.Stage.Current)
+	if s.Stage.Workflow != "develop" {
+		t.Errorf("stage.workflow = %q, want develop", s.Stage.Workflow)
 	}
 	if s.Stage.Owner != "bob-developer" {
 		t.Errorf("stage.owner = %q, want bob-developer", s.Stage.Owner)

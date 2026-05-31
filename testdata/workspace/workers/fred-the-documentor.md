@@ -9,11 +9,6 @@ workflows:
   - intake
   - develop
   - qa-automation
-stages:
-  - intake
-  - ticket_scope
-  - qa_plan
-  - documentation
 default_tmux_window: claude
 launch_mode: foreground
 ---

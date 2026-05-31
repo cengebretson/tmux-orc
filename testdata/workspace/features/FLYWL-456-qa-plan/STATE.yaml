@@ -2,9 +2,8 @@ ticket: FLYWL-456
 slug: FLYWL-456-qa-plan
 status: ready
 stage:
-  current: qa_plan
   owner: fred-documentor
-  workflow: develop
+  workflow: qa-automation
 repos: {}
 inputs:
   ready:
