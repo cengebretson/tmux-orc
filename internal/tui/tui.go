@@ -903,8 +903,10 @@ func renderNameList(maxW int, names []string) []string {
 	return rows
 }
 
-// parseRouterRepos reads ROUTER.md and extracts the ## Repos table.
-// Rows where the name starts/ends with _ (placeholder rows) are skipped.
+// parseRouterRepos reads ROUTER.md and extracts the first table under any
+// section heading that contains "repo". Works with any column layout —
+// uses the first column as name and the last non-empty column as purpose.
+// Placeholder rows (name wrapped in underscores) are skipped.
 func parseRouterRepos(path string) []repoEntry {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -912,31 +914,44 @@ func parseRouterRepos(path string) []repoEntry {
 	}
 	lines := strings.Split(string(data), "\n")
 	inRepos := false
+	pastHeader := false
 	var repos []repoEntry
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "## Repos") {
-			inRepos = true
+		if strings.HasPrefix(trimmed, "## ") {
+			if inRepos {
+				break // left the section
+			}
+			if strings.Contains(strings.ToLower(trimmed), "repo") {
+				inRepos = true
+				pastHeader = false
+			}
 			continue
-		}
-		if inRepos && strings.HasPrefix(trimmed, "## ") {
-			break
 		}
 		if !inRepos || !strings.HasPrefix(trimmed, "|") {
 			continue
 		}
-		// skip header and separator rows
-		if strings.Contains(trimmed, "---") || strings.Contains(trimmed, "Name") {
+		// separator row marks end of header
+		if strings.Contains(trimmed, "---") {
+			pastHeader = true
 			continue
+		}
+		if !pastHeader {
+			continue // skip column header row
 		}
 		cols := strings.Split(trimmed, "|")
-		if len(cols) < 4 {
+		// collect non-empty inner cells (cols[0] and cols[last] are always "")
+		var cells []string
+		for _, c := range cols[1 : len(cols)-1] {
+			cells = append(cells, strings.Trim(strings.TrimSpace(c), "_*` "))
+		}
+		if len(cells) == 0 || cells[0] == "" {
 			continue
 		}
-		name := strings.Trim(strings.TrimSpace(cols[1]), "_*` ")
-		purpose := strings.Trim(strings.TrimSpace(cols[3]), "_*` ")
-		if name == "" || strings.HasPrefix(cols[1], " _") {
-			continue
+		name := cells[0]
+		purpose := cells[len(cells)-1]
+		if name == purpose {
+			purpose = "" // single-column table
 		}
 		repos = append(repos, repoEntry{name: name, purpose: purpose})
 	}
