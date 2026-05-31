@@ -57,10 +57,10 @@ type NextAction struct {
 }
 
 type HistoryEntry struct {
-	At     string `yaml:"at"`
-	Stage  string `yaml:"stage"`
-	Owner  string `yaml:"owner"`
-	Result string `yaml:"result"`
+	At       string `yaml:"at"`
+	Workflow string `yaml:"workflow"`
+	Owner    string `yaml:"owner"`
+	Result   string `yaml:"result"`
 }
 
 // Load reads STATE.yaml from the given feature directory.
@@ -94,7 +94,7 @@ func Start(featureDir string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Workflow,
+		Workflow: s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: "started",
 	})
@@ -123,7 +123,7 @@ func WaitForHuman(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Workflow,
+		Workflow: s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: "waiting_for_human — " + reason,
 	})
@@ -155,7 +155,7 @@ func Block(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Workflow,
+		Workflow: s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: "blocked — " + reason,
 	})
@@ -187,7 +187,7 @@ func Advance(featureDir, workflow, owner, result string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:  s.Stage.Workflow,
+		Workflow: s.Stage.Workflow,
 		Owner:  s.Stage.Owner,
 		Result: result,
 	})

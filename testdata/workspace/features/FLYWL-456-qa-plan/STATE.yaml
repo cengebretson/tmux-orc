@@ -24,10 +24,10 @@ next_action:
   cwd: ""
 history:
   - at: "2026-05-30T10:00:00-05:00"
-    stage: implementation
+    workflow: implementation
     owner: bob-developer
     result: PR opened, QA handoff written
   - at: "2026-05-30T15:50:11-05:00"
-    stage: qa_plan
+    workflow: qa_plan
     owner: fred-documentor
     result: qa plan approved

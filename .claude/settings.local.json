@@ -58,7 +58,10 @@
       "Bash(sd 'advance: auto\\\\nmodel: claude-sonnet-4-6\\\\neffort: medium\\\\n---\\\\n\\\\n# Workflow: code-review' 'advance: auto\\\\nworker: zach-reviewer\\\\n---\\\\n\\\\n# Workflow: code-review' /Users/chris/Desktop/projects/orc/internal/workspace/templates/workflows/code-review/WORKFLOW.md)",
       "Bash(sd 'advance: manual\\\\nmodel: claude-sonnet-4-6\\\\neffort: low' 'advance: manual\\\\nworker: bob-developer' /Users/chris/Desktop/projects/orc/internal/workspace/templates/workflows/pr-open/WORKFLOW.md)",
       "Bash(sd 'advance: auto\\\\nmodel: claude-sonnet-4-6\\\\neffort: medium\\\\n---\\\\n\\\\n# Workflow: pr-repair' 'advance: auto\\\\nworker: bob-developer\\\\n---\\\\n\\\\n# Workflow: pr-repair' /Users/chris/Desktop/projects/orc/internal/workspace/templates/workflows/pr-repair/WORKFLOW.md)",
-      "Bash(/Users/chris/Desktop/projects/orc/orc init *)"
+      "Bash(/Users/chris/Desktop/projects/orc/orc init *)",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "Bash(grep -v \"^.*stage:\\\\s*$\\\\|stage:\\\\s*$\")",
+      "Bash(sd     stage:  *)"
     ]
   }
 }

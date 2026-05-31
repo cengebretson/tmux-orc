@@ -22,7 +22,7 @@ next_action:
 
 history:
   - at: YYYY-MM-DDTHH:MM:SS-00:00
-    stage: intake
+    workflow: intake
     owner: human
     result: feature context created
 

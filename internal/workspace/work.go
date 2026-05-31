@@ -94,7 +94,6 @@ func buildSlug(ticket, suffix string) string {
 // writeStateYAML stamps STATE.yaml with real ticket/slug values.
 func writeStateYAML(featureDir, ticket, slug string) error {
 	type stateStage struct {
-		Current  string `yaml:"current"`
 		Owner    string `yaml:"owner"`
 		Workflow string `yaml:"workflow"`
 	}
@@ -104,10 +103,10 @@ func writeStateYAML(featureDir, ticket, slug string) error {
 		CWD    string `yaml:"cwd"`
 	}
 	type stateHistory struct {
-		At     string `yaml:"at"`
-		Stage  string `yaml:"stage"`
-		Owner  string `yaml:"owner"`
-		Result string `yaml:"result"`
+		At       string `yaml:"at"`
+		Workflow string `yaml:"workflow"`
+		Owner    string `yaml:"owner"`
+		Result   string `yaml:"result"`
 	}
 	type stateFile struct {
 		Ticket string `yaml:"ticket"`
@@ -126,7 +125,6 @@ func writeStateYAML(featureDir, ticket, slug string) error {
 		Slug:   slug,
 		Status: "pending",
 		Stage: stateStage{
-			Current:  "intake",
 			Owner:    "agent",
 			Workflow: "intake",
 		},
@@ -137,10 +135,10 @@ func writeStateYAML(featureDir, ticket, slug string) error {
 		},
 		History: []stateHistory{
 			{
-				At:     time.Now().Format(time.RFC3339),
-				Stage:  "intake",
-				Owner:  "agent",
-				Result: "feature context created by orc work",
+				At:       time.Now().Format(time.RFC3339),
+				Workflow: "intake",
+				Owner:    "agent",
+				Result:   "feature context created by orc work",
 			},
 		},
 	}

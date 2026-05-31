@@ -28,10 +28,10 @@ next_action:
   cwd: ../../worktrees/my-app/FLYWL-123-backend-feature
 history:
   - at: "2026-05-30T09:00:00-05:00"
-    stage: intake
+    workflow: intake
     owner: fred-documentor
     result: feature context created
   - at: "2026-05-30T16:29:15-05:00"
-    stage: implementation
+    workflow: implementation
     owner: bob-developer
     result: waiting_for_human — PR description needs clarification on the auth scope — please review and update SPEC.md

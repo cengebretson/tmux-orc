@@ -741,7 +741,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		fmt.Println("History")
 		for _, h := range s.History {
-			fmt.Printf("  %s  %-24s  %-20s  %s\n", h.At, h.Stage, h.Owner, h.Result)
+			fmt.Printf("  %s  %-24s  %-20s  %s\n", h.At, h.Workflow, h.Owner, h.Result)
 		}
 	}
 
