@@ -435,11 +435,19 @@ func (m Model) View() string {
 
 func (m Model) viewDashboard() string {
 	outerW := m.width - 2
-	innerW := outerW - 2
 
-	var b strings.Builder
+	// ── Column widths ────────────────────────────────────────────────
+	const logoW = 30
+	const logoGap = 2
+	useLogo := outerW > logoW+logoGap+44
 
-	// ── Header: compact labeled box ─────────────────────────────────
+	leftW := outerW
+	if useLogo {
+		leftW = outerW - logoW - logoGap
+	}
+	leftInnerW := leftW - 2
+
+	// ── Header stats ─────────────────────────────────────────────────
 	ago := time.Since(m.lastRefresh).Round(time.Second)
 	active, blocked := 0, 0
 	for _, f := range m.features {
@@ -450,7 +458,6 @@ func (m Model) viewDashboard() string {
 			blocked++
 		}
 	}
-
 	headerTitle := styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator")
 	statsLine := "  " +
 		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features))) +
@@ -460,58 +467,58 @@ func (m Model) viewDashboard() string {
 		styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)) +
 		styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
 
-	const logoW = 30
-	var headerBlock string
-	if outerW > logoW+44 {
-		boxW := outerW - logoW - 2
-		box := drawBoxLabeled(headerTitle, []string{statsLine}, boxW)
-		logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1)).Render(logo)
-		headerBlock = lipgloss.JoinHorizontal(lipgloss.Top, box, "  ", logoRendered)
-	} else {
-		headerBlock = drawBoxLabeled(headerTitle, []string{statsLine}, outerW)
-	}
-	b.WriteString("\n" + headerBlock + "\n")
+	// ── Left column: header + sections ───────────────────────────────
+	var left strings.Builder
+	left.WriteString(drawBoxLabeled(headerTitle, []string{statsLine}, leftW) + "\n")
 
-	// ── Collapsible section boxes ─────────────────────────────────────
 	healthFocused := m.focusedPane == "section" && m.sectionFocus == "health"
-	b.WriteString(m.sectionBox("health", "1", "Health",
+	left.WriteString(m.sectionBox("health", "1", "Health",
 		fmt.Sprintf("%d checks", len(m.healthItems)),
-		m.renderHealthLines(innerW-4), outerW, healthFocused) + "\n")
+		m.renderHealthLines(leftInnerW-4), leftW, healthFocused) + "\n")
 
 	wfFocused := m.focusedPane == "section" && m.sectionFocus == "workflows"
 	var wfContent []string
 	if wfFocused {
 		wfContent = renderNavigableList(m.sectionItems["workflows"], m.sectionCursor)
 	} else {
-		wfContent = renderRouteChain(m.routeChain, innerW-4)
+		wfContent = renderRouteChain(m.routeChain, leftInnerW-4)
 	}
-	b.WriteString(m.sectionBox("workflows", "2", "Workflows",
+	left.WriteString(m.sectionBox("workflows", "2", "Workflows",
 		fmt.Sprintf("%d", len(m.workflowNames)),
-		wfContent, outerW, wfFocused) + "\n")
+		wfContent, leftW, wfFocused) + "\n")
 
 	wkFocused := m.focusedPane == "section" && m.sectionFocus == "workers"
 	var wkContent []string
 	if wkFocused {
 		wkContent = renderNavigableList(m.sectionItems["workers"], m.sectionCursor)
 	} else {
-		wkContent = renderNameList(innerW-4, m.workerNames)
+		wkContent = renderNameList(leftInnerW-4, m.workerNames)
 	}
-	b.WriteString(m.sectionBox("workers", "3", "Workers",
+	left.WriteString(m.sectionBox("workers", "3", "Workers",
 		fmt.Sprintf("%d", len(m.workerNames)),
-		wkContent, outerW, wkFocused) + "\n")
+		wkContent, leftW, wkFocused) + "\n")
 
 	rtFocused := m.focusedPane == "section" && m.sectionFocus == "routes"
 	var rtContent []string
 	if rtFocused {
 		rtContent = renderNavigableList(m.sectionItems["routes"], m.sectionCursor)
 	} else {
-		rtContent = renderRepoList(m.repos, innerW-4)
+		rtContent = renderRepoList(m.repos, leftInnerW-4)
 	}
-	b.WriteString(m.sectionBox("routes", "4", "Routes",
+	left.WriteString(m.sectionBox("routes", "4", "Routes",
 		fmt.Sprintf("%d repos", len(m.repos)),
-		rtContent, outerW, rtFocused) + "\n")
+		rtContent, leftW, rtFocused))
 
-	// ── Features box ─────────────────────────────────────────────────
+	// ── Top block: left column beside logo ───────────────────────────
+	var b strings.Builder
+	if useLogo {
+		logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1)).Render(logo)
+		b.WriteString("\n" + lipgloss.JoinHorizontal(lipgloss.Top, left.String(), strings.Repeat(" ", logoGap), logoRendered) + "\n")
+	} else {
+		b.WriteString("\n" + left.String() + "\n")
+	}
+
+	// ── Features box (full width) ─────────────────────────────────────
 	archiveToggle := styleDim.Render("  [a] show archived")
 	if m.showArchived {
 		archiveToggle = styleDim.Render("  [a] hide archived")
@@ -523,7 +530,7 @@ func (m Model) viewDashboard() string {
 	if len(rows) == 0 {
 		tableLines = []string{"  " + styleDim.Render("No features found. Run orc work <ticket> to start one.")}
 	} else {
-		tableLines = strings.Split(m.renderTable(rows, innerW), "\n")
+		tableLines = strings.Split(m.renderTable(rows, outerW-2), "\n")
 	}
 	featuresBorderColor := surface1
 	if m.focusedPane == "features" {
