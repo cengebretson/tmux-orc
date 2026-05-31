@@ -26,6 +26,12 @@ own instruction files.
 - **System:** <!-- github | gitlab | bitbucket -->
 - **Access:** <!-- e.g. use the `github-mcp` MCP server -->
 - **Org / repo:** <!-- e.g. myorg/myrepo -->
+- **Default branch:** <!-- e.g. main -->
+- **PR target:** <!-- e.g. main or release branch -->
+
+Agents may use local `git` commands for read-only inspection and ticket worktree
+creation. Use the configured source-control access above for remote actions such
+as opening PRs, reading CI status, or posting comments.
 
 ---
 
@@ -44,6 +50,31 @@ output that is easier to parse and reason about.
 | `sd`       | `sed`           | Find-and-replace with clean syntax                   |
 | `bat`      | `cat`           | Viewing files with syntax highlighting               |
 | `delta`    | `diff`          | Reviewing diffs with syntax highlighting             |
+
+---
+
+## Git and Worktrees
+
+Use worktrees for ticket implementation so the main repo checkout stays clean.
+Unless a repo-specific instruction says otherwise, create worktrees under:
+
+```
+worktrees/<repo-name>/<ticket-slug>/
+```
+
+Recommended local commands:
+
+| Command | Purpose |
+|---------|---------|
+| `git status --short` | Check for local changes |
+| `git branch --show-current` | Confirm current branch |
+| `git worktree list` | See existing worktrees |
+| `git worktree add <path> -b <branch>` | Create a ticket worktree and branch |
+| `git diff --stat` | Summarize local changes |
+| `git diff` | Review local changes |
+
+After creating or using a worktree, update `STATE.yaml` through the process in
+`ORC.md` so later stages know where repo work happened.
 
 ---
 

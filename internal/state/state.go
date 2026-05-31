@@ -186,7 +186,7 @@ func Block(featureDir, reason string) error {
 }
 
 // Advance moves the feature to the next workflow, records a history entry, and saves STATE.yaml.
-func Advance(featureDir, workflow, owner, result string) error {
+func Advance(featureDir, stageName, owner, result string) error {
 	path := filepath.Join(featureDir, Filename)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -205,12 +205,12 @@ func Advance(featureDir, workflow, owner, result string) error {
 		Result: result,
 	})
 
-	if workflow != "" {
-		s.Stage.Name = workflow
+	if stageName != "" {
+		s.Stage.Name = stageName
 		if s.StageCounts == nil {
 			s.StageCounts = map[string]int{}
 		}
-		s.StageCounts[workflow]++
+		s.StageCounts[stageName]++
 	}
 	if owner != "" {
 		s.Stage.Owner = owner

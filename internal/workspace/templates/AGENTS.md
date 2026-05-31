@@ -45,3 +45,6 @@ Run repo-specific commands with the selected repo or worktree as `cwd`.
 Do not run package, test, or git commands from the workspace root unless
 the workflow explicitly says to.
 
+If a stage requires code changes, create or use a ticket worktree under
+`worktrees/<repo-name>/<ticket-slug>/` and record it in `STATE.yaml` as described
+in `ORC.md`. Do not leave repository changes untracked by the feature state.

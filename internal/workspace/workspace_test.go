@@ -3,8 +3,10 @@ package workspace_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workspace"
 )
 
@@ -144,6 +146,111 @@ func TestWork_CreatesFeatureFolder(t *testing.T) {
 	}
 }
 
+func TestWork_UsesConfiguredDefaultWorkflow(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := workspace.Init(workspace.InitOptions{Root: dir}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	writeOrcYAML(t, dir, `
+settings:
+  default_workflow: hotfix
+
+repos: []
+
+workflows:
+  default:
+    stages:
+      - name: intake
+  hotfix:
+    stages:
+      - name: develop
+      - name: pr-open
+`)
+
+	result, err := workspace.Work(workspace.WorkOptions{Root: dir, Ticket: "TEST-003"})
+	if err != nil {
+		t.Fatalf("Work: %v", err)
+	}
+
+	s, err := state.Load(result.FeatureDir)
+	if err != nil {
+		t.Fatalf("Load state: %v", err)
+	}
+	if s.Workflow != "hotfix" {
+		t.Fatalf("workflow = %q, want hotfix", s.Workflow)
+	}
+	if s.Stage.Name != "develop" {
+		t.Fatalf("stage = %q, want develop", s.Stage.Name)
+	}
+}
+
+func TestWork_ExplicitWorkflowOverridesConfiguredDefault(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := workspace.Init(workspace.InitOptions{Root: dir}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	writeOrcYAML(t, dir, `
+settings:
+  default_workflow: hotfix
+
+repos: []
+
+workflows:
+  default:
+    stages:
+      - name: intake
+  hotfix:
+    stages:
+      - name: develop
+`)
+
+	result, err := workspace.Work(workspace.WorkOptions{
+		Root:     dir,
+		Ticket:   "TEST-004",
+		Workflow: "default",
+	})
+	if err != nil {
+		t.Fatalf("Work: %v", err)
+	}
+
+	s, err := state.Load(result.FeatureDir)
+	if err != nil {
+		t.Fatalf("Load state: %v", err)
+	}
+	if s.Workflow != "default" {
+		t.Fatalf("workflow = %q, want default", s.Workflow)
+	}
+	if s.Stage.Name != "intake" {
+		t.Fatalf("stage = %q, want intake", s.Stage.Name)
+	}
+}
+
+func TestWork_InvalidWorkflowDoesNotCreateFeatureDir(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := workspace.Init(workspace.InitOptions{Root: dir}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	_, err := workspace.Work(workspace.WorkOptions{
+		Root:     dir,
+		Ticket:   "TEST-005",
+		Workflow: "missing",
+	})
+	if err == nil {
+		t.Fatal("expected missing workflow error, got nil")
+	}
+	if !strings.Contains(err.Error(), `workflow "missing" not found`) {
+		t.Fatalf("error = %q, want missing workflow", err)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(dir, "features", "TEST-005")); !os.IsNotExist(statErr) {
+		t.Fatalf("feature dir exists after failed Work: %v", statErr)
+	}
+}
+
 func TestWork_RejectsDuplicate(t *testing.T) {
 	dir := t.TempDir()
 
@@ -179,5 +286,12 @@ func TestWork_SlugOverride(t *testing.T) {
 
 	if result.Slug != "TEST-002-add-login" {
 		t.Errorf("slug = %q, want TEST-002-add-login", result.Slug)
+	}
+}
+
+func writeOrcYAML(t *testing.T, dir, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "orc.yaml"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
 	}
 }

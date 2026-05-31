@@ -22,6 +22,8 @@ security-sensitive, or hard to undo.
 - Reading files.
 - Searching the repo.
 - Creating or editing files inside the current ticket context.
+- Creating a ticket branch and worktree under `worktrees/<repo-name>/<ticket-slug>/`
+  when the active stage requires repository changes.
 - Running targeted local validation for files just changed.
 - Creating draft plans, summaries, or proposed commands.
 - Updating `STATE.yaml` to reflect work just completed, unless the update changes
@@ -53,7 +55,7 @@ Update `STATE.yaml` whenever any of these change:
 - completion state
 
 Before ending an agent session, update `STATE.yaml` so `orc status`,
-`orc next`, and `orc stuck` reflect reality.
+`orc next`, and `orc show` reflect reality.
 
 ---
 
@@ -70,7 +72,11 @@ worktrees/
 ```
 
 Do not create ad hoc worktrees inside product repos unless a repo-specific rule explicitly
-requires it. Record the active worktree path in `features/<ticket-slug>/STATE.yaml`.
+requires it. Record the active worktree path in `features/<ticket-slug>/STATE.yaml`
+before ending the session.
+
+Use repo names from `orc.yaml`. If you cannot determine the correct repo or branch
+name, run `orc wait <ticket> "<question>"` instead of guessing.
 
 ---
 

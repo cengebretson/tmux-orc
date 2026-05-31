@@ -1,6 +1,7 @@
 package state_test
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -106,5 +107,80 @@ func TestResolveCWD_Relative(t *testing.T) {
 	// resolved from featureDir that should produce a path ending in worktrees/...
 	if cwd == "" || cwd == "." {
 		t.Errorf("expected resolved path, got %q", cwd)
+	}
+}
+
+func writeLegacyState(t *testing.T, featureDir, content string) {
+	t.Helper()
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(featureDir, "STATE.yaml"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Legacy STATE.yaml files (written before the workflow field existed) have no workflow key.
+// Advance must still work and must not overwrite the stage when stageName is empty.
+func TestAdvance_LegacyStateNoWorkflowField(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "OLD-001")
+	writeLegacyState(t, featureDir, `
+ticket: OLD-001
+slug: OLD-001
+status: in_progress
+stage:
+  owner: bob-developer
+  name: develop
+`)
+
+	if err := state.Advance(featureDir, "pr-open", "bob-developer", "done"); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		t.Fatalf("Load after Advance: %v", err)
+	}
+	if s.Stage.Name != "pr-open" {
+		t.Errorf("stage.name = %q, want pr-open", s.Stage.Name)
+	}
+	if s.Status != "ready" {
+		t.Errorf("status = %q, want ready", s.Status)
+	}
+	// workflow field should remain empty — it was never set on this legacy ticket
+	if s.Workflow != "" {
+		t.Errorf("workflow = %q, want empty (legacy ticket)", s.Workflow)
+	}
+}
+
+// When stageName is empty (last stage in pipeline), Advance should leave the
+// current stage name unchanged and still mark the ticket ready.
+func TestAdvance_EmptyStageNamePreservesCurrentStage(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "DONE-001")
+	writeLegacyState(t, featureDir, `
+ticket: DONE-001
+slug: DONE-001
+status: in_progress
+workflow: default
+stage:
+  owner: bob-developer
+  name: qa-automation
+`)
+
+	if err := state.Advance(featureDir, "", "bob-developer", "all tests pass"); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		t.Fatalf("Load after Advance: %v", err)
+	}
+	if s.Stage.Name != "qa-automation" {
+		t.Errorf("stage.name = %q, want qa-automation (unchanged)", s.Stage.Name)
+	}
+	if s.Status != "ready" {
+		t.Errorf("status = %q, want ready", s.Status)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/workflow"
 	"gopkg.in/yaml.v3"
 )
@@ -53,18 +54,30 @@ func Work(opts WorkOptions) (*WorkResult, error) {
 		return nil, fmt.Errorf("features/_template not found — run `orc init` first")
 	}
 
-	if err := copyDir(templateDir, featureDir); err != nil {
-		return nil, fmt.Errorf("creating feature folder: %w", err)
+	cfg, err := config.Load(root)
+	if err != nil {
+		return nil, fmt.Errorf("loading workspace config: %w", err)
 	}
-
 	workflowName := opts.Workflow
 	if workflowName == "" {
-		workflowName = "default"
+		workflowName = cfg.DefaultWorkflow()
 	}
-	workflowCfg, _ := workflow.Load(root)
-	firstStage := "intake"
-	if stages := workflowCfg.StageNames(workflowName); len(stages) > 0 {
-		firstStage = stages[0]
+	workflowCfg, err := workflow.Load(root)
+	if err != nil {
+		return nil, fmt.Errorf("loading workflow config: %w", err)
+	}
+	stages := workflowCfg.StageNames(workflowName)
+	if len(stages) == 0 {
+		known := workflowCfg.Names()
+		if len(known) > 0 {
+			return nil, fmt.Errorf("workflow %q not found in orc.yaml (available: %s)", workflowName, strings.Join(known, ", "))
+		}
+		return nil, fmt.Errorf("workflow %q not found in orc.yaml", workflowName)
+	}
+	firstStage := stages[0]
+
+	if err := copyDir(templateDir, featureDir); err != nil {
+		return nil, fmt.Errorf("creating feature folder: %w", err)
 	}
 
 	if err := writeStateYAML(featureDir, ticket, slug, workflowName, firstStage); err != nil {
@@ -149,10 +162,10 @@ func writeStateYAML(featureDir, ticket, slug, workflowName, firstStage string) e
 		},
 		History: []stateHistory{
 			{
-				At:    time.Now().Format(time.RFC3339),
-				Stage: firstStage,
-				Owner: "agent",
-				Result:   "feature context created by orc work",
+				At:     time.Now().Format(time.RFC3339),
+				Stage:  firstStage,
+				Owner:  "agent",
+				Result: "feature context created by orc work",
 			},
 		},
 	}

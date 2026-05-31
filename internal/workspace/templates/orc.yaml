@@ -4,6 +4,10 @@
 # Run `orc health` to verify the workspace.
 # After editing, the TUI picks up changes on the next auto-refresh.
 
+# settings:
+#   default_workflow: default     # workflow used by `orc work` when --workflow is omitted
+#   auto_archive: false           # archive tickets automatically when the last stage completes
+
 repos:
   - name: my-app
     path: ../my-app

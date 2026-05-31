@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -70,6 +71,7 @@ func (c *Config) Names() []string {
 	for k := range c.Workflows {
 		names = append(names, k)
 	}
+	sort.Strings(names)
 	return names
 }
 

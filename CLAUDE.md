@@ -71,6 +71,8 @@ go test ./...
 | `orc next <ticket> --dry` | Preview the launch command without executing |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
+| `orc validate <ticket>` | Validate a ticket's state — checks workflow, stage, worker, and worktrees |
+| `orc resume <ticket>` | Generate a recovery prompt for a stuck or interrupted ticket |
 | `orc tui` | Open the interactive dashboard |
 | `orc start <ticket>` | Mark a ticket in_progress — called by the agent at the start of each session (hidden from help) |
 | `orc advance <ticket> [--stage <stage>]` | Mark current stage complete and move to the next (called by agents, hidden from help) |
@@ -95,7 +97,7 @@ diverged from the original plan.
 | Worker routing | `orc.yaml` owns default worker per stage; overridden by `stage.owner` or `orc next --worker` |
 | Multi-product | Claude and Codex launch commands rendered from worker `product` field |
 | Workflows + stages | `orc.yaml` defines named pipelines with stage sequences, advance mode, and per-stage worker |
-| Default workflow setting | `settings.default_workflow` chooses the workflow used by `orc work` when `--workflow` is omitted |
+| Workspace settings | `settings.default_workflow` — default pipeline for `orc work`; `settings.auto_archive` — archive on last stage completion |
 | Stage files | `stages/*.md` — plain markdown, no frontmatter; flow control lives entirely in `orc.yaml` |
 | Repair loops | `repair_stages` section in `orc.yaml` with `repairs`, `worker`, `advance`, `max_retries` |
 | Retry tracking | `stage_counts` map in STATE.yaml — incremented by `orc advance` |
@@ -106,6 +108,8 @@ diverged from the original plan.
 | Worktree cleanup | `orc archive` removes git worktrees, moves feature to `_archive/` |
 | tmux integration | `orc work --tmux` opts in; `orc next` auto-creates session, sends agent to stage window; `orc attach` to jump in; runtime persisted in STATE.yaml |
 | Interactive dashboard | `orc tui` opens a Bubble Tea dashboard for status review and ticket actions |
+| Ticket validation | `orc validate <ticket>` — checks workflow exists, stage valid, stage file present, worker exists, worktrees found |
+| Session recovery | `orc resume <ticket>` — generates a recovery prompt from history, partial outputs, and stage docs |
 | Tests | health, state, workers, workspace, workflow packages all covered |
 
 ### Planned
@@ -124,8 +128,10 @@ Ideas worth revisiting when the core is stable.
 
 | Idea | Notes |
 |------|-------|
-| Resume prompt | When a session ends mid-stage without advancing, generate a recovery prompt summarizing what was done so far — reads existing output files, STATE.yaml history, and DECISIONS.md to reconstruct context for the next agent. Could live in `orc next` output or a dedicated `orc resume <ticket>` command. `next_action.prompt` in STATE.yaml is the natural place to write it. |
+| ~~Resume prompt~~ | Done — `orc resume <ticket>` reads history, partial outputs, and stage docs to produce a recovery prompt. |
+| Unify config parsing | Both `internal/config` and `internal/workflow` read `orc.yaml` independently. Move all parsing into `internal/config` (or a renamed `internal/workspace/config`) so the file is parsed once into a single typed struct with `settings`, `repos`, `workflows`, and `repair_stages`. |
 | Agent session completion notification | Notify the human when an agent finishes a stage — e.g. terminal bell, tmux alert, or a push notification via a configured webhook. Most useful in `--tmux` mode where the session runs unattended. |
+| Quotes and themes in `orc.yaml` | Add optional `settings:` block to `orc.yaml` for TUI customization — custom quote pool (`quotes: [...]`) and color theme override (`theme: catppuccin-mocha`). Quotes would be drawn randomly in the TUI logo panel; theme would swap the lipgloss palette. |
 
 ### Deliberate divergences from original design
 

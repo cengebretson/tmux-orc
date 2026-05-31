@@ -58,9 +58,10 @@ agent a complete picture in seconds.
 exit criteria, and the exact `orc advance` command to run when done. Agents don't
 decide what to do next — the workspace tells them.
 
-**Policy lives in files, not code.** Stage docs are plain markdown. Change the
+**Policy lives in files, not code.** Stage docs are plain markdown, and
+`orc.yaml` declares the stage order, default worker, and advance mode. Change the
 review criteria, add a preflight check, swap models — edit the file and the next
-session picks it up immediately. No redeploy, no config flags.
+session picks it up immediately.
 
 **Right agent for each job.** A fast model for implementation, a smarter one for
 review, a specialist for QA. Each worker is configured independently in a markdown
@@ -150,6 +151,12 @@ Launches the agent for the current stage. The agent works, updates `STATE.yaml`,
 and exits. Run `orc next` again for the next stage. Use `--dry` to preview the
 launch command without executing it.
 
+You can also use the dashboard:
+
+```bash
+orc tui
+```
+
 ## How it works
 
 ### Ticket lifecycle
@@ -230,14 +237,17 @@ or human picks up exactly where the last one left off.
 | `orc init --dry-run` | Preview without writing |
 | `orc init --force` | Overwrite existing files |
 | `orc health` | Check workspace filesystem health |
-| `orc status [--json]` | Show all features and their current workflow |
+| `orc status [--json]` | Show all features and their current workflow/stage |
 | `orc work <ticket>` | Create the feature folder for a ticket — run once by the human |
+| `orc work <ticket> --workflow <name>` | Use a named workflow instead of the configured default |
 | `orc work <ticket> --tmux` | Also enable tmux session for this ticket |
 | `orc show <ticket> [--json]` | Show full state for one ticket |
 | `orc next <ticket>` | Launch the next agent for a ticket |
 | `orc next <ticket> --dry` | Preview the launch command without running it |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
+| `orc next <ticket> --worker <id>` | Override the selected worker for one launch |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
+| `orc tui` | Open the interactive dashboard |
 | `orc start <ticket>` | Mark a ticket in_progress — called by agents (hidden from help) |
 | `orc advance <ticket> [--stage <stage>]` | Mark current stage complete and move to the next (called by agents) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
@@ -263,10 +273,8 @@ my-workspace/
       SPEC.md        context, scope, and open questions
       PLAN.md        approach and steps
       DECISIONS.md   decisions and rationale
-      develop/       written by the develop stage
-      code-review/   written by the code-review stage
-      pr-open/       written by the pr-open stage
-      qa-automation/ written by the qa-automation stage
+      # stage subfolders such as develop/, code-review/, and pr-open/
+      # are created by agents when those stages write outputs
     _archive/        completed features moved here by `orc archive`
 
   workers/
@@ -283,12 +291,58 @@ my-workspace/
     qa-automation.md implement and run automated tests
     # plain markdown — no frontmatter; flow control lives in orc.yaml
 
-  orc.yaml           workspace config — repos, paths, and purposes
-  orc.yaml     named pipelines: stage sequence, worker per stage, advance mode
+  orc.yaml           workspace config — repos, workflows, repair stages, settings
   ORC.md             agent state contract — read at session start
 
   worktrees/         git worktrees for ticket branches (gitignored)
 ```
+
+## orc.yaml
+
+`orc.yaml` is the workspace config. It declares repos, named workflows, repair
+stages, and optional settings.
+
+```yaml
+settings:
+  default_workflow: default
+  auto_archive: false
+
+repos:
+  - name: my-app
+    path: ../my-app
+    purpose: Application code, APIs, tests
+
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: develop
+        worker: bob-developer
+        advance: manual
+      - name: code-review
+        worker: bob-developer
+        advance: auto
+      - name: pr-open
+        worker: bob-developer
+        advance: manual
+      - name: qa-automation
+        worker: brian-qa
+        advance: auto
+
+repair_stages:
+  pr-repair:
+    repairs: pr-open
+    worker: bob-developer
+    advance: auto
+    max_retries: 3
+```
+
+`default_workflow` is used by `orc work <ticket>` when `--workflow` is omitted.
+If it is not set, `orc` falls back to `default`. `advance: auto` tells agents to
+run `orc advance` when a stage is complete; `advance: manual` tells agents to
+run `orc wait` so a human can review before continuing.
 
 ## STATE.yaml
 
@@ -339,4 +393,3 @@ Worker resolution order:
 4. Fallback: match by `workflows:` or `stages:` list in worker frontmatter
 
 Use `--dry` to preview the command without launching.
-

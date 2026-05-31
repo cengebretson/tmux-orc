@@ -57,6 +57,39 @@ Also update `stage.name`, `stage.owner`, `next_action`, and `repos` whenever tho
 
 ---
 
+## Worktrees
+
+Agents may create Git worktrees when a stage requires repository changes. Worktrees
+are created by agents, but they must be tracked in `STATE.yaml` so later stages
+and `orc archive` know what happened.
+
+Create worktrees under the workspace:
+
+```
+worktrees/<repo-name>/<ticket-slug>/
+```
+
+Use repo names from `orc.yaml`. When you create or use a worktree, update
+`STATE.yaml`:
+
+```yaml
+repos:
+  <repo-name>:
+    main: /absolute/path/to/main/repo
+    worktree: worktrees/<repo-name>/<ticket-slug>
+    branch: <branch-name>
+```
+
+Rules:
+
+- Use the worktree as `cwd` for repo-specific package, test, and git commands.
+- Set `next_action.cwd` to the worktree path when the next agent should continue there.
+- Record the branch and worktree path before ending the session.
+- Do not manually delete worktrees during feature work; `orc archive` handles cleanup.
+- If the correct repo, branch, or worktree path is unclear, use `orc wait` and ask.
+
+---
+
 ## Feature Folder
 
 Every ticket has a context pack at `features/<ticket-slug>/`:

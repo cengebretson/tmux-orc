@@ -16,8 +16,22 @@ type Repo struct {
 	Purpose string `yaml:"purpose"`
 }
 
+type Settings struct {
+	DefaultWorkflow string `yaml:"default_workflow"`
+	AutoArchive     bool   `yaml:"auto_archive"`
+}
+
 type Config struct {
-	Repos []Repo `yaml:"repos"`
+	Repos    []Repo   `yaml:"repos"`
+	Settings Settings `yaml:"settings"`
+}
+
+// DefaultWorkflow returns the configured default workflow name, falling back to "default".
+func (c *Config) DefaultWorkflow() string {
+	if c.Settings.DefaultWorkflow != "" {
+		return c.Settings.DefaultWorkflow
+	}
+	return "default"
 }
 
 // Load reads orc.yaml from the workspace root.

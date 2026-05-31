@@ -9,12 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
+	"github.com/cengebretson/orc/internal/resume"
 	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/validate"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/tui"
-	"github.com/cengebretson/orc/internal/workflow"
 	"github.com/cengebretson/orc/internal/workers"
+	"github.com/cengebretson/orc/internal/workflow"
 	"github.com/cengebretson/orc/internal/workspace"
 	"github.com/spf13/cobra"
 )
@@ -50,10 +53,10 @@ var initCmd = &cobra.Command{
 }
 
 var (
-	initWorkspace       string
+	initWorkspace         string
 	initWithSampleWorkers bool
-	initDryRun          bool
-	initForce           bool
+	initDryRun            bool
+	initForce             bool
 )
 
 var healthCmd = &cobra.Command{
@@ -157,7 +160,7 @@ var (
 	advanceWorkspace string
 	advanceOwner     string
 	advanceResult    string
-	advanceStage  string
+	advanceStage     string
 )
 
 var archiveCmd = &cobra.Command{
@@ -186,6 +189,24 @@ var tuiCmd = &cobra.Command{
 }
 
 var tuiWorkspace string
+
+var validateCmd = &cobra.Command{
+	Use:   "validate <ticket>",
+	Short: "Validate a ticket's state against the workspace — checks workflow, stage, worker, and worktrees",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runValidate,
+}
+
+var validateWorkspace string
+
+var resumeCmd = &cobra.Command{
+	Use:   "resume <ticket>",
+	Short: "Generate a recovery prompt for a stuck or interrupted ticket",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runResume,
+}
+
+var resumeWorkspace string
 
 var helpAllCmd = &cobra.Command{
 	Use:   "help-all",
@@ -227,7 +248,7 @@ func init() {
 	workCmd.Flags().StringVar(&workWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	workCmd.Flags().StringVar(&workSlug, "slug", "", "Optional slug suffix (e.g. add-user-export → TICKET-123-add-user-export)")
 	workCmd.Flags().BoolVar(&workTmux, "tmux", false, "Enable tmux session for this ticket — session created automatically on first orc next")
-	workCmd.Flags().StringVar(&workWorkflow, "workflow", "default", "Workflow to use for this ticket")
+	workCmd.Flags().StringVar(&workWorkflow, "workflow", "", "Workflow to use (default: settings.default_workflow in orc.yaml, or \"default\")")
 	showCmd.Flags().StringVar(&showWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
 	startCmd.Flags().StringVar(&startWorkspace, "workspace", ".", "Workspace root (default: current directory)")
@@ -240,6 +261,8 @@ func init() {
 	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	attachCmd.Flags().StringVar(&attachWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	tuiCmd.Flags().StringVar(&tuiWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	validateCmd.Flags().StringVar(&validateWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	resumeCmd.Flags().StringVar(&resumeWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
@@ -254,6 +277,8 @@ func init() {
 	rootCmd.AddCommand(archiveCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(tuiCmd)
+	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(helpAllCmd)
 }
 
@@ -350,10 +375,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 		jsonPreamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 		jsonPrompt = jsonPreamble + jsonPrompt
 		workflowCfg, _ := workflow.Load(root)
-		jsonPipeline := s.Workflow
-		if jsonPipeline == "" {
-			jsonPipeline = "default"
-		}
+		jsonPipeline := resolveWorkflow(root, s.Workflow)
 		stageCfg, _ := workflowCfg.StageConfig(jsonPipeline, s.Stage.Name)
 		nextStage := workflowCfg.NextStage(jsonPipeline, s.Stage.Name)
 		if nextStage != "" {
@@ -385,7 +407,8 @@ func runNext(cmd *cobra.Command, args []string) error {
 		out := map[string]any{
 			"ticket":   s.Ticket,
 			"status":   s.Status,
-			"workflow": s.Stage.Name,
+			"workflow": jsonPipeline,
+			"stage":    s.Stage.Name,
 			"owner":    s.Stage.Owner,
 			"cwd":      cwd,
 			"prompt":   jsonPrompt,
@@ -401,7 +424,8 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Status:   %s\n", s.Status)
-	fmt.Printf("Workflow: %s\n", s.Stage.Name)
+	fmt.Printf("Workflow: %s\n", resolveWorkflow(root, s.Workflow))
+	fmt.Printf("Stage:    %s\n", s.Stage.Name)
 	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 
 	switch s.Status {
@@ -441,17 +465,14 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 	cwd := s.ResolveCWD(root, featureDir)
 	prompt := s.NextAction.Prompt
 	if prompt == "" {
-		prompt = fmt.Sprintf("Continue %s — workflow: %s\n\nFeature context: features/%s/STATE.yaml\nWorkflow: workflows/%s/WORKFLOW.md",
+		prompt = fmt.Sprintf("Continue %s — stage: %s\n\nFeature context: features/%s/STATE.yaml\nStage: stages/%s.md",
 			s.Ticket, s.Stage.Name, s.Slug, s.Stage.Name)
 	}
 	preamble := fmt.Sprintf("Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n", s.Ticket)
 	prompt = preamble + prompt
 
 	workflowCfg, _ := workflow.Load(root)
-	pname := s.Workflow
-	if pname == "" {
-		pname = "default"
-	}
+	pname := resolveWorkflow(root, s.Workflow)
 	stageCfg, _ := workflowCfg.StageConfig(pname, s.Stage.Name)
 	nextStage := workflowCfg.NextStage(pname, s.Stage.Name)
 	if nextStage != "" {
@@ -511,8 +532,8 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 
 		// Auto-create session if not already set up.
 		if s.Runtime.Tmux == nil {
-			workflows := listWorkflowNames(root)
-			if err := tmux.CreateSession(session, featureDir, workflows); err != nil {
+			stages := stageNamesForTicket(root, s)
+			if err := tmux.CreateSession(session, featureDir, stages); err != nil {
 				fmt.Printf("tmux session create failed (%v) — running in foreground\n", err)
 				goto runForeground
 			}
@@ -523,8 +544,8 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 			session = s.Runtime.Tmux.Session
 			if !tmux.SessionExists(session) {
 				// Session died (reboot etc) — recreate it.
-				workflows := listWorkflowNames(root)
-				if err := tmux.CreateSession(session, featureDir, workflows); err != nil {
+				stages := stageNamesForTicket(root, s)
+				if err := tmux.CreateSession(session, featureDir, stages); err != nil {
 					fmt.Printf("tmux session recreate failed (%v) — running in foreground\n", err)
 					goto runForeground
 				}
@@ -565,8 +586,6 @@ runForeground:
 	cmd.Dir = cwd
 	return cmd.Run()
 }
-
-
 
 func runWork(cmd *cobra.Command, args []string) error {
 	root, err := resolveRoot(workWorkspace)
@@ -649,10 +668,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 					session = "✗" // configured but not running
 				}
 			}
+			rowPname := resolveWorkflow(root, s.Workflow)
 			rows = append(rows, row{
 				ticket:   s.Ticket,
 				status:   s.Status,
-				workflow: s.Stage.Name,
+				workflow: rowPname + " · " + s.Stage.Name,
 				owner:    s.Stage.Owner,
 				next:     next,
 				session:  session,
@@ -851,9 +871,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	startPname := resolveWorkflow(root, s.Workflow)
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Status:   in_progress\n")
-	fmt.Printf("Workflow: %s\n", s.Stage.Name)
+	fmt.Printf("Workflow: %s\n", startPname)
+	fmt.Printf("Stage:    %s\n", s.Stage.Name)
 	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 	return nil
 }
@@ -933,38 +955,48 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 	prevStage := s.Stage.Name
 
 	// If --workflow not provided, auto-advance to next stage in the feature's pipeline.
-	targetWorkflow := advanceStage
-	if targetWorkflow == "" {
+	nextStage := advanceStage
+	if nextStage == "" {
 		workflowCfg, _ := workflow.Load(root)
-		pname := s.Workflow
-		if pname == "" {
-			pname = "default"
-		}
-		targetWorkflow = workflowCfg.NextStage(pname, prevStage)
+		pname := resolveWorkflow(root, s.Workflow)
+		nextStage = workflowCfg.NextStage(pname, prevStage)
 	}
 
 	result := advanceResult
 	if result == "" {
-		if targetWorkflow != "" && targetWorkflow != prevStage {
-			result = fmt.Sprintf("advanced from %s to %s", prevStage, targetWorkflow)
+		if nextStage != "" && nextStage != prevStage {
+			result = fmt.Sprintf("advanced from %s to %s", prevStage, nextStage)
 		} else {
 			result = fmt.Sprintf("completed %s", prevStage)
 		}
 	}
 
-	if err := state.Advance(featureDir, targetWorkflow, advanceOwner, result); err != nil {
+	if err := state.Advance(featureDir, nextStage, advanceOwner, result); err != nil {
 		return err
 	}
 
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
-	if targetWorkflow != "" && targetWorkflow != prevStage {
-		fmt.Printf("Workflow: %s → %s\n", prevStage, targetWorkflow)
+	if nextStage != "" && nextStage != prevStage {
+		fmt.Printf("Stage:    %s → %s\n", prevStage, nextStage)
 	} else {
-		fmt.Printf("Workflow: %s  (unchanged)\n", prevStage)
+		fmt.Printf("Stage:    %s  (unchanged)\n", prevStage)
 	}
 	if advanceOwner != "" {
 		fmt.Printf("Owner:    %s\n", advanceOwner)
 	}
+	// Auto-archive if the pipeline is complete and the workspace opts in.
+	if nextStage == "" {
+		cfg, _ := config.Load(root)
+		if cfg != nil && cfg.Settings.AutoArchive {
+			fmt.Println()
+			s, err = state.Load(featureDir)
+			if err != nil {
+				return err
+			}
+			return archiveFeature(root, featureDir, s)
+		}
+	}
+
 	fmt.Printf("\nRun `orc next %s` to launch the next worker.\n", s.Ticket)
 	fmt.Println()
 
@@ -991,6 +1023,10 @@ func runArchive(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	return archiveFeature(root, featureDir, s)
+}
+
+func archiveFeature(root, featureDir string, s *state.State) error {
 	// remove git worktrees for any write repos
 	for name, repo := range s.Repos {
 		if repo.Worktree == "" {
@@ -1041,6 +1077,45 @@ func runArchive(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runValidate(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(validateWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	report := validate.Run(root, featureDir)
+	validate.Print(report)
+	if !report.OK() {
+		return fmt.Errorf("validation failed")
+	}
+	return nil
+}
+
+func runResume(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(resumeWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := state.FindFeatureDir(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	ctx, err := resume.Build(root, featureDir)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(ctx.Prompt)
+	return nil
+}
+
 func runTui(cmd *cobra.Command, args []string) error {
 	root, err := resolveRoot(tuiWorkspace)
 	if err != nil {
@@ -1074,38 +1149,28 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	return tmux.Attach(s.Slug + ":" + s.Stage.Name)
 }
 
-// listWorkflowNames returns workflow directory names in pipeline order,
-// with any workflows not in any pipeline appended at the end.
-func listWorkflowNames(root string) []string {
-	workflowsDir := filepath.Join(root, "workflows")
-	entries, err := os.ReadDir(workflowsDir)
-	if err != nil {
-		return nil
+// defaultWorkflow returns the workspace default workflow name from orc.yaml settings,
+// falling back to "default" if not configured or the file cannot be read.
+func defaultWorkflow(root string) string {
+	cfg, _ := config.Load(root)
+	if cfg != nil {
+		return cfg.DefaultWorkflow()
 	}
-	var all []string
-	for _, e := range entries {
-		if e.IsDir() {
-			all = append(all, e.Name())
-		}
-	}
+	return "default"
+}
 
+// resolveWorkflow returns the ticket's workflow name, using the workspace default if unset.
+func resolveWorkflow(root, ticketWorkflow string) string {
+	if ticketWorkflow != "" {
+		return ticketWorkflow
+	}
+	return defaultWorkflow(root)
+}
+
+// stageNamesForTicket returns the ordered stage names for the ticket's workflow pipeline.
+func stageNamesForTicket(root string, s *state.State) []string {
 	workflowCfg, _ := workflow.Load(root)
-	seen := make(map[string]bool)
-	var ordered []string
-	for _, pname := range workflowCfg.Names() {
-		for _, stageName := range workflowCfg.StageNames(pname) {
-			if !seen[stageName] {
-				ordered = append(ordered, stageName)
-				seen[stageName] = true
-			}
-		}
-	}
-	for _, name := range all {
-		if !seen[name] {
-			ordered = append(ordered, name)
-		}
-	}
-	return ordered
+	return workflowCfg.StageNames(resolveWorkflow(root, s.Workflow))
 }
 
 func removeWorktree(repoMain, worktreePath string) error {
