@@ -1,8 +1,6 @@
 package tui
 
 import (
-	_ "embed"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -25,17 +23,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed quotes.json
-var quotesJSON []byte
-
 func pickQuote(custom []string) string {
-	pool := custom
-	if len(pool) == 0 {
-		if err := json.Unmarshal(quotesJSON, &pool); err != nil || len(pool) == 0 {
-			return ""
-		}
+	if len(custom) == 0 {
+		return ""
 	}
-	return pool[rand.Intn(len(pool))]
+	return custom[rand.Intn(len(custom))]
 }
 
 // ── view states ──────────────────────────────────────────────────
