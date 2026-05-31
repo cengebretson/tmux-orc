@@ -469,23 +469,43 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 
 	argv := workers.LaunchArgs(worker, root, cwd, prompt)
 
-	// Auto-detect tmux: if a session is recorded in state and is alive, send the command there.
-	if !dry && tmux.Available() && s.Runtime.Tmux != nil {
-		session := s.Runtime.Tmux.Session
+	// Auto-tmux: create a session if tmux is available and none exists yet, then send there.
+	if !dry && tmux.Available() {
+		session := s.Slug
 		window := s.Stage.Workflow
-		if tmux.SessionExists(session) {
-			fmt.Printf("Sending to tmux session %s:%s...\n", session, window)
-			if err := tmux.SendCommand(session, window, featureDir, cwd, argv); err != nil {
-				fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
-			} else {
-				fmt.Printf("Agent launched in background.\n")
-				fmt.Printf("Attach:  %s\n", tmux.AttachHint(session, window))
-				return nil
+
+		// Auto-create session if not already set up.
+		if s.Runtime.Tmux == nil {
+			workflows := listWorkflowNames(root)
+			if err := tmux.CreateSession(session, featureDir, workflows); err != nil {
+				fmt.Printf("tmux session create failed (%v) — running in foreground\n", err)
+				goto runForeground
+			}
+			if err := state.SetRuntime(featureDir, session); err != nil {
+				fmt.Printf("warning: could not write runtime to STATE.yaml: %v\n", err)
 			}
 		} else {
-			fmt.Printf("tmux session %q not running — use `orc tmux create %s` to restart, or proceeding in foreground\n", session, s.Ticket)
+			session = s.Runtime.Tmux.Session
+			if !tmux.SessionExists(session) {
+				// Session died (reboot etc) — recreate it.
+				workflows := listWorkflowNames(root)
+				if err := tmux.CreateSession(session, featureDir, workflows); err != nil {
+					fmt.Printf("tmux session recreate failed (%v) — running in foreground\n", err)
+					goto runForeground
+				}
+			}
+		}
+
+		fmt.Printf("Sending to tmux session %s:%s...\n", session, window)
+		if err := tmux.SendCommand(session, window, featureDir, cwd, argv); err != nil {
+			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
+		} else {
+			fmt.Printf("Agent launched in background.\n")
+			fmt.Printf("Attach:  %s\n", tmux.AttachHint(session, window))
+			return nil
 		}
 	}
+runForeground:
 
 	if dry {
 		fmt.Printf("Worker:  %s  (%s)\n", worker.Name, matchReason)
