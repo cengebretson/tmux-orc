@@ -59,13 +59,15 @@ go test ./...
 | `orc init --dry-run` | Preview without writing |
 | `orc init --force` | Overwrite existing files |
 | `orc health` | Check workspace filesystem health |
-| `orc status` | Show all features and their current stage |
+| `orc status` | Show all features and their current workflow |
 | `orc work <ticket>` | Create the feature folder for a ticket — run once by the human |
+| `orc work <ticket> --tmux` | Also enable tmux session for this ticket |
 | `orc show <ticket>` | Show full state for one ticket |
 | `orc show <ticket> --json` | Full state as JSON for agent parsing |
 | `orc next <ticket>` | Launch the next agent for a ticket |
 | `orc next <ticket> --dry` | Preview the launch command without executing |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
+| `orc attach <ticket>` | Attach to the tmux session for a ticket |
 | `orc start <ticket>` | Mark a ticket in_progress — called by the agent at the start of each session (hidden from help) |
 | `orc advance <ticket> [--workflow <wf>]` | Mark current workflow complete and move to the next (called by agents, hidden from help) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
@@ -96,6 +98,7 @@ built, what's planned, and where we deliberately diverged from the original plan
 | JSON output | `orc show --json`, `orc next --json`, `orc status --json` — machine-readable for agent parsing and CI |
 | Session contract | `REQUIREMENTS.md` shared workflow contract; `AGENTS.md` Session Start section enforces state updates |
 | Worktree cleanup | `orc archive` removes git worktrees, moves feature to `_archive/` |
+| tmux integration | `orc work --tmux` opts in; `orc next` auto-creates session, sends agent to workflow window; `orc attach` to jump in; runtime persisted in STATE.yaml |
 | Tests | health, state, workers, workspace packages all covered |
 
 ### Planned

@@ -165,12 +165,14 @@ or human picks up exactly where the last one left off.
 | `orc init --dry-run` | Preview without writing |
 | `orc init --force` | Overwrite existing files |
 | `orc health` | Check workspace filesystem health |
-| `orc status [--json]` | Show all features and their current stage |
+| `orc status [--json]` | Show all features and their current workflow |
 | `orc work <ticket>` | Create the feature folder for a ticket — run once by the human |
+| `orc work <ticket> --tmux` | Also enable tmux session for this ticket |
 | `orc show <ticket> [--json]` | Show full state for one ticket |
 | `orc next <ticket>` | Launch the next agent for a ticket |
 | `orc next <ticket> --dry` | Preview the launch command without running it |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
+| `orc attach <ticket>` | Attach to the tmux session for a ticket |
 | `orc start <ticket>` | Mark a ticket in_progress — called by agents (hidden from help) |
 | `orc advance <ticket> [--workflow <wf>]` | Mark current workflow complete and move to the next (called by agents) |
 | `orc wait <ticket> <reason>` | Mark a ticket as waiting for human input |
@@ -237,7 +239,6 @@ slug: FLYWL-123-add-login
 status: in_progress
 
 stage:
-  current: implementation
   owner: developer
   workflow: develop
 
@@ -272,7 +273,7 @@ Worker resolution order:
 1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
 2. `stage.owner` in STATE.yaml — set by a previous `orc advance --owner`
 3. `worker:` in the current workflow's WORKFLOW.md
-4. Fallback: match by `workflows`/`stages` lists if present
+4. Fallback: match by `workflows:` list in worker frontmatter
 
 Use `--dry` to preview the command without launching.
 
