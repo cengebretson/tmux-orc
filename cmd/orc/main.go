@@ -952,14 +952,47 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Guard: archived tickets cannot be advanced.
+	if s.Status == "archived" {
+		return fmt.Errorf("ticket %s is archived — cannot advance", s.Ticket)
+	}
+
+	workflowCfg, _ := workflow.Load(root)
+	pname := resolveWorkflow(root, s.Workflow)
 	prevStage := s.Stage.Name
 
-	// If --workflow not provided, auto-advance to next stage in the feature's pipeline.
+	// If --stage is given manually, validate it exists in the workflow or repair stages.
+	if advanceStage != "" {
+		if _, ok := workflowCfg.StageConfig(pname, advanceStage); !ok {
+			return fmt.Errorf("stage %q not found in workflow %q — check orc.yaml", advanceStage, pname)
+		}
+	}
+
+	// Auto-advance to next stage in the feature's pipeline.
 	nextStage := advanceStage
 	if nextStage == "" {
-		workflowCfg, _ := workflow.Load(root)
-		pname := resolveWorkflow(root, s.Workflow)
 		nextStage = workflowCfg.NextStage(pname, prevStage)
+	}
+
+	// Guard: manual gate — agent must call orc wait, not orc advance.
+	if nextStage != "" {
+		if sc, ok := workflowCfg.StageConfig(pname, prevStage); ok && sc.Advance == "manual" {
+			return fmt.Errorf(
+				"stage %q has advance: manual — use `orc wait %s \"<reason>\"` so a human can review before continuing",
+				prevStage, s.Ticket,
+			)
+		}
+	}
+
+	// Guard: repair stage max_retries.
+	if rs, ok := workflowCfg.RepairStage(prevStage); ok && rs.MaxRetries > 0 {
+		count := s.StageCounts[prevStage]
+		if count >= rs.MaxRetries {
+			return fmt.Errorf(
+				"repair stage %q has reached max_retries (%d) — resolve manually or use `orc block %s`",
+				prevStage, rs.MaxRetries, s.Ticket,
+			)
+		}
 	}
 
 	result := advanceResult
