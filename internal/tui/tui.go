@@ -527,15 +527,13 @@ func (m Model) viewDashboard() string {
 		rtContent, leftW, rtFocused))
 
 	// ── Top block: left column + right box (logo + quote) ───────────
-	var b strings.Builder
+	var topBlock string
 	if useLogo {
 		leftStr := left.String()
 		leftHeight := lipgloss.Height(leftStr)
 
-		// innerW = logoW + 2 so 1-space padding fits on each side of the 30-wide logo.
 		const rightInnerW = logoW + 2
 
-		// Build content lines for the right box.
 		logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
 		quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(overlay0)).Italic(true)
 
@@ -543,14 +541,12 @@ func (m Model) viewDashboard() string {
 		for _, l := range strings.Split(logo, "\n") {
 			rightLines = append(rightLines, " "+logoStyle.Render(l))
 		}
-		rightLines = append(rightLines, "") // blank separator
+		rightLines = append(rightLines, "")
 		if m.quote != "" {
 			for _, l := range strings.Split(wrapText(m.quote, logoW), "\n") {
 				rightLines = append(rightLines, " "+quoteStyle.Render(l))
 			}
 		}
-
-		// Pad or trim to exactly leftHeight-2 lines so the box matches left column height.
 		targetLines := leftHeight - 2
 		for len(rightLines) < targetLines {
 			rightLines = append(rightLines, "")
@@ -558,29 +554,62 @@ func (m Model) viewDashboard() string {
 		rightLines = rightLines[:targetLines]
 
 		rightBox := drawBoxLabeledWith("", rightLines, rightBoxOuter, surface1)
-		b.WriteString("\n" + lipgloss.JoinHorizontal(lipgloss.Top, leftStr, strings.Repeat(" ", logoGap), rightBox) + "\n")
+		topBlock = "\n" + lipgloss.JoinHorizontal(lipgloss.Top, leftStr, strings.Repeat(" ", logoGap), rightBox) + "\n"
 	} else {
-		b.WriteString("\n" + left.String() + "\n")
+		topBlock = "\n" + left.String() + "\n"
 	}
 
-	// ── Features box (full width) ─────────────────────────────────────
+	// ── Features box (full width, height-capped with scrolling) ──────
+	// Remaining height = terminal - topBlock lines - help bar(1) - box borders(2) - table header(2)
+	topLines := strings.Count(topBlock, "\n")
+	maxDataRows := m.height - topLines - 1 - 4
+	if maxDataRows < 1 {
+		maxDataRows = 1
+	}
+
 	archiveToggle := styleDim.Render("  [a] show archived")
 	if m.showArchived {
 		archiveToggle = styleDim.Render("  [a] hide archived")
 	}
-	featuresTitle := styleSection.Render("Features") + archiveToggle
 
-	rows := m.visibleFeatures()
+	allRows := m.visibleFeatures()
+	total := len(allRows)
+
+	// Scroll window: keep cursor in view.
+	offset := 0
+	if m.cursor >= maxDataRows {
+		offset = m.cursor - maxDataRows + 1
+	}
+	if offset+maxDataRows > total {
+		offset = total - maxDataRows
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	end := offset + maxDataRows
+	if end > total {
+		end = total
+	}
+	visibleRows := allRows[offset:end]
+
+	featuresTitle := styleSection.Render("Features") + archiveToggle
+	if total > maxDataRows {
+		featuresTitle += styleDim.Render(fmt.Sprintf("  %d–%d of %d", offset+1, end, total))
+	}
+
 	var tableLines []string
-	if len(rows) == 0 {
+	if total == 0 {
 		tableLines = []string{"  " + styleDim.Render("No features found. Run orc work <ticket> to start one.")}
 	} else {
-		tableLines = strings.Split(m.renderTable(rows, outerW-2), "\n")
+		tableLines = strings.Split(m.renderTable(visibleRows, outerW-2, m.cursor-offset), "\n")
 	}
 	featuresBorderColor := surface1
 	if m.focusedPane == "features" {
 		featuresBorderColor = mauve
 	}
+
+	var b strings.Builder
+	b.WriteString(topBlock)
 	b.WriteString(drawBoxLabeledWith(featuresTitle, tableLines, outerW, featuresBorderColor) + "\n")
 
 	// ── Help bar ──────────────────────────────────────────────────────
@@ -891,7 +920,7 @@ func renderRouteChain(chain []routeStep, maxW int) []string {
 	return rows
 }
 
-func (m Model) renderTable(rows []*featureRow, w int) string {
+func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 	const (
 		wTicket   = 12
 		wName     = 22
@@ -915,7 +944,7 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 
 	for i, row := range rows {
 		s := row.s
-		selected := i == m.cursor
+		selected := i == selectedIdx
 
 		icon := statusIcon(s.Status)
 		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
