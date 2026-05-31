@@ -1811,8 +1811,6 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 	innerW := width - 4
 	var sb strings.Builder
 
-	sb.WriteString("\n" + drawBox(styleDetailTitle.Render(" "+name+" "), nil, width) + "\n")
-
 	// Route chain visualization
 	chainLines := renderRouteChain(chain.steps, chain.loops, innerW)
 	routeLines := make([]string, 0, len(chainLines))
