@@ -21,6 +21,7 @@ type Worker struct {
 	CostTier        string `yaml:"cost_tier"`
 
 	Workflows         []string `yaml:"workflows"`
+	Stages            []string `yaml:"stages"`
 	DefaultTmuxWindow string   `yaml:"default_tmux_window"`
 	LaunchMode        string   `yaml:"launch_mode"`
 }
@@ -147,12 +148,17 @@ func extractFrontmatter(content string) (string, error) {
 	return strings.TrimSpace(rest[:end]), nil
 }
 
-func supportsWorkflow(w *Worker, workflow string) bool {
-	if len(w.Workflows) == 0 {
+func supportsWorkflow(w *Worker, stage string) bool {
+	if len(w.Workflows) == 0 && len(w.Stages) == 0 {
 		return true // no restriction
 	}
 	for _, wf := range w.Workflows {
-		if wf == workflow {
+		if wf == stage {
+			return true
+		}
+	}
+	for _, s := range w.Stages {
+		if s == stage {
 			return true
 		}
 	}

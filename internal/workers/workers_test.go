@@ -18,8 +18,8 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(all) != 2 {
-		t.Errorf("loaded %d workers, want 2", len(all))
+	if len(all) != 3 {
+		t.Errorf("loaded %d workers, want 3", len(all))
 	}
 }
 
@@ -57,8 +57,8 @@ func TestMatch_QAAutomation(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
 
 	matched := workers.Match(all, "qa-automation")
-	if len(matched) != 2 {
-		t.Fatalf("matched %d workers for qa-automation, want 2", len(matched))
+	if len(matched) != 3 {
+		t.Fatalf("matched %d workers for qa-automation, want 3", len(matched))
 	}
 }
 

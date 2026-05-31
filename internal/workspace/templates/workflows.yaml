@@ -19,7 +19,7 @@ workflows:
         worker: bob-developer
         advance: manual
       - name: qa-automation
-        worker: fred-documentor
+        worker: brian-qa
         advance: auto
 
 repair_stages:

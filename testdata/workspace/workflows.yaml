@@ -14,7 +14,7 @@ workflows:
         worker: zach-reviewer
         advance: auto
       - name: qa-automation
-        worker: fred-documentor
+        worker: brian-qa
         advance: auto
 
 repair_stages:
