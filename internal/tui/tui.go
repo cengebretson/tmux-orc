@@ -219,7 +219,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 		case "1":
-			m.expanded["health"] = !m.expanded["health"]
+			wasExpanded := m.expanded["health"]
+			m.expanded["health"] = !wasExpanded
+			if wasExpanded && m.sectionFocus == "health" {
+				m.focusedPane = "features"
+				m.sectionFocus = ""
+				m.sectionCursor = 0
+			}
 		case "2":
 			wasExpanded := m.expanded["workflows"]
 			m.expanded["workflows"] = !wasExpanded
@@ -364,7 +370,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) navigableSections() []string {
-	var out []string
+	out := []string{"health"}
 	for _, key := range []string{"workflows", "workers", "routes"} {
 		if len(m.sectionItems[key]) > 0 {
 			out = append(out, key)
