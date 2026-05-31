@@ -41,9 +41,10 @@ orc · workspace orchestrator
 `
 
 var rootCmd = &cobra.Command{
-	Use:   "orc",
-	Short: "orc — agentic workspace orchestrator",
-	Long:  banner,
+	Use:               "orc",
+	Short:             "orc — agentic workspace orchestrator",
+	Long:              banner,
+	CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true},
 }
 
 var initCmd = &cobra.Command{
@@ -211,25 +212,38 @@ var resumeWorkspace string
 
 var helpAllCmd = &cobra.Command{
 	Use:   "help-all",
-	Short: "List all commands, including agent-only hidden commands",
+	Short: "List all commands with human and agent commands separated",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("All orc commands:")
+		var human, agent []*cobra.Command
+		for _, c := range rootCmd.Commands() {
+			if c.Name() == "help" || c.Name() == "help-all" || c.Name() == "completion" {
+				continue
+			}
+			if c.Hidden {
+				agent = append(agent, c)
+			} else {
+				human = append(human, c)
+			}
+		}
+
+		fmt.Println("Human commands:")
 		fmt.Println()
 		fmt.Printf("  %-30s  %s\n", "COMMAND", "DESCRIPTION")
 		fmt.Printf("  %-30s  %s\n", "-------", "-----------")
-		for _, c := range rootCmd.Commands() {
-			if c.Name() == "help" || c.Name() == "help-all" {
-				continue
-			}
-			tag := ""
-			if c.Hidden {
-				tag = "  [agent]"
-			}
-			fmt.Printf("  %-30s  %s%s\n", c.UseLine(), c.Short, tag)
+		for _, c := range human {
+			fmt.Printf("  %-30s  %s\n", c.UseLine(), c.Short)
+		}
+
+		fmt.Println()
+		fmt.Println("Agent commands  (called by agents, hidden from orc --help):")
+		fmt.Println()
+		fmt.Printf("  %-30s  %s\n", "COMMAND", "DESCRIPTION")
+		fmt.Printf("  %-30s  %s\n", "-------", "-----------")
+		for _, c := range agent {
+			fmt.Printf("  %-30s  %s\n", c.UseLine(), c.Short)
 		}
 		fmt.Println()
-		fmt.Println("[agent] commands are called by agents, not humans. They are hidden from normal help.")
 	},
 }
 
