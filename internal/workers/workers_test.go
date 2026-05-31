@@ -39,98 +39,26 @@ func TestLoad_ParsesFrontmatter(t *testing.T) {
 	if bob.CostTier != "medium" {
 		t.Errorf("cost_tier = %q, want medium", bob.CostTier)
 	}
-	if len(bob.Stages) == 0 {
-		t.Error("expected stages to be populated")
-	}
 }
 
-func TestMatch_ByStage(t *testing.T) {
+func TestFindByID_Found(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
 
-	matched := workers.Match(all, "develop")
-	if len(matched) != 2 {
-		t.Fatalf("matched %d workers, want 2 (both support develop)", len(matched))
+	w := workers.FindByID(all, "bob-developer")
+	if w == nil {
+		t.Fatal("expected bob-developer, got nil")
+	}
+	if w.ID != "bob-developer" {
+		t.Errorf("id = %q, want bob-developer", w.ID)
 	}
 }
 
-func TestMatch_QAAutomation(t *testing.T) {
+func TestFindByID_NotFound(t *testing.T) {
 	all, _ := workers.Load(fixtureWorkersDir())
 
-	matched := workers.Match(all, "qa-automation")
-	if len(matched) != 3 {
-		t.Fatalf("matched %d workers for qa-automation, want 3", len(matched))
-	}
-}
-
-func TestMatch_PRRepair(t *testing.T) {
-	all, _ := workers.Load(fixtureWorkersDir())
-
-	matched := workers.Match(all, "pr-repair")
-	if len(matched) != 1 {
-		t.Fatalf("matched %d workers for pr-repair, want 1", len(matched))
-	}
-	if matched[0].ID != "bob-developer" {
-		t.Errorf("matched worker = %q, want bob-developer", matched[0].ID)
-	}
-}
-
-func TestMatch_NoMatch(t *testing.T) {
-	all, _ := workers.Load(fixtureWorkersDir())
-
-	matched := workers.Match(all, "nonexistent-stage")
-	if len(matched) != 0 {
-		t.Errorf("expected no matches, got %d", len(matched))
-	}
-}
-
-func TestMatch_WorkflowsFieldIgnoredForStageMatching(t *testing.T) {
-	// workflows: in worker frontmatter is reserved for pipeline names.
-	// It must not be used to match stage names — only stages: does that.
-	w := &workers.Worker{
-		ID:        "pipeline-only",
-		Workflows: []string{"develop"}, // "develop" here is a pipeline name, not a stage
-		Stages:    []string{},          // no stage restriction set
-	}
-	// With no stages: restriction, should match any stage including "develop"
-	// (because the worker has no stage filter, not because workflows: matched).
-	matched := workers.Match([]*workers.Worker{w}, "develop")
-	if len(matched) != 1 {
-		t.Errorf("worker with no stages: restriction should match any stage, got %d matches", len(matched))
-	}
-
-	// But a worker whose workflows: lists "develop" and stages: lists something else
-	// should NOT match the "develop" stage.
-	w2 := &workers.Worker{
-		ID:        "stage-filtered",
-		Workflows: []string{"develop"},   // pipeline name
-		Stages:    []string{"qa-automation"}, // only handles qa-automation stage
-	}
-	matched2 := workers.Match([]*workers.Worker{w2}, "develop")
-	if len(matched2) != 0 {
-		t.Errorf("workflows: field must not match stage names; expected 0 matches, got %d", len(matched2))
-	}
-}
-
-func TestPreferred_Found(t *testing.T) {
-	all, _ := workers.Load(fixtureWorkersDir())
-	matched := workers.Match(all, "develop")
-
-	preferred := workers.Preferred(matched, "bob-developer")
-	if preferred == nil {
-		t.Fatal("expected preferred worker, got nil")
-	}
-	if preferred.ID != "bob-developer" {
-		t.Errorf("preferred = %q, want bob-developer", preferred.ID)
-	}
-}
-
-func TestPreferred_NotFound(t *testing.T) {
-	all, _ := workers.Load(fixtureWorkersDir())
-	matched := workers.Match(all, "develop")
-
-	preferred := workers.Preferred(matched, "nonexistent-worker")
-	if preferred != nil {
-		t.Errorf("expected nil, got %q", preferred.ID)
+	w := workers.FindByID(all, "nonexistent-worker")
+	if w != nil {
+		t.Errorf("expected nil, got %q", w.ID)
 	}
 }
 
@@ -141,9 +69,6 @@ func TestLaunchCommand_Codex(t *testing.T) {
 	cmd := workers.LaunchCommand(bob, "/workspace", "/workspace/worktrees/app/FLYWL-123", "do the thing")
 	if cmd == "" {
 		t.Error("expected non-empty launch command")
-	}
-	if bob.Product != "codex" {
-		t.Skip("bob is not codex in this fixture")
 	}
 }
 

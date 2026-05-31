@@ -104,7 +104,12 @@
       "Bash(git reset *)",
       "Bash(awk -F: '{print $1}')",
       "Bash(grep -n \"logoW\\\\|logoGap\\\\|const logo\\\\b\\\\|logo = \\\\`\" /Users/chris/Desktop/projects/orc/internal/tui/tui.go)",
-      "Bash(grep -n \"^const logo\\\\b\\\\|^\tlogo \\\\b\\\\|logo = \\\\`\\\\|^var logo\" /Users/chris/Desktop/projects/orc/internal/tui/tui.go)"
+      "Bash(grep -n \"^const logo\\\\b\\\\|^\tlogo \\\\b\\\\|logo = \\\\`\\\\|^var logo\" /Users/chris/Desktop/projects/orc/internal/tui/tui.go)",
+      "Bash(git -C /Users/chris/Desktop/projects/orc add cmd/orc/main.go)",
+      "Bash(git -C /Users/chris/Desktop/projects/orc commit -m ' *)",
+      "Bash(git *)",
+      "Bash(sed -n '395,415p' /Users/chris/Desktop/projects/orc/cmd/orc/main.go)",
+      "Bash(sed -n '500,520p' /Users/chris/Desktop/projects/orc/cmd/orc/main.go)"
     ]
   }
 }

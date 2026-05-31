@@ -8,10 +8,6 @@ thinking: high
 cost_tier: medium
 default_tmux_window: claude
 launch_mode: foreground
-stages:
-  - intake
-  - develop
-  - qa-automation
 ---
 
 # Fred the Documentor

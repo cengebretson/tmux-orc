@@ -20,9 +20,7 @@ type Worker struct {
 	Thinking        string `yaml:"thinking"`
 	CostTier        string `yaml:"cost_tier"`
 
-	Workflows         []string `yaml:"workflows"`
-	Stages            []string `yaml:"stages"`
-	DefaultTmuxWindow string   `yaml:"default_tmux_window"`
+	DefaultTmuxWindow string `yaml:"default_tmux_window"`
 	LaunchMode        string   `yaml:"launch_mode"`
 }
 
@@ -47,18 +45,6 @@ func Load(workersDir string) ([]*Worker, error) {
 	return workers, nil
 }
 
-// Match returns workers whose stages: list includes the given stage name,
-// or workers with no stages: restriction (matches any stage).
-func Match(workers []*Worker, stageName string) []*Worker {
-	var matched []*Worker
-	for _, w := range workers {
-		if supportsStage(w, stageName) {
-			matched = append(matched, w)
-		}
-	}
-	return matched
-}
-
 // FindByID returns the worker with the given ID, or nil.
 func FindByID(workers []*Worker, id string) *Worker {
 	for _, w := range workers {
@@ -67,12 +53,6 @@ func FindByID(workers []*Worker, id string) *Worker {
 		}
 	}
 	return nil
-}
-
-// Preferred returns the worker whose ID matches the owner, or nil.
-// Deprecated: use FindByID. Kept for fallback match paths.
-func Preferred(workers []*Worker, ownerID string) *Worker {
-	return FindByID(workers, ownerID)
 }
 
 // LaunchCommand renders the launch command string for display.
@@ -149,18 +129,4 @@ func extractFrontmatter(content string) (string, error) {
 	return strings.TrimSpace(rest[:end]), nil
 }
 
-// supportsStage reports whether a worker handles the given stage name.
-// A worker with no stages: list matches any stage (no restriction).
-// workflows: is reserved for pipeline names and is not used for stage matching.
-func supportsStage(w *Worker, stageName string) bool {
-	if len(w.Stages) == 0 {
-		return true // no restriction
-	}
-	for _, s := range w.Stages {
-		if s == stageName {
-			return true
-		}
-	}
-	return false
-}
 

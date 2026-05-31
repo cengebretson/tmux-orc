@@ -8,10 +8,6 @@ reasoning_effort: high
 cost_tier: medium
 default_tmux_window: app-codex
 launch_mode: foreground
-stages:
-  - develop
-  - qa-automation
-  - pr-repair
 ---
 
 # Bob the Developer

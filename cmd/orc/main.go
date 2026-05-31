@@ -398,12 +398,6 @@ func runNext(cmd *cobra.Command, args []string) error {
 		if preferred == nil && stageCfg.Worker != "" {
 			preferred = workers.FindByID(allWorkers, stageCfg.Worker)
 		}
-		if preferred == nil {
-			matched := workers.Match(allWorkers, s.Stage.Name)
-			if len(matched) > 0 {
-				preferred = matched[0]
-			}
-		}
 		out := map[string]any{
 			"ticket":   s.Ticket,
 			"status":   s.Status,
@@ -506,21 +500,12 @@ func runNextAction(root, featureDir string, s *state.State, dry bool) error {
 		worker = workers.FindByID(allWorkers, stageCfg.Worker)
 		matchReason = "workflow default"
 	}
-	if worker == nil {
-		matched := workers.Match(allWorkers, s.Stage.Name)
-		if len(matched) > 0 {
-			worker = matched[0]
-			matchReason = "best match for workflow"
-		}
-	}
 
 	if worker == nil {
-		fmt.Printf("No worker found for stage %q\n", s.Stage.Name)
 		if stageCfg.Worker != "" {
-			fmt.Printf("Stage default worker %q not found in workers/\n", stageCfg.Worker)
+			return fmt.Errorf("worker %q assigned to stage %q in orc.yaml not found in workers/", stageCfg.Worker, s.Stage.Name)
 		}
-		fmt.Println("Set worker: in orc.yaml or add a matching worker file.")
-		return nil
+		return fmt.Errorf("no worker assigned for stage %q — set worker: in orc.yaml", s.Stage.Name)
 	}
 
 	argv := workers.LaunchArgs(worker, root, cwd, prompt)
@@ -819,16 +804,25 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	} else {
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
-		matched := workers.Match(allWorkers, s.Stage.Name)
-		preferred := workers.Preferred(matched, s.Stage.Owner)
-		if preferred == nil && len(matched) > 0 {
-			preferred = matched[0]
+		wfCfg, _ := workflow.Load(root)
+		pname := resolveWorkflow(root, s.Workflow)
+		sc, _ := wfCfg.StageConfig(pname, s.Stage.Name)
+		workerID := s.Stage.Owner
+		if workerID == "" {
+			workerID = sc.Worker
 		}
-		if preferred != nil {
-			fmt.Printf("  Worker:  %s (%s)\n", preferred.Name, preferred.Product)
-			if preferred.Model != "" {
-				fmt.Printf("  Model:   %s\n", preferred.Model)
+		if workerID != "" {
+			preferred := workers.FindByID(allWorkers, workerID)
+			if preferred != nil {
+				fmt.Printf("  Worker:  %s (%s)\n", preferred.Name, preferred.Product)
+				if preferred.Model != "" {
+					fmt.Printf("  Model:   %s\n", preferred.Model)
+				}
+			} else {
+				fmt.Printf("  Worker:  %s (not found in workers/)\n", workerID)
 			}
+		} else {
+			fmt.Println("  Worker:  none assigned — set worker: in orc.yaml")
 		}
 		fmt.Println("  Run `orc next` to launch.")
 	}

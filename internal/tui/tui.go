@@ -1621,10 +1621,6 @@ func renderWorkerFile(path string, width int) (string, error) {
 		add("cost tier", w.CostTier)
 		add("reasoning", w.ReasoningEffort)
 		add("launch mode", w.LaunchMode)
-		if len(w.Workflows) > 0 {
-			add("workflows", strings.Join(w.Workflows, ", "))
-		}
-
 		// Measure label column width.
 		labelW := 0
 		for _, r := range rows {
