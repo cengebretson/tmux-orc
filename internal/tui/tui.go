@@ -454,12 +454,13 @@ func (m Model) viewDashboard() string {
 
 	// ── Column widths ────────────────────────────────────────────────
 	const logoW = 30
-	const logoGap = 2
-	useLogo := outerW > logoW+logoGap+44
+	const rightBoxOuter = logoW + 2 // box border adds 2
+	const logoGap = 1
+	useLogo := outerW > rightBoxOuter+logoGap+44
 
 	leftW := outerW
 	if useLogo {
-		leftW = outerW - logoW - logoGap
+		leftW = outerW - rightBoxOuter - logoGap
 	}
 	leftInnerW := leftW - 2
 
@@ -525,21 +526,39 @@ func (m Model) viewDashboard() string {
 		fmt.Sprintf("%d repos", len(m.repos)),
 		rtContent, leftW, rtFocused))
 
-	// ── Top block: left column beside logo + quote ───────────────────
+	// ── Top block: left column + right box (logo + quote) ───────────
 	var b strings.Builder
 	if useLogo {
-		logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1)).Render(logo)
-		right := logoRendered
-		if m.quote != "" {
-			wrapped := wrapText(m.quote, logoW)
-			quoteRendered := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(overlay0)).
-				Italic(true).
-				Width(logoW).
-				Render(wrapped)
-			right = lipgloss.JoinVertical(lipgloss.Left, logoRendered, "", quoteRendered)
+		leftStr := left.String()
+		leftHeight := lipgloss.Height(leftStr)
+
+		const rightInnerW = logoW // logo is exactly 30 wide
+		rightBoxOuter := rightInnerW + 2
+
+		// Build content lines for the right box.
+		logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
+		quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(overlay0)).Italic(true)
+
+		var rightLines []string
+		for _, l := range strings.Split(logo, "\n") {
+			rightLines = append(rightLines, logoStyle.Render(l))
 		}
-		b.WriteString("\n" + lipgloss.JoinHorizontal(lipgloss.Top, left.String(), strings.Repeat(" ", logoGap), right) + "\n")
+		rightLines = append(rightLines, "") // blank separator
+		if m.quote != "" {
+			for _, l := range strings.Split(wrapText(m.quote, rightInnerW), "\n") {
+				rightLines = append(rightLines, quoteStyle.Render(l))
+			}
+		}
+
+		// Pad or trim to exactly leftHeight-2 lines so the box matches left column height.
+		targetLines := leftHeight - 2
+		for len(rightLines) < targetLines {
+			rightLines = append(rightLines, "")
+		}
+		rightLines = rightLines[:targetLines]
+
+		rightBox := drawBoxLabeledWith("", rightLines, rightBoxOuter, surface1)
+		b.WriteString("\n" + lipgloss.JoinHorizontal(lipgloss.Top, leftStr, strings.Repeat(" ", logoGap), rightBox) + "\n")
 	} else {
 		b.WriteString("\n" + left.String() + "\n")
 	}
