@@ -54,6 +54,7 @@ type dataMsg struct {
 	healthItems   []health.Result
 	workflowNames []string
 	workerNames   []string
+	allWorkers    []*workers.Worker
 	workflows     []workflowChain
 	repos         []config.Repo
 	sectionItems  map[string][]sectionItem
@@ -108,6 +109,7 @@ type Model struct {
 	healthItems   []health.Result
 	workflowNames []string
 	workerNames   []string
+	allWorkers    []*workers.Worker
 	workflows     []workflowChain
 	repos         []config.Repo
 	expanded      map[string]bool
@@ -203,6 +205,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.healthItems = msg.healthItems
 		m.workflowNames = msg.workflowNames
 		m.workerNames = msg.workerNames
+		m.allWorkers = msg.allWorkers
 		m.workflows = msg.workflows
 		m.repos = msg.repos
 		m.sectionItems = msg.sectionItems
@@ -392,7 +395,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					case "workers":
 						content, err = renderWorkerFile(f.path, m.width-4)
 					case "workflows":
-						content = renderWorkflowDetail(f.label, m.workflows, m.width-4)
+						content = renderWorkflowDetail(f.label, m.workflows, m.allWorkers, filepath.Join(m.root, "stages"), m.features, m.width-4)
 					default:
 						content, err = renderFile(f.path)
 					}
@@ -1422,6 +1425,7 @@ func loadData(root string) tea.Cmd {
 			healthItems:   report.Results,
 			workflowNames: wfNames,
 			workerNames:   workerNames,
+			allWorkers:    allWorkers,
 			workflows:     chains,
 			repos:         repos,
 			sectionItems:  si,
@@ -1727,7 +1731,7 @@ func renderWorkerFile(path string, width int) (string, error) {
 
 // renderWorkflowFile renders a stage markdown file. width is the available viewport width.
 // renderWorkflowDetail renders an inline detail view for a named workflow.
-func renderWorkflowDetail(name string, chains []workflowChain, width int) string {
+func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*workers.Worker, stagesDir string, features []*featureRow, width int) string {
 	var chain *workflowChain
 	for i := range chains {
 		if chains[i].name == name {
@@ -1739,10 +1743,46 @@ func renderWorkflowDetail(name string, chains []workflowChain, width int) string
 		return styleHealthErr.Render("workflow " + name + " not found")
 	}
 
+	// ticket count per stage for this workflow
+	stageCounts := map[string]int{}
+	for _, row := range features {
+		s := row.s
+		wf := s.Workflow
+		if wf == "" {
+			wf = "default"
+		}
+		if wf == name {
+			stageCounts[s.Stage.Name]++
+		}
+	}
+
+	workerLabel := func(id string) string {
+		if id == "" {
+			return styleDim.Render("—")
+		}
+		if w := workers.FindByID(allWorkers, id); w != nil {
+			label := w.Name
+			if label == "" {
+				label = w.ID
+			}
+			if w.Engine != "" {
+				label += styleDim.Render("  " + w.Engine)
+			}
+			return label
+		}
+		return styleDim.Render(id)
+	}
+
+	stageExists := func(stageName string) string {
+		if _, err := os.Stat(filepath.Join(stagesDir, stageName+".md")); err == nil {
+			return styleHealthOK.Render("✓")
+		}
+		return styleHealthErr.Render("✗")
+	}
+
 	innerW := width - 4
 	var sb strings.Builder
 
-	// Title
 	sb.WriteString("\n" + drawBox(styleDetailTitle.Render(" "+name+" "), nil, width) + "\n")
 
 	// Route chain visualization
@@ -1753,62 +1793,68 @@ func renderWorkflowDetail(name string, chains []workflowChain, width int) string
 	}
 	sb.WriteString(drawBox(styleSection.Render(" Route "), routeLines, width) + "\n")
 
-	// Stage table
-	const wStageName = 20
-	wWorker := innerW - wStageName - 14 // 14 = padding + Advance col
+	// Stage table: ✓ | Stage | Worker (engine) | Advance | Active
+	const (
+		wCheck     = 1
+		wStageName = 20
+		wAdvance   = 10
+		wActive    = 6
+	)
+	wWorker := innerW - wCheck - wStageName - wAdvance - wActive - 10
 	if wWorker < 16 {
 		wWorker = 16
 	}
 	header := "  " +
+		padRight(styleTableHeader.Render(""), wCheck) + "  " +
 		padRight(styleTableHeader.Render("Stage"), wStageName) + "  " +
 		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
-		styleTableHeader.Render("Advance")
+		padRight(styleTableHeader.Render("Advance"), wAdvance) + "  " +
+		styleTableHeader.Render("Active")
 	divider := "  " + styleDivider.Render(strings.Repeat("─", innerW-2))
 
-	var stageLines []string
-	stageLines = append(stageLines, header, divider)
-	for _, step := range chain.steps {
-		workerVal := step.workerID
-		if workerVal == "" {
-			workerVal = styleDim.Render("—")
-		}
-		var advVal string
-		if step.advance == "manual" {
-			advVal = styleStatusWaiting.Render("● manual")
-		} else {
-			advVal = styleHealthOK.Render("auto")
-		}
-		stageLines = append(stageLines, "  "+
-			padRight(styleSubtext.Render(truncate(step.name, wStageName)), wStageName)+"  "+
-			padRight(styleDim.Render(truncate(workerVal, wWorker)), wWorker)+"  "+
-			advVal)
-	}
-	sb.WriteString(drawBox(styleSection.Render(" Stages "), stageLines, width) + "\n")
-
-	// Repair stages
-	if len(chain.repairSteps) > 0 {
-		var repairLines []string
-		repairLines = append(repairLines, header, divider)
-		for _, rs := range chain.repairSteps {
-			workerVal := rs.workerID
-			if workerVal == "" {
-				workerVal = "—"
-			}
+	stageRows := func(steps []routeStep) []string {
+		var lines []string
+		lines = append(lines, header, divider)
+		for _, step := range steps {
 			var advVal string
-			if rs.advance == "manual" {
+			if step.advance == "manual" {
 				advVal = styleStatusWaiting.Render("● manual")
 			} else {
 				advVal = styleHealthOK.Render("auto")
 			}
-			detail := styleDim.Render(fmt.Sprintf("repairs %s", rs.repairs))
-			if rs.maxRetries > 0 {
-				detail = styleDim.Render(fmt.Sprintf("repairs %s · max %d", rs.repairs, rs.maxRetries))
+			count := stageCounts[step.name]
+			var activeVal string
+			if count > 0 {
+				activeVal = styleSubtext.Render(fmt.Sprintf("%d", count))
+			} else {
+				activeVal = styleDim.Render("—")
 			}
-			repairLines = append(repairLines,
-				"  "+padRight(styleSubtext.Render(truncate(rs.name, wStageName)), wStageName)+"  "+
-					padRight(styleDim.Render(truncate(workerVal, wWorker)), wWorker)+"  "+
-					advVal)
-			repairLines = append(repairLines, "  "+strings.Repeat(" ", wStageName+2)+detail)
+			lines = append(lines, "  "+
+				padRight(stageExists(step.name), wCheck)+"  "+
+				padRight(styleSubtext.Render(truncate(step.name, wStageName)), wStageName)+"  "+
+				padRight(workerLabel(step.workerID), wWorker)+"  "+
+				padRight(advVal, wAdvance)+"  "+
+				activeVal)
+		}
+		return lines
+	}
+
+	sb.WriteString(drawBox(styleSection.Render(" Stages "), stageRows(chain.steps), width) + "\n")
+
+	if len(chain.repairSteps) > 0 {
+		// convert repairSteps to routeStep slice for reuse
+		repairAsSteps := make([]routeStep, len(chain.repairSteps))
+		for i, rs := range chain.repairSteps {
+			repairAsSteps[i] = routeStep{name: rs.name, advance: rs.advance, workerID: rs.workerID}
+		}
+		repairLines := stageRows(repairAsSteps)
+		// append repairs/max-retries annotation under each repair row
+		for _, rs := range chain.repairSteps {
+			detail := fmt.Sprintf("repairs %s", rs.repairs)
+			if rs.maxRetries > 0 {
+				detail = fmt.Sprintf("repairs %s · max %d", rs.repairs, rs.maxRetries)
+			}
+			repairLines = append(repairLines, "  "+strings.Repeat(" ", wCheck+wStageName+4)+styleDim.Render(detail))
 		}
 		sb.WriteString(drawBox(styleSection.Render(" Repair Stages "), repairLines, width) + "\n")
 	}
