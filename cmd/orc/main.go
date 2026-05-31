@@ -11,6 +11,7 @@ import (
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/tmux"
+	"github.com/cengebretson/orc/internal/tui"
 	"github.com/cengebretson/orc/internal/workflow"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/cengebretson/orc/internal/workspace"
@@ -175,6 +176,15 @@ var attachCmd = &cobra.Command{
 
 var attachWorkspace string
 
+var tuiCmd = &cobra.Command{
+	Use:   "tui",
+	Short: "Open the interactive dashboard",
+	Args:  cobra.NoArgs,
+	RunE:  runTui,
+}
+
+var tuiWorkspace string
+
 var helpAllCmd = &cobra.Command{
 	Use:   "help-all",
 	Short: "List all commands, including agent-only hidden commands",
@@ -226,6 +236,7 @@ func init() {
 	advanceCmd.Flags().StringVar(&advanceWorkflow, "workflow", "", "New workflow name (required when crossing workflow boundaries)")
 	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	attachCmd.Flags().StringVar(&attachWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	tuiCmd.Flags().StringVar(&tuiWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
@@ -239,6 +250,7 @@ func init() {
 	rootCmd.AddCommand(advanceCmd)
 	rootCmd.AddCommand(archiveCmd)
 	rootCmd.AddCommand(attachCmd)
+	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(helpAllCmd)
 }
 
@@ -962,6 +974,14 @@ func runArchive(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Archived: features/_archive/%s/\n", slug)
 	return nil
+}
+
+func runTui(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(tuiWorkspace)
+	if err != nil {
+		return err
+	}
+	return tui.Run(root)
 }
 
 func runAttach(cmd *cobra.Command, args []string) error {
