@@ -447,7 +447,7 @@ func (m Model) viewDashboard() string {
 	if wfFocused {
 		wfContent = renderNavigableList(m.sectionItems["workflows"], m.sectionCursor)
 	} else {
-		wfContent = renderNameList(innerW-4, m.workflowNames)
+		wfContent = renderRouteChain(m.routeChain, innerW-4)
 	}
 	b.WriteString(m.sectionBox("workflows", "2", "Workflows",
 		fmt.Sprintf("%d", len(m.workflowNames)),
@@ -1063,8 +1063,19 @@ func loadData(root string) tea.Cmd {
 		// section items for navigable file viewer
 		si := map[string][]sectionItem{}
 
-		// workflows: each dir that has a WORKFLOW.md
+		// workflows: in pipeline order (follow next_workflow chain), then any remaining dirs
+		inChain := map[string]bool{}
+		for _, step := range chain {
+			p := filepath.Join(wfDir, step.name, "WORKFLOW.md")
+			if _, err := os.Stat(p); err == nil {
+				si["workflows"] = append(si["workflows"], sectionItem{label: step.name, path: p})
+			}
+			inChain[step.name] = true
+		}
 		for _, name := range wfNames {
+			if inChain[name] {
+				continue
+			}
 			p := filepath.Join(wfDir, name, "WORKFLOW.md")
 			if _, err := os.Stat(p); err == nil {
 				si["workflows"] = append(si["workflows"], sectionItem{label: name, path: p})
