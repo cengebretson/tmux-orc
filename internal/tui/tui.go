@@ -1233,13 +1233,79 @@ func buildFileList(featureDir string, s *state.State) []detailFile {
 	return out
 }
 
+// catppuccinMochaStyle is a glamour style JSON matching the Catppuccin Mocha palette.
+const catppuccinMochaStyle = `{
+  "document": { "block_prefix": "\n", "block_suffix": "\n", "color": "#cdd6f4", "margin": 2 },
+  "block_quote": { "indent": 1, "indent_token": "│ ", "color": "#a6adc8" },
+  "paragraph": {},
+  "list": { "level_indent": 2 },
+  "heading": { "block_suffix": "\n", "color": "#cba6f7", "bold": true },
+  "h1": { "prefix": " ", "suffix": " ", "color": "#1e1e2e", "background_color": "#cba6f7", "bold": true },
+  "h2": { "prefix": "## ", "color": "#cba6f7", "bold": true },
+  "h3": { "prefix": "### ", "color": "#b4befe", "bold": true },
+  "h4": { "prefix": "#### ", "color": "#89b4fa" },
+  "h5": { "prefix": "##### ", "color": "#74c7ec" },
+  "h6": { "prefix": "###### ", "color": "#6c7086" },
+  "text": {},
+  "strikethrough": { "crossed_out": true },
+  "emph": { "italic": true },
+  "strong": { "bold": true, "color": "#f5c2e7" },
+  "hr": { "color": "#45475a", "format": "\n────────\n" },
+  "item": { "block_prefix": "• " },
+  "enumeration": { "block_prefix": ". " },
+  "task": { "ticked": "[✓] ", "unticked": "[ ] " },
+  "link": { "color": "#89b4fa", "underline": true },
+  "link_text": { "color": "#74c7ec", "bold": true },
+  "image": { "color": "#f5c2e7", "underline": true },
+  "image_text": { "color": "#6c7086", "format": "Image: {{.text}} →" },
+  "code": { "prefix": " ", "suffix": " ", "color": "#f38ba8", "background_color": "#313244" },
+  "code_block": {
+    "color": "#cdd6f4", "margin": 2,
+    "chroma": {
+      "text": { "color": "#cdd6f4" },
+      "error": { "color": "#f38ba8", "background_color": "#313244" },
+      "comment": { "color": "#6c7086" },
+      "comment_preproc": { "color": "#fab387" },
+      "keyword": { "color": "#cba6f7" },
+      "keyword_reserved": { "color": "#cba6f7" },
+      "keyword_namespace": { "color": "#f38ba8" },
+      "keyword_type": { "color": "#f9e2af" },
+      "operator": { "color": "#89dceb" },
+      "punctuation": { "color": "#cdd6f4" },
+      "name": { "color": "#cdd6f4" },
+      "name_builtin": { "color": "#fab387" },
+      "name_tag": { "color": "#cba6f7" },
+      "name_attribute": { "color": "#89b4fa" },
+      "name_class": { "color": "#f9e2af", "bold": true },
+      "name_constant": { "color": "#fab387" },
+      "name_decorator": { "color": "#f9e2af" },
+      "name_function": { "color": "#89b4fa" },
+      "literal_number": { "color": "#fab387" },
+      "literal_string": { "color": "#a6e3a1" },
+      "literal_string_escape": { "color": "#94e2d5" },
+      "generic_deleted": { "color": "#f38ba8" },
+      "generic_emph": { "italic": true },
+      "generic_inserted": { "color": "#a6e3a1" },
+      "generic_strong": { "bold": true },
+      "generic_subheading": { "color": "#6c7086" },
+      "background": { "background_color": "#1e1e2e" }
+    }
+  },
+  "table": {},
+  "definition_list": {},
+  "definition_term": {},
+  "definition_description": { "block_prefix": "\n🠶 " },
+  "html_block": {},
+  "html_span": {}
+}`
+
 func renderFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	r, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
+		glamour.WithStylesFromJSONBytes([]byte(catppuccinMochaStyle)),
 		glamour.WithWordWrap(120),
 	)
 	if err != nil {
