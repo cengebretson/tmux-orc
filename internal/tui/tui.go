@@ -39,6 +39,7 @@ type dataMsg struct {
 	workerNames   []string
 	routeChain    []routeStep
 	repos         []repoEntry
+	sectionItems  map[string][]sectionItem
 }
 
 type routeStep struct {
@@ -49,6 +50,11 @@ type routeStep struct {
 type repoEntry struct {
 	name    string
 	purpose string
+}
+
+type sectionItem struct {
+	label string
+	path  string
 }
 
 // ── data types ───────────────────────────────────────────────────
@@ -78,14 +84,22 @@ type Model struct {
 	width         int
 	height        int
 
+	// section pane navigation
+	focusedPane   string // "features" or "section"
+	sectionFocus  string // "workflows" | "workers" | "routes"
+	sectionCursor int
+	sectionItems  map[string][]sectionItem
+
 	// detail
 	detail      *featureRow
 	detailFiles []detailFile
 	fileIdx     int
 
 	// file viewer
-	viewport    viewport.Model
-	viewerTitle string
+	viewport      viewport.Model
+	viewerTitle   string
+	viewerContext string // label shown in file viewer title bar
+	viewerReturn  viewState
 
 	err error
 }
@@ -99,6 +113,8 @@ func New(root string) Model {
 	return Model{
 		root:        root,
 		lastRefresh: time.Now(),
+		focusedPane: "features",
+		sectionItems: map[string][]sectionItem{},
 		expanded: map[string]bool{
 			"health":    false,
 			"workflows": false,
@@ -143,6 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workerNames = msg.workerNames
 		m.routeChain = msg.routeChain
 		m.repos = msg.repos
+		m.sectionItems = msg.sectionItems
 		m.lastRefresh = time.Now()
 		if rows := m.visibleFeatures(); m.cursor >= len(rows) && len(rows) > 0 {
 			m.cursor = len(rows) - 1
@@ -159,44 +176,138 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.view {
 
 	case viewDashboard:
-		rows := m.visibleFeatures()
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
+		case "r":
+			return m, loadData(m.root)
+
+		case "tab":
+			navigable := m.navigableSections()
+			if len(navigable) == 0 {
+				break
 			}
-		case "down", "j":
-			if m.cursor < len(rows)-1 {
-				m.cursor++
+			if m.focusedPane == "features" {
+				m.focusedPane = "section"
+				m.sectionFocus = navigable[0]
+				m.sectionCursor = 0
+			} else {
+				idx := -1
+				for i, k := range navigable {
+					if k == m.sectionFocus {
+						idx = i
+						break
+					}
+				}
+				next := idx + 1
+				if next >= len(navigable) {
+					m.focusedPane = "features"
+					m.sectionFocus = ""
+				} else {
+					m.sectionFocus = navigable[next]
+					m.sectionCursor = 0
+				}
 			}
-		case "a":
-			m.showArchived = !m.showArchived
-			m.cursor = 0
+
+		case "esc", "b":
+			if m.focusedPane == "section" {
+				m.focusedPane = "features"
+				m.sectionFocus = ""
+				m.sectionCursor = 0
+			}
+
 		case "1":
 			m.expanded["health"] = !m.expanded["health"]
 		case "2":
-			m.expanded["workflows"] = !m.expanded["workflows"]
+			wasExpanded := m.expanded["workflows"]
+			m.expanded["workflows"] = !wasExpanded
+			if wasExpanded && m.sectionFocus == "workflows" {
+				m.focusedPane = "features"
+				m.sectionFocus = ""
+				m.sectionCursor = 0
+			}
 		case "3":
-			m.expanded["workers"] = !m.expanded["workers"]
+			wasExpanded := m.expanded["workers"]
+			m.expanded["workers"] = !wasExpanded
+			if wasExpanded && m.sectionFocus == "workers" {
+				m.focusedPane = "features"
+				m.sectionFocus = ""
+				m.sectionCursor = 0
+			}
 		case "4":
-			m.expanded["routes"] = !m.expanded["routes"]
-		case "r":
-			return m, loadData(m.root)
-		case "t":
-			if m.cursor < len(rows) {
-				row := rows[m.cursor]
-				if row.s.Runtime.Tmux != nil && row.tmuxLive {
-					return m, attachTmux(row.s.Slug, row.s.Stage.Workflow)
+			wasExpanded := m.expanded["routes"]
+			m.expanded["routes"] = !wasExpanded
+			if wasExpanded && m.sectionFocus == "routes" {
+				m.focusedPane = "features"
+				m.sectionFocus = ""
+				m.sectionCursor = 0
+			}
+
+		case "up", "k":
+			if m.focusedPane == "section" {
+				if m.sectionCursor > 0 {
+					m.sectionCursor--
+				}
+			} else {
+				if m.cursor > 0 {
+					m.cursor--
 				}
 			}
+
+		case "down", "j":
+			if m.focusedPane == "section" {
+				items := m.sectionItems[m.sectionFocus]
+				if m.sectionCursor < len(items)-1 {
+					m.sectionCursor++
+				}
+			} else {
+				rows := m.visibleFeatures()
+				if m.cursor < len(rows)-1 {
+					m.cursor++
+				}
+			}
+
+		case "a":
+			if m.focusedPane == "features" {
+				m.showArchived = !m.showArchived
+				m.cursor = 0
+			}
+
+		case "t":
+			if m.focusedPane == "features" {
+				rows := m.visibleFeatures()
+				if m.cursor < len(rows) {
+					row := rows[m.cursor]
+					if row.s.Runtime.Tmux != nil && row.tmuxLive {
+						return m, attachTmux(row.s.Slug, row.s.Stage.Workflow)
+					}
+				}
+			}
+
 		case "enter":
-			if m.cursor < len(rows) {
-				m.detail = rows[m.cursor]
-				m.detailFiles = buildFileList(m.detail.featureDir, m.detail.s)
-				m.fileIdx = 0
-				m.view = viewDetail
+			if m.focusedPane == "section" {
+				items := m.sectionItems[m.sectionFocus]
+				if m.sectionCursor < len(items) {
+					f := items[m.sectionCursor]
+					content, err := renderFile(f.path)
+					if err != nil {
+						content = styleHealthErr.Render("could not read: " + err.Error())
+					}
+					m.viewport = viewport.New(m.width-4, m.height-6)
+					m.viewport.SetContent(content)
+					m.viewerTitle = f.label
+					m.viewerContext = sectionLabel(m.sectionFocus)
+					m.viewerReturn = viewDashboard
+					m.view = viewFile
+				}
+			} else {
+				rows := m.visibleFeatures()
+				if m.cursor < len(rows) {
+					m.detail = rows[m.cursor]
+					m.detailFiles = buildFileList(m.detail.featureDir, m.detail.s)
+					m.fileIdx = 0
+					m.view = viewDetail
+				}
 			}
 		}
 
@@ -228,6 +339,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.viewport = viewport.New(m.width-4, m.height-6)
 				m.viewport.SetContent(content)
 				m.viewerTitle = f.label
+				m.viewerContext = m.detail.s.Ticket
+				m.viewerReturn = viewDetail
 				m.view = viewFile
 			}
 		}
@@ -237,7 +350,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "esc", "b":
-			m.view = viewDetail
+			m.view = m.viewerReturn
 		default:
 			var cmd tea.Cmd
 			m.viewport, cmd = m.viewport.Update(msg)
@@ -246,6 +359,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m Model) navigableSections() []string {
+	var out []string
+	for _, key := range []string{"workflows", "workers", "routes"} {
+		if m.expanded[key] && len(m.sectionItems[key]) > 0 {
+			out = append(out, key)
+		}
+	}
+	return out
+}
+
+func sectionLabel(key string) string {
+	labels := map[string]string{
+		"workflows": "Workflows",
+		"workers":   "Workers",
+		"routes":    "Routes",
+	}
+	if l, ok := labels[key]; ok {
+		return l
+	}
+	return key
 }
 
 // ── View ─────────────────────────────────────────────────────────
@@ -297,19 +432,40 @@ func (m Model) viewDashboard() string {
 	// ── Collapsible section boxes ─────────────────────────────────────
 	b.WriteString(m.sectionBox("health", "1", "Health",
 		fmt.Sprintf("%d checks", len(m.healthItems)),
-		m.renderHealthLines(innerW-4), outerW) + "\n")
+		m.renderHealthLines(innerW-4), outerW, false) + "\n")
 
+	wfFocused := m.focusedPane == "section" && m.sectionFocus == "workflows"
+	var wfContent []string
+	if wfFocused {
+		wfContent = renderNavigableList(m.sectionItems["workflows"], m.sectionCursor)
+	} else {
+		wfContent = renderNameList(innerW-4, m.workflowNames)
+	}
 	b.WriteString(m.sectionBox("workflows", "2", "Workflows",
 		fmt.Sprintf("%d", len(m.workflowNames)),
-		renderNameList(innerW-4, m.workflowNames), outerW) + "\n")
+		wfContent, outerW, wfFocused) + "\n")
 
+	wkFocused := m.focusedPane == "section" && m.sectionFocus == "workers"
+	var wkContent []string
+	if wkFocused {
+		wkContent = renderNavigableList(m.sectionItems["workers"], m.sectionCursor)
+	} else {
+		wkContent = renderNameList(innerW-4, m.workerNames)
+	}
 	b.WriteString(m.sectionBox("workers", "3", "Workers",
 		fmt.Sprintf("%d", len(m.workerNames)),
-		renderNameList(innerW-4, m.workerNames), outerW) + "\n")
+		wkContent, outerW, wkFocused) + "\n")
 
+	rtFocused := m.focusedPane == "section" && m.sectionFocus == "routes"
+	var rtContent []string
+	if rtFocused {
+		rtContent = renderNavigableList(m.sectionItems["routes"], m.sectionCursor)
+	} else {
+		rtContent = renderRepoList(m.repos, innerW-4)
+	}
 	b.WriteString(m.sectionBox("routes", "4", "Routes",
 		fmt.Sprintf("%d repos", len(m.repos)),
-		renderRepoList(m.repos, innerW-4), outerW) + "\n")
+		rtContent, outerW, rtFocused) + "\n")
 
 	// ── Features box ─────────────────────────────────────────────────
 	archiveToggle := styleDim.Render("  [a] show archived")
@@ -330,7 +486,8 @@ func (m Model) viewDashboard() string {
 	// ── Help bar ──────────────────────────────────────────────────────
 	help := strings.Join([]string{
 		helpItem("↑↓", "navigate"),
-		helpItem("enter", "detail"),
+		helpItem("enter", "open"),
+		helpItem("tab", "focus sections"),
 		helpItem("t", "attach"),
 		helpItem("a", "archived"),
 		helpItem("1-4", "expand/collapse"),
@@ -362,11 +519,15 @@ func drawBox(title string, contentLines []string, outerW int) string {
 		Render(strings.Join(all, "\n"))
 }
 
-// drawBoxLabeled renders a rounded box with the title embedded in the top border,
-// like: ╭─ Title ──────────╮
+// drawBoxLabeled renders a rounded box with the title embedded in the top border.
 func drawBoxLabeled(title string, contentLines []string, outerW int) string {
+	return drawBoxLabeledWith(title, contentLines, outerW, surface1)
+}
+
+// drawBoxLabeledWith is drawBoxLabeled with a configurable border color.
+func drawBoxLabeledWith(title string, contentLines []string, outerW int, borderColor string) string {
 	innerW := outerW - 2
-	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
+	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(borderColor))
 
 	label := " " + title + " "
 	labelW := lipgloss.Width(label)
@@ -450,9 +611,13 @@ func (m Model) renderHealthLines(maxW int) []string {
 // sectionBox renders a collapsible labeled box.
 // Collapsed: just the top+bottom border with title and summary in the border line.
 // Expanded: full box with content.
-func (m Model) sectionBox(key, keyStr, name, summary string, content []string, outerW int) string {
+func (m Model) sectionBox(key, keyStr, name, summary string, content []string, outerW int, focused bool) string {
 	innerW := outerW - 2
-	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
+	borderColor := surface1
+	if focused {
+		borderColor = mauve
+	}
+	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(borderColor))
 	title := styleDim.Render(keyStr) + " " + styleSection.Render(name)
 
 	if !m.expanded[key] {
@@ -475,7 +640,21 @@ func (m Model) sectionBox(key, keyStr, name, summary string, content []string, o
 	for _, l := range content {
 		indented = append(indented, "  "+l)
 	}
-	return drawBoxLabeled(title, indented, outerW)
+	return drawBoxLabeledWith(title, indented, outerW, borderColor)
+}
+
+// renderNavigableList renders a list of section items with a cursor indicator.
+func renderNavigableList(items []sectionItem, cursor int) []string {
+	var lines []string
+	for i, item := range items {
+		if i == cursor {
+			lines = append(lines, styleHealthOK.Render("▶")+"  "+styleSubtext.Render(item.label)+
+				styleDim.Render("  enter to view"))
+		} else {
+			lines = append(lines, "   "+styleDim.Render(item.label))
+		}
+	}
+	return lines
 }
 
 // renderNameList wraps a list of names with · separators to fit maxW.
@@ -799,7 +978,7 @@ func (m Model) viewDetail() string {
 func (m Model) viewFile() string {
 	outerW := m.width - 2
 	var b strings.Builder
-	title := styleDetailTitle.Render(" "+m.detail.s.Ticket) +
+	title := styleDetailTitle.Render(" "+m.viewerContext) +
 		styleDim.Render(" · ") +
 		styleSubtext.Render(m.viewerTitle+" ")
 	b.WriteString("\n" + drawBox(title, nil, outerW) + "\n")
@@ -869,6 +1048,43 @@ func loadData(root string) tea.Cmd {
 
 		repos := parseRouterRepos(filepath.Join(root, "ROUTER.md"))
 
+		// section items for navigable file viewer
+		si := map[string][]sectionItem{}
+
+		// workflows: each dir that has a WORKFLOW.md
+		for _, name := range wfNames {
+			p := filepath.Join(wfDir, name, "WORKFLOW.md")
+			if _, err := os.Stat(p); err == nil {
+				si["workflows"] = append(si["workflows"], sectionItem{label: name, path: p})
+			}
+		}
+
+		// workers: actual .md files in workers/
+		workersDir := filepath.Join(root, "workers")
+		if entries, err := filepath.Glob(filepath.Join(workersDir, "*.md")); err == nil {
+			for _, p := range entries {
+				base := filepath.Base(p)
+				if base == "_template.md" {
+					continue
+				}
+				id := strings.TrimSuffix(base, ".md")
+				label := id
+				for _, w := range allWorkers {
+					if w.ID == id && w.Name != "" {
+						label = w.Name
+						break
+					}
+				}
+				si["workers"] = append(si["workers"], sectionItem{label: label, path: p})
+			}
+		}
+
+		// routes: ROUTER.md as a single item
+		routerPath := filepath.Join(root, "ROUTER.md")
+		if _, err := os.Stat(routerPath); err == nil {
+			si["routes"] = []sectionItem{{label: "ROUTER.md", path: routerPath}}
+		}
+
 		return dataMsg{
 			features:      features,
 			healthItems:   report.Results,
@@ -876,6 +1092,7 @@ func loadData(root string) tea.Cmd {
 			workerNames:   workerNames,
 			routeChain:    chain,
 			repos:         repos,
+			sectionItems:  si,
 		}
 	}
 }
