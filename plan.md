@@ -93,5 +93,43 @@ Lower priority — worth revisiting once the core is solid.
 
 | Idea | Notes |
 |------|-------|
-| Quotes and themes in `orc.yaml` | `settings.quotes: [...]` for a custom TUI quote pool; `settings.theme: catppuccin-mocha` to swap the lipgloss palette. |
+| ~~Quotes in `orc.yaml`~~ ✓ Done | `settings.quotes: [...]` — troll quotes ship as default in the workspace template. |
+| Theme configuration | See spec below. |
 | Ticket system config | `settings.ticket_system` for machine-readable source — lets the intake stage know where to fetch ticket data without hardcoding it in the stage doc. |
+
+---
+
+### Theme configuration (spec)
+
+Swap the TUI color palette via `settings.theme` in `orc.yaml`. The hardcoded
+Catppuccin Mocha constants in `tui.go` would be extracted into a theme struct
+and resolved at startup.
+
+#### Config shape
+
+```yaml
+settings:
+  theme: catppuccin-mocha   # default; options: catppuccin-mocha | catppuccin-latte | dracula | gruvbox
+```
+
+#### Built-in themes to ship
+
+| Name | Background | Feel |
+|------|-----------|------|
+| `catppuccin-mocha` | dark | current default |
+| `catppuccin-latte` | light | same palette, light mode |
+| `dracula` | dark | purple/pink accent |
+| `gruvbox` | dark | warm retro |
+
+#### Implementation notes
+
+- Extract the color constants at the top of `tui.go` into a `Theme` struct
+  with fields for each semantic role (`base`, `surface`, `text`, `subtext`,
+  `mauve`, `green`, `yellow`, `red`, etc.)
+- Add `var themes = map[string]Theme{...}` with the built-in palettes
+- Add `Theme string yaml:"theme"` to `Settings` in `internal/config`
+- Resolve the active theme in `Run()` and pass it into `New(root, theme)`
+- All `lipgloss.NewStyle().Foreground(lipgloss.Color(mauve))` calls reference
+  the resolved theme instead of the package-level constants
+
+**Effort:** Medium — mechanical but thorough; touches every style definition in `tui.go`.
