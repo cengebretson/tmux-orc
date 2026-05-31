@@ -79,8 +79,10 @@ always created inside this workspace under `worktrees/`.
 > 2. Full path on the filesystem (e.g. /Users/me/projects/my-app)
 > 3. Purpose (one line)
 
-**Then update `ROUTER.md`:**
-- Replace the example row in the Repos table with the real repos
+**Then update `orc.yaml`:**
+- Replace the example entry under `repos:` with the real repos (name, path, purpose)
+
+**And update `ROUTER.md`:**
 - Fill in the `git worktree add` example command with the actual workspace path
 
 ---
@@ -110,16 +112,11 @@ id: intake-agent-claude
 name: Intake Agent (Claude)
 engine: claude
 model: <chosen model>
-service_tier: <low/medium/high>
-workflows:
-  - intake
-stages:
-  - intake
 launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.
-Reads stages/intake.md for source system instructions.
+Reads ROUTER.md for ticket system details, then stages/intake.md for steps.
 ```
 
 - Update `TOOLS.md` — in the Claude section, list the MCP server names the user provided
@@ -149,16 +146,11 @@ id: intake-agent-codex
 name: Intake Agent (Codex)
 engine: codex
 model: <chosen model or omit for default>
-service_tier: <low/medium/high>
-workflows:
-  - intake
-stages:
-  - intake
 launch_mode: foreground
 ---
 
 Fetches ticket context and populates the feature folder.
-Reads stages/intake.md for source system instructions.
+Reads ROUTER.md for ticket system details, then stages/intake.md for steps.
 ```
 
 - Update `TOOLS.md` — in the Codex section, list any tools or MCP servers the user provided
