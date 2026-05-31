@@ -25,24 +25,32 @@ into `runNext` + `printDryRun`. 6 tests added.
 
 ---
 
-## Up next
+## ~~4. Generic worker args map~~ ✓ Done
 
-### Banner suppression
-
-Auto-suppress the ASCII banner when stdout is not a TTY. Add `--no-banner` flag
-for scripting. Most useful when piping `orc next --json` into other tools.
-
-**Effort:** Small.
+Replaced per-field `reasoning_effort` / `service_tier` / `thinking` with
+`args: map[string]string`. Codex renders as `-c key=value`; Claude renders as
+`--key value`. `engine` replaces `product`.
 
 ---
 
-### `reasoning_effort` / `service_tier` in workers
+## ~~5. TUI polish~~ ✓ Done
 
-Add `reasoning_effort` and `service_tier` fields to worker frontmatter so Codex
-workers can declare priority tier and reasoning depth. Render them in the launch
-command when set.
+Workflow pipeline order, hotfix fixture workflow, configurable auto-refresh
+(`tui_refresh` in orc.yaml, default 60s), `r` key for manual refresh, active
+stories on worker detail view, interactive stage drill-in from workflow detail
+(`▶` cursor, enter opens stage file with pipeline context in title).
 
-**Effort:** Small.
+---
+
+## Up next
+
+### Agent completion notification
+
+Terminal bell, tmux alert, or webhook when an agent finishes a stage. Most
+useful in `--tmux` mode where sessions run unattended. Controlled via
+`settings.notify` in `orc.yaml`.
+
+**Effort:** Medium.
 
 ---
 
@@ -52,6 +60,5 @@ Lower priority — worth revisiting once the core is solid.
 
 | Idea | Notes |
 |------|-------|
-| Agent session completion notification | Terminal bell, tmux alert, or webhook when an agent finishes a stage. Most useful in `--tmux` mode where sessions run unattended. Controlled via `settings.notify` in `orc.yaml`. |
 | Quotes and themes in `orc.yaml` | `settings.quotes: [...]` for a custom TUI quote pool; `settings.theme: catppuccin-mocha` to swap the lipgloss palette. |
 | Ticket system config | `settings.ticket_system` for machine-readable source — lets the intake stage know where to fetch ticket data without hardcoding it in the stage doc. |
