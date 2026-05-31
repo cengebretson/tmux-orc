@@ -272,8 +272,8 @@ func (m Model) viewDashboard() string {
 
 	var b strings.Builder
 
-	// ── Header box: health info left, logo right ──────────────────────
-	const logoW = 32 // logo is 30 wide + 2 gap
+	// ── Header: title + stats left, logo right ───────────────────────
+	const logoW = 32
 	infoW := innerW - logoW
 
 	ago := time.Since(m.lastRefresh).Round(time.Second)
@@ -287,57 +287,55 @@ func (m Model) viewDashboard() string {
 		}
 	}
 
-	var infoLines []string
-	infoLines = append(infoLines,
-		styleHeader.Render("orc")+styleDim.Render("  workspace orchestrator"),
+	infoContent := strings.Join([]string{
+		styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator"),
 		"",
-		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features)))+
-			styleDim.Render("  ·  ")+
-			styleHealthOK.Render(fmt.Sprintf("%d active", active))+
-			styleDim.Render("  ·  ")+
-			styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked))+
+		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features))) +
+			styleDim.Render("  ·  ") +
+			styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
+			styleDim.Render("  ·  ") +
+			styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)) +
 			styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago)),
-		"",
-	)
-	infoLines = append(infoLines, m.sectionLines("health", "1 Health",
-		fmt.Sprintf("%d checks", len(m.healthItems)),
-		m.renderHealthLines(infoW))...)
-
-	infoLines = append(infoLines, m.sectionLines("workflows", "2 Workflows",
-		fmt.Sprintf("%d", len(m.workflowNames)),
-		renderNameList(infoW, m.workflowNames))...)
-
-	infoLines = append(infoLines, m.sectionLines("workers", "3 Workers",
-		fmt.Sprintf("%d", len(m.workerNames)),
-		renderNameList(infoW, m.workerNames))...)
-
-	infoLines = append(infoLines, m.sectionLines("routes", "4 Routes",
-		fmt.Sprintf("%d repos", len(m.repos)),
-		renderRepoList(m.repos, infoW))...)
-
+	}, "\n")
+	infoCol := lipgloss.NewStyle().Width(infoW).Render(infoContent)
 	logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve)).Width(logoW).Render(logo)
-	infoCol := lipgloss.NewStyle().Width(infoW).Render(strings.Join(infoLines, "\n"))
 	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, infoCol, logoRendered)
-
 	b.WriteString("\n" + drawBox("", strings.Split(headerContent, "\n"), outerW) + "\n")
+
+	// ── Collapsible section boxes ─────────────────────────────────────
+	b.WriteString(m.sectionBox("health", "1", "Health",
+		fmt.Sprintf("%d checks", len(m.healthItems)),
+		m.renderHealthLines(innerW-4), outerW) + "\n")
+
+	b.WriteString(m.sectionBox("workflows", "2", "Workflows",
+		fmt.Sprintf("%d", len(m.workflowNames)),
+		renderNameList(innerW-4, m.workflowNames), outerW) + "\n")
+
+	b.WriteString(m.sectionBox("workers", "3", "Workers",
+		fmt.Sprintf("%d", len(m.workerNames)),
+		renderNameList(innerW-4, m.workerNames), outerW) + "\n")
+
+	b.WriteString(m.sectionBox("routes", "4", "Routes",
+		fmt.Sprintf("%d repos", len(m.repos)),
+		renderRepoList(m.repos, innerW-4), outerW) + "\n")
 
 	// ── Features box ─────────────────────────────────────────────────
 	archiveToggle := styleDim.Render("  [a] show archived")
 	if m.showArchived {
 		archiveToggle = styleDim.Render("  [a] hide archived")
 	}
-	featuresTitle := styleSection.Render(" Features ") + archiveToggle
+	featuresTitle := styleSection.Render("Features") + archiveToggle
 
 	rows := m.visibleFeatures()
 	var tableLines []string
 	if len(rows) == 0 {
-		tableLines = []string{styleDim.Render(" No features found. Start one with orc work <ticket>.")}
+		tableLines = []string{"  " + styleDim.Render("No features found. Run orc work <ticket> to start one.")}
 	} else {
 		tableLines = strings.Split(m.renderTable(rows, innerW), "\n")
 	}
-	b.WriteString(drawBox(featuresTitle, tableLines, outerW) + "\n")
+	b.WriteString(drawBoxLabeled(featuresTitle, tableLines, outerW) + "\n")
 
-	// ── Help ──────────────────────────────────────────────────────────
+	// ── Help bar ──────────────────────────────────────────────────────
 	help := strings.Join([]string{
 		helpItem("↑↓", "navigate"),
 		helpItem("enter", "detail"),
@@ -352,10 +350,7 @@ func (m Model) viewDashboard() string {
 	return b.String()
 }
 
-// drawBox renders a rounded lipgloss box of outerW total width.
-// If title is non-empty it becomes the first content line, separated from
-// the remaining lines by a full-width divider. This avoids measuring ANSI
-// strings for border placement — lipgloss handles all width management.
+// drawBox renders a plain rounded box (no title in border).
 func drawBox(title string, contentLines []string, outerW int) string {
 	innerW := outerW - 2
 
@@ -373,6 +368,46 @@ func drawBox(title string, contentLines []string, outerW int) string {
 		BorderForeground(lipgloss.Color(surface1)).
 		Width(innerW).
 		Render(strings.Join(all, "\n"))
+}
+
+// drawBoxLabeled renders a rounded box with the title embedded in the top border,
+// like: ╭─ Title ──────────╮
+func drawBoxLabeled(title string, contentLines []string, outerW int) string {
+	innerW := outerW - 2
+	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
+
+	label := " " + title + " "
+	labelW := lipgloss.Width(label)
+	dashRight := innerW - 1 - labelW
+	if dashRight < 0 {
+		dashRight = 0
+	}
+
+	top := bd.Render("╭─") + label + bd.Render(strings.Repeat("─", dashRight)+"╮")
+	bot := bd.Render("╰" + strings.Repeat("─", innerW) + "╯")
+
+	var lines []string
+	lines = append(lines, top)
+	for _, cl := range contentLines {
+		clW := lipgloss.Width(cl)
+		pad := innerW - clW
+		if pad < 0 {
+			pad = 0
+		}
+		lines = append(lines, bd.Render("│")+cl+strings.Repeat(" ", pad)+bd.Render("│"))
+	}
+	lines = append(lines, bot)
+	return strings.Join(lines, "\n")
+}
+
+// padRight pads s to at least width visible characters, using lipgloss.Width
+// to measure so ANSI escape codes don't throw off the count.
+func padRight(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
 }
 
 // renderHealthLines wraps health items into rows fitting within maxW.
@@ -420,25 +455,35 @@ func (m Model) renderHealthLines(maxW int) []string {
 	return rows
 }
 
-// sectionLines returns the header + optional content lines for a collapsible section.
-func (m Model) sectionLines(key, title, collapsedSummary string, content []string) []string {
-	expanded := m.expanded[key]
-	icon := styleHealthOK.Render("▼")
-	if !expanded {
-		icon = styleDim.Render("▶")
-	}
-	header := icon + "  " + styleSection.Render(title)
-	if !expanded {
-		if collapsedSummary != "" {
-			header += "  " + styleDim.Render(collapsedSummary)
+// sectionBox renders a collapsible labeled box.
+// Collapsed: just the top+bottom border with title and summary in the border line.
+// Expanded: full box with content.
+func (m Model) sectionBox(key, keyStr, name, summary string, content []string, outerW int) string {
+	innerW := outerW - 2
+	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
+	title := styleDim.Render(keyStr) + " " + styleSection.Render(name)
+
+	if !m.expanded[key] {
+		label := " " + title
+		if summary != "" {
+			label += styleDim.Render("  "+summary)
 		}
-		return []string{"", header}
+		label += " "
+		labelW := lipgloss.Width(label)
+		dashRight := innerW - 1 - labelW
+		if dashRight < 0 {
+			dashRight = 0
+		}
+		top := bd.Render("╭─") + label + bd.Render(strings.Repeat("─", dashRight)+"╮")
+		bot := bd.Render("╰" + strings.Repeat("─", innerW) + "╯")
+		return strings.Join([]string{top, bot}, "\n")
 	}
-	lines := []string{"", header}
+
+	var indented []string
 	for _, l := range content {
-		lines = append(lines, "   "+l)
+		indented = append(indented, "  "+l)
 	}
-	return lines
+	return drawBoxLabeled(title, indented, outerW)
 }
 
 // renderNameList wraps a list of names with · separators to fit maxW.
@@ -583,13 +628,12 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 		wWorker   = 20
 	)
 
-	header := fmt.Sprintf(" %-*s  %-*s  %-*s  %-*s  %s",
-		wTicket, styleTableHeader.Render("Ticket"),
-		wStatus, styleTableHeader.Render("Status"),
-		wWorkflow, styleTableHeader.Render("Workflow"),
-		wWorker, styleTableHeader.Render("Worker"),
-		styleTableHeader.Render("Tmux"),
-	)
+	header := " " +
+		padRight(styleTableHeader.Render("Ticket"), wTicket) + "  " +
+		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
+		padRight(styleTableHeader.Render("Workflow"), wWorkflow) + "  " +
+		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
+		styleTableHeader.Render("Tmux")
 
 	div := " " + styleDivider.Render(strings.Repeat("─", w-1))
 
@@ -619,13 +663,12 @@ func (m Model) renderTable(rows []*featureRow, w int) string {
 			worker = styleDim.Render("—")
 		}
 
-		line := fmt.Sprintf(" %-*s  %-*s  %-*s  %-*s  %s",
-			wTicket, truncate(s.Ticket, wTicket),
-			wStatus+10, statusCell, // +10 for ANSI escape overhead
-			wWorkflow, truncate(s.Stage.Workflow, wWorkflow),
-			wWorker+5, truncate(worker, wWorker),
-			tmuxCell,
-		)
+		line := " " +
+			padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
+			padRight(statusCell, wStatus) + "  " +
+			padRight(truncate(s.Stage.Workflow, wWorkflow), wWorkflow) + "  " +
+			padRight(truncate(worker, wWorker), wWorker) + "  " +
+			tmuxCell
 
 		if selected {
 			line = styleRowSelected.Width(w).Render(line)
