@@ -884,13 +884,16 @@ func runWait(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	reason := strings.Join(args[1:], " ")
-	if err := state.WaitForHuman(featureDir, reason); err != nil {
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+	if err := state.ValidateRepos(s, root); err != nil {
 		return err
 	}
 
-	s, err := state.Load(featureDir)
-	if err != nil {
+	reason := strings.Join(args[1:], " ")
+	if err := state.WaitForHuman(featureDir, reason); err != nil {
 		return err
 	}
 
@@ -948,6 +951,10 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 	// Guard: archived tickets cannot be advanced.
 	if s.Status == "archived" {
 		return fmt.Errorf("ticket %s is archived — cannot advance", s.Ticket)
+	}
+
+	if err := state.ValidateRepos(s, root); err != nil {
+		return err
 	}
 
 	workflowCfg, _ := config.Load(root)

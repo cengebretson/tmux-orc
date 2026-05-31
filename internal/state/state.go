@@ -330,6 +330,79 @@ func ClearRuntime(featureDir string) error {
 	return os.WriteFile(path, out, 0644)
 }
 
+// ValidateRepos checks that repo fields in STATE.yaml are internally consistent
+// and point to paths that make sense within the workspace. Returns a non-nil
+// error listing all problems found. Only validates fields that are set — a repo
+// with no worktree recorded is not an error.
+func ValidateRepos(s *State, workspaceRoot string) error {
+	worktreesRoot := filepath.Join(workspaceRoot, "worktrees")
+	var errs []string
+
+	for name, r := range s.Repos {
+		// main must exist if set
+		if r.Main != "" {
+			if _, err := os.Stat(r.Main); os.IsNotExist(err) {
+				errs = append(errs, fmt.Sprintf("repos.%s.main %q does not exist", name, r.Main))
+			}
+		}
+
+		if r.Worktree != "" {
+			// worktree must be under worktrees/ in the workspace
+			abs := r.Worktree
+			if !filepath.IsAbs(abs) {
+				abs = filepath.Join(workspaceRoot, abs)
+			}
+			rel, err := filepath.Rel(worktreesRoot, abs)
+			if err != nil || strings.HasPrefix(rel, "..") {
+				errs = append(errs, fmt.Sprintf("repos.%s.worktree %q is not under worktrees/ in the workspace", name, r.Worktree))
+			}
+
+			// branch must be non-empty when a worktree is recorded
+			if r.Branch == "" {
+				errs = append(errs, fmt.Sprintf("repos.%s.branch is empty but worktree is set", name))
+			}
+		}
+	}
+
+	// next_action.cwd must be under a recorded worktree when any worktree is set
+	hasWorktrees := false
+	for _, r := range s.Repos {
+		if r.Worktree != "" {
+			hasWorktrees = true
+			break
+		}
+	}
+	if hasWorktrees && s.NextAction.CWD != "" {
+		cwd := s.NextAction.CWD
+		if !filepath.IsAbs(cwd) {
+			cwd = filepath.Join(workspaceRoot, cwd)
+		}
+		matched := false
+		for _, r := range s.Repos {
+			if r.Worktree == "" {
+				continue
+			}
+			wt := r.Worktree
+			if !filepath.IsAbs(wt) {
+				wt = filepath.Join(workspaceRoot, wt)
+			}
+			rel, err := filepath.Rel(wt, cwd)
+			if err == nil && !strings.HasPrefix(rel, "..") {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			errs = append(errs, fmt.Sprintf("next_action.cwd %q does not match any recorded worktree", s.NextAction.CWD))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("STATE.yaml repo validation failed:\n  %s", strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
 func (s *State) ResolveCWD(workspaceRoot, featureDir string) string {
 	cwd := s.NextAction.CWD
 	if cwd == "" || cwd == "." {

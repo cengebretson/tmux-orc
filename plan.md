@@ -15,22 +15,12 @@ All callers use a single `config.Load` call.
 
 ---
 
-## 2. Worktree contract validation
+## ~~2. Worktree contract validation~~ ✓ Done
 
-**What:** `orc validate` checks that recorded worktrees exist on disk, but
-there is no enforcement when agents write to `STATE.yaml`. A typo in
-`repos.<name>.worktree` or a missing `repos.<name>.main` silently passes
-through until `orc archive` fails.
-
-**Fix:** Add a `state.ValidateRepos(s, root)` check that `orc advance` and
-`orc wait` call before writing state. Checks:
-
-- `repos.<name>.main` points at an existing git repo
-- `repos.<name>.worktree` is under `worktrees/` in the workspace
-- `repos.<name>.branch` is non-empty
-- `next_action.cwd` matches the active worktree when repos are set
-
-**Effort:** Small–medium. Mostly path checks, similar to existing health code.
+`state.ValidateRepos(s, root)` added to `internal/state`. Called by `orc advance`
+and `orc wait` before writing state. Checks main path existence, worktree under
+`worktrees/`, non-empty branch when worktree is set, and cwd under a recorded
+worktree when any worktrees are present. 7 tests added.
 
 ---
 

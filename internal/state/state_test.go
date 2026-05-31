@@ -154,6 +154,110 @@ stage:
 	}
 }
 
+func TestValidateRepos_NoRepos(t *testing.T) {
+	s := &state.State{}
+	if err := state.ValidateRepos(s, t.TempDir()); err != nil {
+		t.Errorf("expected nil for empty repos, got %v", err)
+	}
+}
+
+func TestValidateRepos_ValidWorktree(t *testing.T) {
+	root := t.TempDir()
+	wt := filepath.Join(root, "worktrees", "my-app", "TICKET-1")
+	if err := os.MkdirAll(wt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	mainPath := filepath.Join(root, "my-app")
+	if err := os.MkdirAll(mainPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &state.State{
+		Repos: map[string]state.Repo{
+			"my-app": {Main: mainPath, Worktree: wt, Branch: "feature/x"},
+		},
+		NextAction: state.NextAction{CWD: wt},
+	}
+	if err := state.ValidateRepos(s, root); err != nil {
+		t.Errorf("expected nil for valid state, got %v", err)
+	}
+}
+
+func TestValidateRepos_MissingMain(t *testing.T) {
+	root := t.TempDir()
+	s := &state.State{
+		Repos: map[string]state.Repo{
+			"my-app": {Main: "/nonexistent/path", Worktree: "", Branch: ""},
+		},
+	}
+	if err := state.ValidateRepos(s, root); err == nil {
+		t.Error("expected error for missing main path, got nil")
+	}
+}
+
+func TestValidateRepos_WorktreeOutsideWorktreesDir(t *testing.T) {
+	root := t.TempDir()
+	outsidePath := filepath.Join(root, "somewhere-else", "TICKET-1")
+	if err := os.MkdirAll(outsidePath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s := &state.State{
+		Repos: map[string]state.Repo{
+			"my-app": {Worktree: outsidePath, Branch: "feature/x"},
+		},
+	}
+	if err := state.ValidateRepos(s, root); err == nil {
+		t.Error("expected error for worktree outside worktrees/, got nil")
+	}
+}
+
+func TestValidateRepos_MissingBranchWhenWorktreeSet(t *testing.T) {
+	root := t.TempDir()
+	wt := filepath.Join(root, "worktrees", "my-app", "TICKET-1")
+	if err := os.MkdirAll(wt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s := &state.State{
+		Repos: map[string]state.Repo{
+			"my-app": {Worktree: wt, Branch: ""},
+		},
+	}
+	if err := state.ValidateRepos(s, root); err == nil {
+		t.Error("expected error for empty branch with worktree set, got nil")
+	}
+}
+
+func TestValidateRepos_CWDNotUnderWorktree(t *testing.T) {
+	root := t.TempDir()
+	wt := filepath.Join(root, "worktrees", "my-app", "TICKET-1")
+	if err := os.MkdirAll(wt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s := &state.State{
+		Repos: map[string]state.Repo{
+			"my-app": {Worktree: wt, Branch: "feature/x"},
+		},
+		NextAction: state.NextAction{CWD: "/some/other/path"},
+	}
+	if err := state.ValidateRepos(s, root); err == nil {
+		t.Error("expected error for cwd not under any worktree, got nil")
+	}
+}
+
+func TestValidateRepos_CWDSkippedWhenNoWorktrees(t *testing.T) {
+	root := t.TempDir()
+	// Repos set but no worktrees recorded — cwd check should be skipped
+	s := &state.State{
+		Repos: map[string]state.Repo{
+			"my-app": {Main: "", Worktree: "", Branch: ""},
+		},
+		NextAction: state.NextAction{CWD: "/some/other/path"},
+	}
+	if err := state.ValidateRepos(s, root); err != nil {
+		t.Errorf("expected nil when no worktrees set, got %v", err)
+	}
+}
+
 // When stageName is empty (last stage in pipeline), Advance should leave the
 // current stage name unchanged and still mark the ticket ready.
 func TestAdvance_EmptyStageNamePreservesCurrentStage(t *testing.T) {
