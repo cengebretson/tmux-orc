@@ -521,7 +521,8 @@ func (m Model) viewDashboard() string {
 	leftInnerW := leftW - 2
 
 	// ── Header stats ─────────────────────────────────────────────────
-	ago := time.Since(m.lastRefresh).Round(time.Second)
+	since := time.Since(m.lastRefresh)
+	ago := since.Round(time.Second)
 	active, blocked := 0, 0
 	for _, f := range m.features {
 		switch f.s.Status {
@@ -538,7 +539,7 @@ func (m Model) viewDashboard() string {
 		styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
 		styleDim.Render("  ·  ") +
 		styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)) +
-		styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
+		stalenessStyle(since).Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
 
 	// ── Left column: header + sections ───────────────────────────────
 	var left strings.Builder

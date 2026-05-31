@@ -1,6 +1,10 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 const logo = `⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -192,6 +196,19 @@ func statusIcon(status string) string {
 		return "○"
 	default:
 		return "·"
+	}
+}
+
+// stalenessStyle returns dim when fresh, yellow when a refresh cycle has been
+// missed (~15s), and red when clearly stale (~45s+).
+func stalenessStyle(age time.Duration) lipgloss.Style {
+	switch {
+	case age > 45*time.Second:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(red))
+	case age > 15*time.Second:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(yellow))
+	default:
+		return styleDim
 	}
 }
 
