@@ -732,7 +732,7 @@ func (m Model) viewDashboard() string {
 			helpItem("tab", "focus sections"),
 			helpItem("t", "attach"),
 			helpItem("1-4", "expand/collapse"),
-
+			helpItem("r", "refresh"),
 			helpItem("q", "quit"),
 		)
 		b.WriteString(styleHelp.Render(" " + strings.Join(helpItems, "  ")))
