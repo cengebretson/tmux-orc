@@ -129,12 +129,12 @@ Ideas worth revisiting when the core is stable.
 | Original | What we did instead | Why |
 |----------|--------------------|----|
 | `JIRA.md` in feature template | `TICKET.md` | System-agnostic — works with GitHub Issues, Linear, local files, or manual |
-| `django/` subfolder in features | `impl/` | Not framework-specific |
+| `django/` subfolder in features | per-stage subfolders (`develop/`, `code-review/`, etc.) | Each stage writes to its own named folder — provenance is unambiguous |
 | `orc workon` command | `orc work` | Shorter, cleaner |
 | `orc done` command | `orc archive` with `_archive/` folder | Preserves history, keeps workspace clean, reversible |
 | No first-run config | `SETUP.md` agent-driven setup | Cleaner than hand-editing files; works with Claude or Codex |
 | Intake bundled into main workflow | Separate `intake` stage | Cleaner separation — every ticket goes through intake first, then routes to the right stage |
-| `backend/` subfolder | `impl/` subfolder | Generic — not coupled to backend/frontend distinction |
+| `backend/` subfolder | per-stage subfolders | Stage name is the folder name — self-documenting and not coupled to any stack |
 
 ## Template System
 

@@ -1,4 +1,4 @@
-# Workflow: intake
+# Stage: intake
 
 > Before starting: read `ORC.md` for state update rules and error handling.
 

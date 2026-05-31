@@ -210,14 +210,10 @@ my-workspace/
       SPEC.md        context, scope, and open questions
       PLAN.md        approach and steps
       DECISIONS.md   decisions and rationale
-      impl/
-        PR.md        PR URL and status
-        QA_HANDOFF.md  implementation summary for QA
-      qa/
-        SOURCE_CONTEXT.md
-        QA_PLAN.md
-        RUNS.md
-        QA_RESULT.md
+      develop/       written by the develop stage
+      code-review/   written by the code-review stage
+      pr-open/       written by the pr-open stage
+      qa-automation/ written by the qa-automation stage
     _archive/        completed features moved here by `orc archive`
 
   workers/

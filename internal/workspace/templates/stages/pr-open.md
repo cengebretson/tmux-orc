@@ -1,4 +1,4 @@
-# Workflow: pr-open
+# Stage: pr-open
 
 > Before starting: read `ORC.md` for state update rules and error handling.
 
@@ -10,8 +10,8 @@ writes the PR description, opens the PR, and hands off for human review.
 ## Steps
 
 **Owner:** developer agent  
-**Inputs:** `impl/QA_HANDOFF.md`, `impl/REVIEW.md`, `TICKET.md`, feature worktree  
-**Outputs:** Open PR, populated `impl/PR.md`
+**Inputs:** `develop/HANDOFF.md`, `code-review/REVIEW.md`, `TICKET.md`, feature worktree  
+**Outputs:** Open PR, populated `pr-open/PR.md`
 
 **Preflight**
 1. Read `features/<ticket-slug>/STATE.yaml` for the active worktree and branch.
@@ -22,15 +22,15 @@ writes the PR description, opens the PR, and hands off for human review.
 
 **Open PR**
 6. Read `TICKET.md` for the ticket summary and acceptance criteria.
-7. Read `impl/QA_HANDOFF.md` for the implementation summary.
+7. Read `develop/HANDOFF.md` for the implementation summary.
 8. Write a PR title: concise, under 70 characters, describes what changed.
 9. Write a PR body: what changed and why (link ticket), how to test, migration or deployment notes.
 10. Open the PR via the source control MCP server (see `TOOLS.md`).
-11. Write the PR URL and status to `impl/PR.md`.
+11. Write the PR URL and status to `pr-open/PR.md`.
 
 ## Exit Criteria
 
-PR is open and `impl/PR.md` has the URL.
+PR is open and `pr-open/PR.md` has the URL.
 
 When done, run:
 ```

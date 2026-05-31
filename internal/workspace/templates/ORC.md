@@ -77,18 +77,20 @@ Read `STATE.yaml` and `TICKET.md` at the start of every session. Read `SPEC.md` 
 
 The feature folder is the handoff medium between stages. Read previous stage outputs before starting work. If a required input is missing, `orc wait` — do not proceed.
 
+Each stage writes its outputs to a subfolder matching its name: `<stage-name>/`. This makes provenance unambiguous — if you need to find what `develop` produced, look in `develop/`.
+
 | Path | Written by | Read by |
 |------|-----------|---------|
 | `TICKET.md` | intake | all stages |
 | `SPEC.md` | intake | develop, code-review |
 | `PLAN.md` | intake | develop |
 | `DECISIONS.md` | any stage | any stage |
-| `impl/QA_HANDOFF.md` | develop | qa-automation |
-| `impl/PR.md` | pr-open | qa-automation, human |
-| `impl/REVIEW.md` | code-review | develop |
-| `qa/QA_PLAN.md` | qa-automation | qa-automation (next session) |
-| `qa/RUNS.md` | qa-automation | qa-automation, human |
-| `qa/QA_RESULT.md` | qa-automation | human, archive |
+| `develop/HANDOFF.md` | develop | code-review, pr-open, qa-automation |
+| `code-review/REVIEW.md` | code-review | develop, pr-open |
+| `pr-open/PR.md` | pr-open | pr-repair, qa-automation, human |
+| `qa-automation/PLAN.md` | qa-automation | qa-automation (next session) |
+| `qa-automation/RUNS.md` | qa-automation | qa-automation, human |
+| `qa-automation/RESULT.md` | qa-automation | human, archive |
 
 ---
 

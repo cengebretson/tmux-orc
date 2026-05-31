@@ -22,12 +22,18 @@ features/
     SPEC.md             context, scope, and open questions
     PLAN.md             implementation approach and steps
     DECISIONS.md        significant decisions and rationale
-    impl/
+    develop/            outputs written by the develop stage
+      HANDOFF.md        implementation summary and known risks
+    code-review/        outputs written by the code-review stage
+      REVIEW.md         findings and verdict
+    pr-open/            outputs written by the pr-open stage
       PR.md             PR URL and status
-      QA_HANDOFF.md     implementation summary for the QA agent
-    qa/
+    qa-automation/      outputs written by the qa-automation stage
       SOURCE_CONTEXT.md repo context for the QA agent
-      QA_PLAN.md        test cases and coverage plan
+      PLAN.md           test cases and coverage plan
       RUNS.md           test run history
-      QA_RESULT.md      final result and evidence
+      RESULT.md         final result and evidence
 ```
+
+Each stage writes its outputs to a subfolder matching its name. Stages create their
+own subfolder — nothing is pre-created in the template.

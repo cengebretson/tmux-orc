@@ -36,11 +36,11 @@ issues, and produces a written verdict before any PR is opened.
 ## Permission Boundaries
 
 Read-only on the repo worktree. May not commit, push, or modify files.
-Write only to `impl/REVIEW.md`.
+Write only to `code-review/REVIEW.md`.
 
 ## Review Format
 
-`impl/REVIEW.md` must include:
+`code-review/REVIEW.md` must include:
 
 - **Verdict:** `approved` | `needs changes` | `blocked`
 - **Summary:** one paragraph on overall quality
