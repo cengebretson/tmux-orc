@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -116,6 +117,10 @@ type Model struct {
 	viewerContext string // label shown in file viewer title bar
 	viewerReturn  viewState
 
+	// search
+	search    textinput.Model
+	searching bool
+
 	quote string
 	err   error
 }
@@ -126,6 +131,13 @@ type detailFile struct {
 }
 
 func New(root string) Model {
+	ti := textinput.New()
+	ti.Placeholder = "filter tickets..."
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(mauve))
+	ti.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(text))
+	ti.Prompt = "/ "
+	ti.CharLimit = 64
+
 	return Model{
 		root:        root,
 		lastRefresh: time.Now(),
@@ -137,7 +149,8 @@ func New(root string) Model {
 			"workers":   false,
 			"routes":    false,
 		},
-		quote: pickQuote(),
+		search: ti,
+		quote:  pickQuote(),
 	}
 }
 
@@ -193,11 +206,39 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.view {
 
 	case viewDashboard:
+		// ── Search mode: route keys to textinput ─────────────────────
+		if m.searching {
+			switch msg.String() {
+			case "esc":
+				m.searching = false
+				m.search.Blur()
+				m.search.SetValue("")
+				m.cursor = 0
+				return m, nil
+			case "enter":
+				m.searching = false
+				m.search.Blur()
+				m.cursor = 0
+				return m, nil
+			default:
+				var cmd tea.Cmd
+				m.search, cmd = m.search.Update(msg)
+				m.cursor = 0
+				return m, cmd
+			}
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "r":
 			return m, loadData(m.root)
+		case "/":
+			if m.focusedPane == "features" {
+				m.searching = true
+				m.search.Focus()
+				return m, textinput.Blink
+			}
 
 		case "tab", "shift+tab":
 			navigable := m.navigableSections()
@@ -612,18 +653,38 @@ func (m Model) viewDashboard() string {
 	b.WriteString(topBlock)
 	b.WriteString(drawBoxLabeledWith(featuresTitle, tableLines, outerW, featuresBorderColor) + "\n")
 
-	// ── Help bar ──────────────────────────────────────────────────────
-	help := strings.Join([]string{
-		helpItem("↑↓", "navigate"),
-		helpItem("enter", "open"),
-		helpItem("tab", "focus sections"),
-		helpItem("t", "attach"),
-		helpItem("a", "archived"),
-		helpItem("1-4", "expand/collapse"),
-		helpItem("r", "refresh"),
-		helpItem("q", "quit"),
-	}, "  ")
-	b.WriteString(styleHelp.Render(" " + help))
+	// ── Help bar / search input ───────────────────────────────────────
+	if m.searching {
+		query := m.search.Value()
+		matchCount := len(m.visibleFeatures())
+		hint := styleDim.Render(fmt.Sprintf("  %d match", matchCount))
+		if matchCount != 1 {
+			hint = styleDim.Render(fmt.Sprintf("  %d matches", matchCount))
+		}
+		if query == "" {
+			hint = styleDim.Render("  type to filter")
+		}
+		b.WriteString(" " + m.search.View() + hint + "  " + styleDim.Render("enter confirm  esc cancel"))
+	} else {
+		var helpItems []string
+		helpItems = append(helpItems,
+			helpItem("↑↓", "navigate"),
+			helpItem("enter", "open"),
+			helpItem("/", "search"),
+			helpItem("tab", "focus sections"),
+			helpItem("t", "attach"),
+			helpItem("a", "archived"),
+			helpItem("1-4", "expand/collapse"),
+			helpItem("r", "refresh"),
+			helpItem("q", "quit"),
+		)
+		if m.search.Value() != "" {
+			helpItems = append([]string{
+				styleHelpKey.Render("/") + styleDim.Render(" "+m.search.Value()) + "  " + styleDim.Render("esc clear"),
+			}, helpItems...)
+		}
+		b.WriteString(styleHelp.Render(" " + strings.Join(helpItems, "  ")))
+	}
 
 	return b.String()
 }
@@ -1255,10 +1316,17 @@ func newTmuxCmd(session, window string) *exec.Cmd {
 // ── Helpers ───────────────────────────────────────────────────────
 
 func (m Model) visibleFeatures() []*featureRow {
+	query := strings.ToLower(strings.TrimSpace(m.search.Value()))
 	var out []*featureRow
 	for _, f := range m.features {
 		if f.s.Status == "archived" && !m.showArchived {
 			continue
+		}
+		if query != "" {
+			haystack := strings.ToLower(f.s.Ticket + " " + f.s.Slug)
+			if !strings.Contains(haystack, query) {
+				continue
+			}
 		}
 		out = append(out, f)
 	}
