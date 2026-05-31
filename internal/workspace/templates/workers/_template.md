@@ -4,7 +4,8 @@ name: Worker Display Name
 product: claude
 kind: agent
 model: claude-sonnet-4-6
-service_tier: medium
+args:
+  effort: medium
 default_tmux_window: claude
 launch_mode: foreground
 ---

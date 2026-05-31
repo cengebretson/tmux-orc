@@ -4,8 +4,9 @@ name: Bob the Developer
 product: codex
 kind: agent
 model: gpt-5.5
-reasoning_effort: high
-service_tier: medium
+args:
+  reasoning_effort: high
+  service_tier: medium
 default_tmux_window: app-codex
 launch_mode: foreground
 ---

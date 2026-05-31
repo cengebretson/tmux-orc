@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -16,8 +17,7 @@ type Worker struct {
 	Kind    string `yaml:"kind"`
 	Model   string `yaml:"model"`
 
-	ReasoningEffort string `yaml:"reasoning_effort"`
-	ServiceTier     string `yaml:"service_tier"`
+	Args map[string]string `yaml:"args"` // extra flags: --key value (claude) or -c key=value (codex)
 
 	DefaultTmuxWindow string `yaml:"default_tmux_window"`
 	LaunchMode        string `yaml:"launch_mode"`
@@ -83,17 +83,18 @@ func LaunchArgs(w *Worker, workspaceRoot, cwd, prompt string) []string {
 			model = "default"
 		}
 		args := []string{"codex", "--model", model}
-		if w.ReasoningEffort != "" {
-			args = append(args, "-c", "reasoning_effort="+w.ReasoningEffort)
-		}
-		if w.ServiceTier != "" {
-			args = append(args, "-c", "service_tier="+w.ServiceTier)
+		for _, k := range sortedKeys(w.Args) {
+			args = append(args, "-c", k+"="+w.Args[k])
 		}
 		return append(args, "--cd", cwd, prompt)
 	case "cursor":
 		return []string{"cursor", cwd}
 	default: // claude
-		return []string{"claude", "--add-dir", workspaceRoot, prompt}
+		args := []string{"claude", "--add-dir", workspaceRoot}
+		for _, k := range sortedKeys(w.Args) {
+			args = append(args, "--"+k, w.Args[k])
+		}
+		return append(args, prompt)
 	}
 }
 
@@ -121,6 +122,15 @@ func parseWorkerFile(path string) (*Worker, error) {
 	}
 
 	return &w, nil
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func extractFrontmatter(content string) (string, error) {

@@ -1613,8 +1613,14 @@ func renderWorkerFile(path string, width int) (string, error) {
 		add("id", w.ID)
 		add("product", w.Product)
 		add("model", w.Model)
-		add("cost tier", w.ServiceTier)
-		add("reasoning", w.ReasoningEffort)
+		argKeys := make([]string, 0, len(w.Args))
+		for k := range w.Args {
+			argKeys = append(argKeys, k)
+		}
+		sort.Strings(argKeys)
+		for _, k := range argKeys {
+			add(k, w.Args[k])
+		}
 		add("launch mode", w.LaunchMode)
 		// Measure label column width.
 		labelW := 0
