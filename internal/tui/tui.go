@@ -1166,13 +1166,18 @@ func (m Model) viewDetail() string {
 				styleTmuxDead.Render("not running — run orc next "+s.Ticket+" to restart")))
 		}
 	}
-	if s.NextAction.Prompt != "" {
-		prompt := s.NextAction.Prompt
-		if len(prompt) > innerW-20 {
-			prompt = prompt[:innerW-23] + "…"
+	if nextName, nextAdvance := nextStageFor(m.workflows, s.Workflow, s.Stage.Name); nextName != "" {
+		var nextVal string
+		if nextAdvance == "auto" {
+			nextVal = styleHealthOK.Render("→ "+nextName) + styleDim.Render("  auto")
+		} else {
+			nextVal = styleStatusWaiting.Render("→ "+nextName) + styleDim.Render("  awaiting approval")
 		}
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
-			styleDetailLabel.Render(" Next    "), styleSubtext.Render(prompt)))
+			styleDetailLabel.Render(" Next    "), nextVal))
+	} else if s.Stage.Name != "" {
+		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
+			styleDetailLabel.Render(" Next    "), styleDim.Render("last stage")))
 	}
 	b.WriteString(drawBox(styleSection.Render(" State "), stateLines, outerW) + "\n")
 
@@ -1258,6 +1263,23 @@ func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
+}
+
+// nextStageFor returns the name and advance mode of the stage after stageName
+// in the named workflow chain, or empty strings if it is the last stage.
+func nextStageFor(chains []workflowChain, workflowName, stageName string) (name, advance string) {
+	for _, c := range chains {
+		if c.name != workflowName && !(workflowName == "" || workflowName == "default") {
+			continue
+		}
+		for i, step := range c.steps {
+			if step.name == stageName && i+1 < len(c.steps) {
+				next := c.steps[i+1]
+				return next.name, next.advance
+			}
+		}
+	}
+	return "", ""
 }
 
 func loadData(root string) tea.Cmd {
