@@ -239,7 +239,7 @@ func (m Model) viewDashboard() string {
 
 	var b strings.Builder
 
-	// ── Header box: logo left, title + health right ──────────────────
+	// ── Header box: logo left, title + stats right ───────────────────
 	ago := time.Since(m.lastRefresh).Round(time.Second)
 	logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve)).Render(logo)
 	logoW := lipgloss.Width(strings.SplitN(logo, "\n", 2)[0]) // 30
@@ -254,8 +254,7 @@ func (m Model) viewDashboard() string {
 		}
 	}
 
-	infoW := innerW - logoW - 3 // 3 = gap between logo and info
-	healthLines := m.renderHealthLines(infoW)
+	infoW := innerW - logoW - 3
 	infoLines := []string{
 		styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator"),
 		"",
@@ -265,10 +264,8 @@ func (m Model) viewDashboard() string {
 			styleDim.Render("  ·  ") +
 			styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)),
 		"",
+		styleDim.Render(fmt.Sprintf("↺ %s ago", ago)),
 	}
-	infoLines = append(infoLines, healthLines...)
-	infoLines = append(infoLines, "", styleDim.Render(fmt.Sprintf("↺ %s ago", ago)))
-
 	infoCol := lipgloss.NewStyle().Width(infoW).Render(strings.Join(infoLines, "\n"))
 	headerContent := lipgloss.JoinHorizontal(lipgloss.Top,
 		logoRendered+strings.Repeat(" ", 3),
@@ -276,12 +273,16 @@ func (m Model) viewDashboard() string {
 	)
 	b.WriteString("\n" + drawBox("", strings.Split(headerContent, "\n"), outerW) + "\n")
 
+	// ── Health box ────────────────────────────────────────────────────
+	healthLines := m.renderHealthLines(innerW - 2)
+	b.WriteString(drawBox(styleSection.Render(" Health "), healthLines, outerW) + "\n")
+
 	// ── Features box ─────────────────────────────────────────────────
-	archiveToggle := styleDim.Render(" [a] show archived")
+	archiveToggle := styleDim.Render("  [a] show archived")
 	if m.showArchived {
-		archiveToggle = styleDim.Render(" [a] hide archived")
+		archiveToggle = styleDim.Render("  [a] hide archived")
 	}
-	featuresTitle := styleSection.Render("─ Features ") + archiveToggle
+	featuresTitle := styleSection.Render(" Features ") + archiveToggle
 
 	rows := m.visibleFeatures()
 	var tableLines []string
@@ -465,7 +466,7 @@ func (m Model) viewDetail() string {
 	var b strings.Builder
 
 	// Title bar
-	slugTitle := styleDetailTitle.Render("─ " + s.Slug + " ")
+	slugTitle := styleDetailTitle.Render(" " + s.Slug + " ")
 	b.WriteString("\n" + drawBox(slugTitle, nil, outerW) + "\n")
 
 	// State fields
@@ -498,7 +499,7 @@ func (m Model) viewDetail() string {
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
 			styleDetailLabel.Render(" Next    "), styleSubtext.Render(prompt)))
 	}
-	b.WriteString(drawBox(styleSection.Render("─ State "), stateLines, outerW) + "\n")
+	b.WriteString(drawBox(styleSection.Render(" State "), stateLines, outerW) + "\n")
 
 	// History
 	if len(s.History) > 0 {
@@ -515,7 +516,7 @@ func (m Model) viewDetail() string {
 				styleSubtext.Render(truncate(h.Result, innerW-72)),
 			))
 		}
-		b.WriteString(drawBox(styleSection.Render("─ History "), histLines, outerW) + "\n")
+		b.WriteString(drawBox(styleSection.Render(" History "), histLines, outerW) + "\n")
 	}
 
 	// Files
@@ -546,7 +547,7 @@ func (m Model) viewDetail() string {
 		if hint != "" {
 			fileLines = append(fileLines, hint)
 		}
-		b.WriteString(drawBox(styleSection.Render("─ Files "), fileLines, outerW) + "\n")
+		b.WriteString(drawBox(styleSection.Render(" Files "), fileLines, outerW) + "\n")
 	}
 
 	help := strings.Join([]string{
@@ -566,7 +567,7 @@ func (m Model) viewDetail() string {
 func (m Model) viewFile() string {
 	outerW := m.width - 2
 	var b strings.Builder
-	title := styleDetailTitle.Render("─ "+m.detail.s.Ticket) +
+	title := styleDetailTitle.Render(" "+m.detail.s.Ticket) +
 		styleDim.Render(" · ") +
 		styleSubtext.Render(m.viewerTitle+" ")
 	b.WriteString("\n" + drawBox(title, nil, outerW) + "\n")
