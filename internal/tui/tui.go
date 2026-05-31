@@ -481,7 +481,11 @@ func (m Model) viewDashboard() string {
 	} else {
 		tableLines = strings.Split(m.renderTable(rows, innerW), "\n")
 	}
-	b.WriteString(drawBoxLabeled(featuresTitle, tableLines, outerW) + "\n")
+	featuresBorderColor := surface1
+	if m.focusedPane == "features" {
+		featuresBorderColor = mauve
+	}
+	b.WriteString(drawBoxLabeledWith(featuresTitle, tableLines, outerW, featuresBorderColor) + "\n")
 
 	// ── Help bar ──────────────────────────────────────────────────────
 	help := strings.Join([]string{
