@@ -37,6 +37,12 @@ type dataMsg struct {
 	healthItems   []health.Result
 	workflowNames []string
 	workerNames   []string
+	routeChain    []routeStep
+}
+
+type routeStep struct {
+	name    string
+	advance string // "auto" or "manual"
 }
 
 // ── data types ───────────────────────────────────────────────────
@@ -51,17 +57,19 @@ type featureRow struct {
 // ── model ─────────────────────────────────────────────────────────
 
 type Model struct {
-	root         string
-	view         viewState
-	features     []*featureRow
-	healthItems  []health.Result
+	root          string
+	view          viewState
+	features      []*featureRow
+	healthItems   []health.Result
 	workflowNames []string
 	workerNames   []string
-	cursor       int
-	showArchived bool
-	lastRefresh  time.Time
-	width        int
-	height       int
+	routeChain    []routeStep
+	expanded      map[string]bool
+	cursor        int
+	showArchived  bool
+	lastRefresh   time.Time
+	width         int
+	height        int
 
 	// detail
 	detail      *featureRow
@@ -84,6 +92,12 @@ func New(root string) Model {
 	return Model{
 		root:        root,
 		lastRefresh: time.Now(),
+		expanded: map[string]bool{
+			"health":    true,
+			"workflows": true,
+			"workers":   true,
+			"routes":    true,
+		},
 	}
 }
 
@@ -120,6 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.healthItems = msg.healthItems
 		m.workflowNames = msg.workflowNames
 		m.workerNames = msg.workerNames
+		m.routeChain = msg.routeChain
 		m.lastRefresh = time.Now()
 		if rows := m.visibleFeatures(); m.cursor >= len(rows) && len(rows) > 0 {
 			m.cursor = len(rows) - 1
@@ -151,6 +166,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "a":
 			m.showArchived = !m.showArchived
 			m.cursor = 0
+		case "1":
+			m.expanded["health"] = !m.expanded["health"]
+		case "2":
+			m.expanded["workflows"] = !m.expanded["workflows"]
+		case "3":
+			m.expanded["workers"] = !m.expanded["workers"]
+		case "4":
+			m.expanded["routes"] = !m.expanded["routes"]
 		case "r":
 			return m, loadData(m.root)
 		case "t":
@@ -268,18 +291,21 @@ func (m Model) viewDashboard() string {
 			styleDim.Render(fmt.Sprintf("  ·  ↺ %s ago", ago)),
 		"",
 	)
-	infoLines = append(infoLines, m.renderHealthLines(infoW)...)
-	if len(m.workflowNames) > 0 {
-		infoLines = append(infoLines, "")
-		infoLines = append(infoLines, renderNameList(
-			styleDetailLabel.Render("workflows"), m.workflowNames, infoW,
-		)...)
-	}
-	if len(m.workerNames) > 0 {
-		infoLines = append(infoLines, renderNameList(
-			styleDetailLabel.Render("workers  "), m.workerNames, infoW,
-		)...)
-	}
+	infoLines = append(infoLines, m.sectionLines("health", "1 Health",
+		fmt.Sprintf("%d checks", len(m.healthItems)),
+		m.renderHealthLines(infoW))...)
+
+	infoLines = append(infoLines, m.sectionLines("workflows", "2 Workflows",
+		fmt.Sprintf("%d", len(m.workflowNames)),
+		renderNameList(infoW, m.workflowNames))...)
+
+	infoLines = append(infoLines, m.sectionLines("workers", "3 Workers",
+		fmt.Sprintf("%d", len(m.workerNames)),
+		renderNameList(infoW, m.workerNames))...)
+
+	infoLines = append(infoLines, m.sectionLines("routes", "4 Routes",
+		fmt.Sprintf("%d steps", len(m.routeChain)),
+		renderRouteChain(m.routeChain, infoW))...)
 
 	logoRendered := lipgloss.NewStyle().Foreground(lipgloss.Color(mauve)).Width(logoW).Render(logo)
 	infoCol := lipgloss.NewStyle().Width(infoW).Render(strings.Join(infoLines, "\n"))
@@ -309,6 +335,7 @@ func (m Model) viewDashboard() string {
 		helpItem("enter", "detail"),
 		helpItem("t", "attach"),
 		helpItem("a", "archived"),
+		helpItem("1-4", "expand/collapse"),
 		helpItem("r", "refresh"),
 		helpItem("q", "quit"),
 	}, "  ")
@@ -385,32 +412,96 @@ func (m Model) renderHealthLines(maxW int) []string {
 	return rows
 }
 
-// renderNameList renders a labelled list of names as wrapped lines.
-func renderNameList(label string, names []string, maxW int) []string {
+// sectionLines returns the header + optional content lines for a collapsible section.
+func (m Model) sectionLines(key, title, collapsedSummary string, content []string) []string {
+	expanded := m.expanded[key]
+	icon := styleHealthOK.Render("▼")
+	if !expanded {
+		icon = styleDim.Render("▶")
+	}
+	header := icon + "  " + styleSection.Render(title)
+	if !expanded {
+		if collapsedSummary != "" {
+			header += "  " + styleDim.Render(collapsedSummary)
+		}
+		return []string{"", header}
+	}
+	lines := []string{"", header}
+	for _, l := range content {
+		lines = append(lines, "   "+l)
+	}
+	return lines
+}
+
+// renderNameList wraps a list of names with · separators to fit maxW.
+func renderNameList(maxW int, names []string) []string {
 	sep := styleDivider.Render("  ·  ")
 	sepW := lipgloss.Width(sep)
-	labelW := lipgloss.Width(label)
-	indent := strings.Repeat(" ", labelW+2)
 
 	var rows []string
-	row := label + "  "
-	rowW := labelW + 2
+	row := ""
+	rowW := 0
 	for _, name := range names {
 		chip := styleSubtext.Render(name)
 		chipW := lipgloss.Width(chip)
-		if rowW > labelW+2 && rowW+sepW+chipW > maxW {
+		if rowW > 0 && rowW+sepW+chipW > maxW {
 			rows = append(rows, row)
-			row = indent
-			rowW = labelW + 2
+			row = ""
+			rowW = 0
 		}
-		if rowW > labelW+2 {
+		if rowW > 0 {
 			row += sep
 			rowW += sepW
 		}
 		row += chip
 		rowW += chipW
 	}
-	if rowW > labelW+2 {
+	if row != "" {
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// renderRouteChain renders the workflow pipeline with colored arrows.
+func renderRouteChain(chain []routeStep, maxW int) []string {
+	if len(chain) == 0 {
+		return nil
+	}
+	sep := styleDivider.Render("  ")
+	sepW := lipgloss.Width(sep)
+
+	var rows []string
+	row := ""
+	rowW := 0
+	for i, step := range chain {
+		chip := styleSubtext.Render(step.name)
+		chipW := lipgloss.Width(chip)
+
+		var arrow string
+		var arrowW int
+		if i < len(chain)-1 {
+			if chain[i].advance == "manual" {
+				arrow = sep + styleStatusWaiting.Render("→") + sep
+			} else {
+				arrow = sep + styleHealthOK.Render("→") + sep
+			}
+			arrowW = sepW*2 + 1
+		}
+
+		needed := chipW + arrowW
+		if rowW > 0 && rowW+needed > maxW {
+			rows = append(rows, row)
+			row = ""
+			rowW = 0
+		}
+		row += chip
+		rowW += chipW
+		if arrow != "" {
+			row += arrow
+			rowW += arrowW
+		}
+	}
+	if row != "" {
 		rows = append(rows, row)
 	}
 	return rows
@@ -611,15 +702,34 @@ func loadData(root string) tea.Cmd {
 		features := collectFeatures(root)
 		report := health.Run(root)
 
-		// workflow names
-		var wfNames []string
 		wfDir := filepath.Join(root, "workflows")
+
+		// workflow names (all dirs)
+		var wfNames []string
 		if entries, err := os.ReadDir(wfDir); err == nil {
 			for _, e := range entries {
 				if e.IsDir() {
 					wfNames = append(wfNames, e.Name())
 				}
 			}
+		}
+
+		// route chain — follow next_workflow links from intake
+		var chain []routeStep
+		seen := map[string]bool{}
+		cur := "intake"
+		for cur != "" && !seen[cur] {
+			seen[cur] = true
+			cfg, _ := workflow.Load(wfDir, cur)
+			advance := ""
+			if cfg != nil {
+				advance = cfg.Advance
+			}
+			chain = append(chain, routeStep{name: cur, advance: advance})
+			if cfg == nil {
+				break
+			}
+			cur = cfg.NextWorkflow
 		}
 
 		// worker names
@@ -638,6 +748,7 @@ func loadData(root string) tea.Cmd {
 			healthItems:   report.Results,
 			workflowNames: wfNames,
 			workerNames:   workerNames,
+			routeChain:    chain,
 		}
 	}
 }
