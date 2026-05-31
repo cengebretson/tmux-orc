@@ -44,6 +44,29 @@ const (
 // ── messages ─────────────────────────────────────────────────────
 
 type tickMsg time.Time
+type rainbowTickMsg struct{}
+
+const rainbowSteps = 48 // 4 cycles × 12 colors at 80ms each ≈ 3.8s
+
+var rainbowPalette = []string{
+	"#cba6f7", // mauve
+	"#f5c2e7", // pink
+	"#f2cdcd", // flamingo
+	"#f38ba8", // red
+	"#fab387", // peach
+	"#f9e2af", // yellow
+	"#a6e3a1", // green
+	"#94e2d5", // teal
+	"#89dceb", // sky
+	"#74c7ec", // sapphire
+	"#89b4fa", // blue
+	"#b4befe", // lavender
+}
+
+func rainbowTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(time.Time) tea.Msg { return rainbowTickMsg{} })
+}
+
 type dataMsg struct {
 	features        []*featureRow
 	healthItems     []health.Result
@@ -143,6 +166,10 @@ type Model struct {
 	searching bool
 
 	quote string
+
+	// easter egg: type "orc" on the dashboard to trigger rainbow logo
+	keyBuffer   [3]string
+	rainbowStep int // 0=off, counts down from rainbowSteps
 }
 
 type detailFile struct {
@@ -231,6 +258,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case rainbowTickMsg:
+		if m.rainbowStep > 0 {
+			m.rainbowStep--
+			if m.rainbowStep > 0 {
+				return m, rainbowTick()
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -259,6 +295,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				return m, cmd
 			}
+		}
+
+		// track last 3 keys for "orc" easter egg
+		m.keyBuffer[0] = m.keyBuffer[1]
+		m.keyBuffer[1] = m.keyBuffer[2]
+		m.keyBuffer[2] = msg.String()
+		if m.keyBuffer == [3]string{"o", "r", "c"} && m.rainbowStep == 0 {
+			m.rainbowStep = rainbowSteps
+			return m, rainbowTick()
 		}
 
 		switch msg.String() {
@@ -614,7 +659,13 @@ func (m Model) viewDashboard() string {
 			blocked++
 		}
 	}
-	headerTitle := styleHeader.Render("orc") + styleDim.Render("  workspace orchestrator")
+	orcLabel := styleHeader.Render("orc")
+	if m.rainbowStep > 0 {
+		idx := (rainbowSteps - m.rainbowStep) % len(rainbowPalette)
+		c := lipgloss.Color(rainbowPalette[idx])
+		orcLabel = lipgloss.NewStyle().Foreground(c).Bold(true).Render("orc")
+	}
+	headerTitle := orcLabel + styleDim.Render("  workspace orchestrator")
 	statsLine := "  " +
 		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features))) +
 		styleDim.Render("  ·  ") +
@@ -682,7 +733,13 @@ func (m Model) viewDashboard() string {
 		leftStr := left.String()
 		leftHeight := lipgloss.Height(leftStr)
 
-		logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Surface1))
+		logoColor := lipgloss.Color(activeTheme.Palette.Surface1)
+		if m.rainbowStep > 0 {
+			// offset by half the palette so logo and header title use different colors
+			idx := (rainbowSteps - m.rainbowStep + len(rainbowPalette)/2) % len(rainbowPalette)
+			logoColor = lipgloss.Color(rainbowPalette[idx])
+		}
+		logoStyle := lipgloss.NewStyle().Foreground(logoColor)
 		quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Overlay0)).Italic(true)
 
 		var rightLines []string
