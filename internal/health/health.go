@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
+	"github.com/cengebretson/orc/internal/workers"
 	"github.com/cengebretson/orc/internal/workflow"
 )
 
@@ -69,6 +70,8 @@ func Run(root string) *Report {
 
 	// orc.yaml (repos + workflows)
 	report.Results = append(report.Results, checkOrcConfig(root))
+	report.Results = append(report.Results, checkRepoPaths(root))
+	report.Results = append(report.Results, checkWorkflowRefs(root))
 	report.Results = append(report.Results, checkDirWithCount(root, "stages", "*.md", "stage"))
 
 	// optional dirs — note presence but don't fail if missing
@@ -225,4 +228,71 @@ func checkDirWithCount(root, dir, pattern, label string) Result {
 	default:
 		return Result{Name: dir + "/", Status: OK, Detail: fmt.Sprintf("%d %ss", len(matches), label)}
 	}
+}
+
+func checkRepoPaths(root string) Result {
+	cfg, err := config.Load(root)
+	if err != nil || len(cfg.Repos) == 0 {
+		return Result{Name: "repo paths", Status: Empty, Detail: "no repos to check"}
+	}
+	var missing []string
+	for _, r := range cfg.Repos {
+		p := r.Path
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(root, p)
+		}
+		if _, err := os.Stat(p); err != nil {
+			missing = append(missing, fmt.Sprintf("%s (%s)", r.Name, r.Path))
+		}
+	}
+	if len(missing) > 0 {
+		return Result{Name: "repo paths", Status: Missing, Detail: "not found: " + strings.Join(missing, ", ")}
+	}
+	return Result{Name: "repo paths", Status: OK, Detail: "all paths exist"}
+}
+
+func checkWorkflowRefs(root string) Result {
+	wfCfg, err := workflow.Load(root)
+	if err != nil || len(wfCfg.Names()) == 0 {
+		return Result{Name: "workflow refs", Status: Empty, Detail: "no workflows to check"}
+	}
+
+	// collect known worker IDs by parsing frontmatter
+	knownWorkers := map[string]bool{}
+	allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
+	for _, w := range allWorkers {
+		knownWorkers[w.ID] = true
+	}
+
+	stagesDir := filepath.Join(root, "stages")
+	var errs []string
+
+	for _, wfName := range wfCfg.Names() {
+		for _, stageName := range wfCfg.StageNames(wfName) {
+			sc, _ := wfCfg.StageConfig(wfName, stageName)
+
+			// check stage file exists
+			if _, err := os.Stat(filepath.Join(stagesDir, stageName+".md")); err != nil {
+				errs = append(errs, fmt.Sprintf("missing stage file: %s.md", stageName))
+			}
+			// check worker exists
+			if sc.Worker != "" && !knownWorkers[sc.Worker] {
+				errs = append(errs, fmt.Sprintf("unknown worker: %s (stage: %s)", sc.Worker, stageName))
+			}
+		}
+	}
+	// check repair stage refs too
+	for rsName, rs := range wfCfg.RepairStages {
+		if _, err := os.Stat(filepath.Join(stagesDir, rsName+".md")); err != nil {
+			errs = append(errs, fmt.Sprintf("missing stage file: %s.md", rsName))
+		}
+		if rs.Worker != "" && !knownWorkers[rs.Worker] {
+			errs = append(errs, fmt.Sprintf("unknown worker: %s (repair stage: %s)", rs.Worker, rsName))
+		}
+	}
+
+	if len(errs) > 0 {
+		return Result{Name: "workflow refs", Status: Missing, Detail: strings.Join(errs, "  ·  ")}
+	}
+	return Result{Name: "workflow refs", Status: OK, Detail: "all workers and stages exist"}
 }

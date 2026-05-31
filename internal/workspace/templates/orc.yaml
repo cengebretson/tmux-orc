@@ -19,7 +19,7 @@ workflows:
         worker: bob-developer
         advance: manual
       - name: code-review
-        worker: zach-reviewer
+        worker: bob-developer
         advance: auto
       - name: pr-open
         worker: bob-developer
