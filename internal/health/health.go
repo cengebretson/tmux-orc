@@ -69,14 +69,11 @@ func Run(root string) *Report {
 	// workflows/
 	report.Results = append(report.Results, checkDirWithCount(root, "workflows", "*/WORKFLOW.md", "workflow"))
 
-	// required workflows
-	report.Results = append(report.Results, checkFile(filepath.Join(root, "workflows", "intake"), "WORKFLOW.md"))
-
-	// per-workflow frontmatter details
+	// per-workflow frontmatter details (sub-items, shown by orc health CLI)
 	report.Results = append(report.Results, checkWorkflowDetails(root)...)
 
 	// optional dirs — note presence but don't fail if missing
-	for _, d := range []string{"worktrees", "projects", "user-overrides"} {
+	for _, d := range []string{"worktrees", "user-overrides"} {
 		report.Results = append(report.Results, checkOptionalDir(root, d))
 	}
 

@@ -348,9 +348,13 @@ func drawBox(title string, lines []string, outerW int) string {
 }
 
 // renderHealthLines returns health items as wrapped rows, fitting within maxW.
+// Sub-items (indented names from per-workflow detail checks) are skipped.
 func (m Model) renderHealthLines(maxW int) []string {
 	var parts []string
 	for _, item := range m.healthItems {
+		if strings.HasPrefix(item.Name, " ") {
+			continue // skip sub-items (workflow detail rows)
+		}
 		var s lipgloss.Style
 		switch item.Status {
 		case health.OK:
