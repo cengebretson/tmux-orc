@@ -141,8 +141,7 @@ var (
 
 	// Help bar
 	styleHelp = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(overlay0)).
-			MarginTop(1)
+			Foreground(lipgloss.Color(overlay0))
 
 	styleHelpKey = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(subtext1))
