@@ -31,6 +31,13 @@ The workspace is the source of truth. Agents read it to know what to do next.
 what command to use. Policy lives in `RULES.md`, `AGENTS.md`, and worker
 definitions — not in code.
 
+The quality of the system depends on the quality of the workflow docs. A
+well-written `WORKFLOW.md` has clear exit criteria, explicit output definitions,
+unambiguous signals agents can read (like a `verdict:` line), and exact commands
+for every outcome. The sample workflows are a starting point — tune them to your
+stack, your review standards, and your team's process. They're just markdown files:
+edit one and the next agent session picks up the new instructions immediately.
+
 Works equally well with **Claude** and **Codex**. Every decision that could
 couple the workspace to a single agent product is avoided by design.
 

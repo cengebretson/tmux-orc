@@ -74,6 +74,26 @@ requires it. Record the active worktree path in `features/<ticket-slug>/STATE.ya
 
 ---
 
+## Workflow Quality
+
+The workflows in `workflows/` are the intelligence of the system — they define
+what agents do, when they're done, and how they hand off to the next step.
+
+A workflow doc should have:
+- **Clear exit criteria** — the agent knows exactly when it's done
+- **Explicit output definitions** — which files get written and where
+- **Unambiguous signals** — structured fields like `verdict:` that downstream
+  workflows can read without interpretation
+- **Exact commands** — `orc advance`, `orc wait`, or `orc block` for every outcome,
+  with no ambiguity about which to use
+
+The sample workflows are a starting point. Tune them to your stack, review
+standards, and team process. They are plain markdown files — edit one and the
+next agent session picks up the new instructions immediately. No deploys, no
+code changes required.
+
+---
+
 ## Cost-Aware Worker Selection
 
 Prefer the lowest-cost worker that is allowed for the workflow/stage and capable of the task.
