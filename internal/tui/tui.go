@@ -6,22 +6,22 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"sort"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/workers"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 	"gopkg.in/yaml.v3"
 )
 
@@ -70,11 +70,10 @@ type repairLoop struct {
 }
 
 type workflowChain struct {
-	name   string
-	steps  []routeStep
-	loops  []repairLoop
+	name  string
+	steps []routeStep
+	loops []repairLoop
 }
-
 
 type sectionItem struct {
 	label string
@@ -146,9 +145,9 @@ func New(root string) Model {
 	ti.CharLimit = 64
 
 	return Model{
-		root:        root,
-		lastRefresh: time.Now(),
-		focusedPane: "features",
+		root:         root,
+		lastRefresh:  time.Now(),
+		focusedPane:  "features",
 		sectionItems: map[string][]sectionItem{},
 		expanded: map[string]bool{
 			"health":    false,
@@ -710,7 +709,7 @@ func (m Model) viewDashboard() string {
 			helpItem("tab", "focus sections"),
 			helpItem("t", "attach"),
 			helpItem("1-4", "expand/collapse"),
-	
+
 			helpItem("q", "quit"),
 		)
 		b.WriteString(styleHelp.Render(" " + strings.Join(helpItems, "  ")))
@@ -843,7 +842,7 @@ func (m Model) sectionBox(key, keyStr, name, summary string, content []string, o
 	if !m.expanded[key] {
 		label := " " + title
 		if summary != "" {
-			label += styleDim.Render("  "+summary)
+			label += styleDim.Render("  " + summary)
 		}
 		label += " "
 		labelW := lipgloss.Width(label)

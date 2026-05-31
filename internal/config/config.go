@@ -43,10 +43,10 @@ type RepairStageDef struct {
 }
 
 type Config struct {
-	Repos        []Repo                      `yaml:"repos"`
-	Settings     Settings                    `yaml:"settings"`
-	Workflows    map[string]WorkflowDef      `yaml:"workflows"`
-	RepairStages map[string]RepairStageDef   `yaml:"repair_stages"`
+	Repos        []Repo                    `yaml:"repos"`
+	Settings     Settings                  `yaml:"settings"`
+	Workflows    map[string]WorkflowDef    `yaml:"workflows"`
+	RepairStages map[string]RepairStageDef `yaml:"repair_stages"`
 }
 
 // DefaultWorkflow returns the configured default workflow name, falling back to "default".

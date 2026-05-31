@@ -73,9 +73,9 @@ type NextAction struct {
 }
 
 type HistoryEntry struct {
-	At    string `yaml:"at"`
-	Stage string `yaml:"stage"`
-	Owner string `yaml:"owner"`
+	At     string `yaml:"at"`
+	Stage  string `yaml:"stage"`
+	Owner  string `yaml:"owner"`
 	Result string `yaml:"result"`
 }
 
@@ -110,7 +110,7 @@ func Start(featureDir string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:   s.Stage.Name,
+		Stage:  s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: "started",
 	})
@@ -139,7 +139,7 @@ func WaitForHuman(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:   s.Stage.Name,
+		Stage:  s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: "waiting_for_human — " + reason,
 	})
@@ -171,7 +171,7 @@ func Block(featureDir, reason string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:   s.Stage.Name,
+		Stage:  s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: "blocked — " + reason,
 	})
@@ -203,7 +203,7 @@ func Advance(featureDir, stageName, owner, result string) error {
 
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
-		Stage:   s.Stage.Name,
+		Stage:  s.Stage.Name,
 		Owner:  s.Stage.Owner,
 		Result: result,
 	})

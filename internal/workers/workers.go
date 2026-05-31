@@ -21,7 +21,7 @@ type Worker struct {
 	CostTier        string `yaml:"cost_tier"`
 
 	DefaultTmuxWindow string `yaml:"default_tmux_window"`
-	LaunchMode        string   `yaml:"launch_mode"`
+	LaunchMode        string `yaml:"launch_mode"`
 }
 
 // Load parses all worker markdown files in the given directory.
@@ -128,5 +128,3 @@ func extractFrontmatter(content string) (string, error) {
 	}
 	return strings.TrimSpace(rest[:end]), nil
 }
-
-

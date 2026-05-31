@@ -30,9 +30,9 @@ func (s Status) String() string {
 }
 
 type Result struct {
-	Name    string
-	Status  Status
-	Detail  string
+	Name   string
+	Status Status
+	Detail string
 }
 
 type Report struct {
@@ -135,7 +135,6 @@ func checkFile(root, name string) Result {
 	return Result{Name: name, Status: Missing, Detail: "missing — run `orc init`"}
 }
 
-
 func checkFeatures(root string) Result {
 	path := filepath.Join(root, "features")
 	info, err := os.Stat(path)
@@ -201,7 +200,6 @@ func checkOrcConfig(root string) Result {
 	}
 	return Result{Name: config.Filename, Status: OK, Detail: detail}
 }
-
 
 func checkDirWithCount(root, dir, pattern, label string) Result {
 	path := filepath.Join(root, dir)

@@ -13,9 +13,9 @@ import (
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/resume"
 	"github.com/cengebretson/orc/internal/state"
-	"github.com/cengebretson/orc/internal/validate"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/tui"
+	"github.com/cengebretson/orc/internal/validate"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/cengebretson/orc/internal/workspace"
 	"github.com/spf13/cobra"
@@ -1220,7 +1220,6 @@ func printJSON(v any) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }
-
 
 func resolveRoot(path string) (string, error) {
 	if path == "." {

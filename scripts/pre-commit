@@ -8,6 +8,13 @@ if ! git diff --quiet go.mod go.sum; then
   exit 1
 fi
 
+echo "→ fmt"
+gofmt -l -w ./cmd ./internal
+if ! git diff --quiet; then
+  echo "gofmt reformatted files — stage the changes and re-commit"
+  exit 1
+fi
+
 echo "→ lint"
 golangci-lint run ./...
 

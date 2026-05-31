@@ -1,4 +1,4 @@
-.PHONY: build install clean test lint tidy check
+.PHONY: build install clean test lint tidy fmt check
 
 build:
 	go build -o orc ./cmd/orc/...
@@ -17,5 +17,8 @@ lint:
 
 tidy:
 	go mod tidy
+
+fmt:
+	gofmt -l -w ./cmd ./internal
 
 check: lint test

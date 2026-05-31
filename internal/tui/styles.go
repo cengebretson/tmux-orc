@@ -22,9 +22,9 @@ const logo = `⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀⠀⠀
 
 // Catppuccin Mocha palette
 const (
-	crust   = "#11111b"
-	mantle  = "#181825"
-	base    = "#1e1e2e"
+	crust    = "#11111b"
+	mantle   = "#181825"
+	base     = "#1e1e2e"
 	surface0 = "#313244"
 	surface1 = "#45475a"
 	surface2 = "#585b70"
@@ -138,14 +138,13 @@ var (
 			Foreground(lipgloss.Color(subtext1))
 
 	// Tmux status
-	styleTmuxLive    = lipgloss.NewStyle().Foreground(lipgloss.Color(green))
-	styleTmuxDead    = lipgloss.NewStyle().Foreground(lipgloss.Color(red))
-	styleTmuxNone    = lipgloss.NewStyle().Foreground(lipgloss.Color(overlay0))
+	styleTmuxLive = lipgloss.NewStyle().Foreground(lipgloss.Color(green))
+	styleTmuxDead = lipgloss.NewStyle().Foreground(lipgloss.Color(red))
+	styleTmuxNone = lipgloss.NewStyle().Foreground(lipgloss.Color(overlay0))
 
 	// Border/divider
 	styleDivider = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(surface1))
-
 )
 
 func statusStyle(status string) lipgloss.Style {

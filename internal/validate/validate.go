@@ -51,10 +51,10 @@ func (r *Report) OK() bool {
 	return true
 }
 
-func ok(name string) Check        { return Check{Name: name, Status: OK} }
-func okd(name, d string) Check    { return Check{Name: name, Status: OK, Detail: d} }
-func warn(name, d string) Check   { return Check{Name: name, Status: Warning, Detail: d} }
-func fail(name, d string) Check   { return Check{Name: name, Status: Fail, Detail: d} }
+func ok(name string) Check      { return Check{Name: name, Status: OK} }
+func okd(name, d string) Check  { return Check{Name: name, Status: OK, Detail: d} }
+func warn(name, d string) Check { return Check{Name: name, Status: Warning, Detail: d} }
+func fail(name, d string) Check { return Check{Name: name, Status: Fail, Detail: d} }
 
 // Run validates a ticket's STATE.yaml against the workspace.
 func Run(root, featureDir string) *Report {
