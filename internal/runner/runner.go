@@ -84,6 +84,13 @@ func resolveWorkflow(cfg *config.Config, ticketWorkflow string) (string, error) 
 	if name == "" {
 		name = cfg.DefaultWorkflow()
 	}
+	if name == "" {
+		known := cfg.Names()
+		if len(known) > 0 {
+			return "", fmt.Errorf("no default_workflow set in orc.yaml (available: %s)", strings.Join(known, ", "))
+		}
+		return "", fmt.Errorf("no default_workflow set in orc.yaml")
+	}
 	if _, ok := cfg.Workflows[name]; !ok {
 		known := cfg.Names()
 		if len(known) > 0 {

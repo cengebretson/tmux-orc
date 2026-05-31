@@ -11,6 +11,7 @@
 #   theme: catppuccin-mocha       # TUI color theme (default: catppuccin-mocha)
 
 settings:
+  default_workflow: default
   quotes:
     - "Mmm... human burgers!"
     - "Do we get fries with that?"

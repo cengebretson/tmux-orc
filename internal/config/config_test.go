@@ -15,10 +15,10 @@ func writeOrcYAML(t *testing.T, dir, content string) {
 	}
 }
 
-func TestDefaultWorkflow_FallsBackToDefault(t *testing.T) {
+func TestDefaultWorkflow_ReturnsEmptyWhenNotSet(t *testing.T) {
 	cfg := &config.Config{}
-	if got := cfg.DefaultWorkflow(); got != "default" {
-		t.Errorf("DefaultWorkflow() = %q, want \"default\"", got)
+	if got := cfg.DefaultWorkflow(); got != "" {
+		t.Errorf("DefaultWorkflow() = %q, want \"\"", got)
 	}
 }
 
@@ -61,8 +61,8 @@ func TestLoad_MissingFile_ReturnsEmptyConfig(t *testing.T) {
 	if len(cfg.Repos) != 0 {
 		t.Errorf("expected empty repos, got %d", len(cfg.Repos))
 	}
-	if cfg.DefaultWorkflow() != "default" {
-		t.Errorf("DefaultWorkflow() = %q, want \"default\"", cfg.DefaultWorkflow())
+	if cfg.DefaultWorkflow() != "" {
+		t.Errorf("DefaultWorkflow() = %q, want \"\"", cfg.DefaultWorkflow())
 	}
 	if len(cfg.Names()) != 0 {
 		t.Errorf("expected no workflows, got %d", len(cfg.Names()))

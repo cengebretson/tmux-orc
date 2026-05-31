@@ -61,12 +61,9 @@ func (c *Config) TuiRefreshInterval() time.Duration {
 	return 60 * time.Second
 }
 
-// DefaultWorkflow returns the configured default workflow name, falling back to "default".
+// DefaultWorkflow returns the configured default workflow name, or "" if not set.
 func (c *Config) DefaultWorkflow() string {
-	if c.Settings.DefaultWorkflow != "" {
-		return c.Settings.DefaultWorkflow
-	}
-	return "default"
+	return c.Settings.DefaultWorkflow
 }
 
 // Names returns all workflow names, sorted.

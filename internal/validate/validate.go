@@ -82,6 +82,15 @@ func Run(root, featureDir string) *Report {
 	if pname == "" {
 		pname = cfg.DefaultWorkflow()
 	}
+	if pname == "" {
+		known := cfg.Names()
+		detail := "no default_workflow set in orc.yaml"
+		if len(known) > 0 {
+			detail += fmt.Sprintf(" (available: %s)", strings.Join(known, ", "))
+		}
+		r.Checks = append(r.Checks, fail("workflow", detail))
+		return r
+	}
 	if _, ok := cfg.Workflows[pname]; !ok {
 		known := cfg.Names()
 		detail := fmt.Sprintf("%q not found in orc.yaml", pname)

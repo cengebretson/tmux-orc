@@ -1124,16 +1124,16 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	return tmux.Attach(s.Slug + ":" + s.Stage.Name)
 }
 
-// resolveWorkflow returns the ticket's workflow name, using the workspace default if unset.
+// resolveWorkflow returns the ticket's workflow name for display purposes.
 func resolveWorkflow(root, ticketWorkflow string) string {
 	if ticketWorkflow != "" {
 		return ticketWorkflow
 	}
 	cfg, _ := config.Load(root)
-	if cfg != nil {
-		return cfg.DefaultWorkflow()
+	if cfg != nil && cfg.Settings.DefaultWorkflow != "" {
+		return cfg.Settings.DefaultWorkflow
 	}
-	return "default"
+	return ""
 }
 
 // stageNamesForTicket returns the ordered stage names for the ticket's workflow pipeline.
