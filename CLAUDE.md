@@ -125,6 +125,7 @@ Ideas worth revisiting when the core is stable.
 | Idea | Notes |
 |------|-------|
 | Resume prompt | When a session ends mid-stage without advancing, generate a recovery prompt summarizing what was done so far — reads existing output files, STATE.yaml history, and DECISIONS.md to reconstruct context for the next agent. Could live in `orc next` output or a dedicated `orc resume <ticket>` command. `next_action.prompt` in STATE.yaml is the natural place to write it. |
+| Agent session completion notification | Notify the human when an agent finishes a stage — e.g. terminal bell, tmux alert, or a push notification via a configured webhook. Most useful in `--tmux` mode where the session runs unattended. |
 
 ### Deliberate divergences from original design
 
