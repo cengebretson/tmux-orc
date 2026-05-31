@@ -42,15 +42,7 @@ Do not re-run sections already marked complete.
 > What system do you use for tickets or stories?
 > (1) Jira  (2) GitHub Issues  (3) Linear  (4) Local markdown files  (5) None / manual
 
-**Then update `stages/intake.md`:**
-- Remove the option blocks that do not apply, keep only the chosen one
-- If Jira: ask for the project key, fill it in
-- If GitHub Issues: ask for the repo (owner/name), fill it in
-- If Linear: ask for the team key, fill it in
-- If local files: ask for the folder path, fill it in
-- If manual: update the workflow to say the human fills in TICKET.md by hand
-
-**Also update `ROUTER.md`:**
+**Update `ROUTER.md`:**
 - Fill in the Ticket System section with the chosen system, project/team key,
   the exact command to retrieve a ticket by ID, and any auth requirements
 
