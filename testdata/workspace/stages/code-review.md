@@ -1,4 +1,4 @@
-# Workflow: code-review
+# Stage: code-review
 
 > Before starting: read `ORC.md` for state update rules and error handling.
 
@@ -11,7 +11,7 @@ a PR is opened. Automatically loops back to `develop` when changes are needed, u
 ## Cycle Counting
 
 Before reviewing, count how many times `code-review` appears in `STATE.yaml` history
-(entries where `workflow: code-review`). This is the current cycle number.
+(entries where `stage: code-review`). This is the current cycle number.
 
 - Cycle 1–2: if changes needed, route back to `develop` automatically
 - Cycle 3: if still not approved, call `orc wait` — a human must resolve
@@ -19,40 +19,39 @@ Before reviewing, count how many times `code-review` appears in `STATE.yaml` his
 ## Steps
 
 **Owner:** zach-reviewer agent  
-**Inputs:** feature branch code in worktree, `PLAN.md`, `SPEC.md`, `impl/QA_HANDOFF.md`,  
-`impl/REVIEW.md` (from prior cycles)  
-**Outputs:** `impl/REVIEW.md` (overwrite with updated findings)
+**Inputs:** feature branch code in worktree, `PLAN.md`, `SPEC.md`, `develop/HANDOFF.md`,  
+`code-review/REVIEW.md` (from prior cycles)  
+**Outputs:** `code-review/REVIEW.md` (overwrite with updated findings)
 
 1. Read `SPEC.md` and `PLAN.md` to understand the intended design.
-2. Read `impl/QA_HANDOFF.md` for the implementation summary and known risks.
-3. If a prior `impl/REVIEW.md` exists, read it to understand what was previously flagged.
+2. Read `develop/HANDOFF.md` for the implementation summary and known risks.
+3. If a prior `code-review/REVIEW.md` exists, read it to understand what was previously flagged.
 4. Review the code changes in the worktree (`git diff main` or the feature branch).
 5. Check for: correctness, spec compliance, edge cases, security issues, test coverage.
-6. Write `impl/REVIEW.md` with findings using tags: `[bug]` `[spec]` `[style]` `[risk]` `[minor]`
+6. Write `code-review/REVIEW.md` with findings using tags: `[bug]` `[spec]` `[style]` `[risk]` `[minor]`
 7. Set the verdict line: `**verdict: approved**`, `**verdict: needs-changes**`, or `**verdict: blocked**`.
-   Valid values are defined in `impl/REVIEW.md` — do not use custom verdicts.
+   Valid values are defined in `code-review/REVIEW.md` — do not use custom verdicts.
 
 ## Exit Criteria
 
-`impl/REVIEW.md` is written with a clear verdict.
+`code-review/REVIEW.md` is written with a clear verdict.
 
 **If approved** — run:
 ```
-orc advance <ticket> --workflow pr-open --owner <worker-id> --result "Code review passed"
+orc advance <ticket> --stage pr-open --owner <worker-id> --result "Code review passed"
 ```
 
 **If needs-changes, cycle 1 or 2** — run:
 ```
-orc advance <ticket> --workflow develop --owner <worker-id> --result "Review cycle <N>: changes needed — see impl/REVIEW.md"
+orc advance <ticket> --stage develop --owner <worker-id> --result "Review cycle <N>: changes needed — see code-review/REVIEW.md"
 ```
 
 **If needs-changes, cycle 3** — run:
 ```
-orc wait <ticket> "3 review cycles failed — see impl/REVIEW.md for unresolved findings"
+orc wait <ticket> "3 review cycles failed — see code-review/REVIEW.md for unresolved findings"
 ```
 
 **If blocked** (design issue, spec conflict, missing requirement) — run:
 ```
 orc wait <ticket> "Review blocked — <reason>. Human decision required before continuing."
 ```
-

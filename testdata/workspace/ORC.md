@@ -57,9 +57,27 @@ Also update `stage.name`, `stage.owner`, `next_action`, and `repos` whenever tho
 
 ---
 
+## Feature Folder
+
+Every ticket has a context pack at `features/<ticket-slug>/`:
+
+| File | Purpose |
+|------|---------|
+| `STATE.yaml` | Durable state — status, stage, owner, next action, history |
+| `TICKET.md` | Ticket description and acceptance criteria |
+| `SPEC.md` | Context, scope, constraints, open questions |
+| `PLAN.md` | Implementation approach and steps |
+| `DECISIONS.md` | Non-obvious choices — what, why, alternatives rejected |
+
+Read `STATE.yaml` and `TICKET.md` at the start of every session. Read `SPEC.md` and `PLAN.md` before any implementation work.
+
+---
+
 ## Stage Handoff
 
-The feature folder is the handoff medium. Read previous stage outputs before starting work. If a required input is missing, `orc wait` — do not proceed.
+The feature folder is the handoff medium between stages. Read previous stage outputs before starting work. If a required input is missing, `orc wait` — do not proceed.
+
+Each stage writes its outputs to a subfolder matching its name: `<stage-name>/`. This makes provenance unambiguous — if you need to find what `develop` produced, look in `develop/`.
 
 | Path | Written by | Read by |
 |------|-----------|---------|
@@ -67,12 +85,12 @@ The feature folder is the handoff medium. Read previous stage outputs before sta
 | `SPEC.md` | intake | develop, code-review |
 | `PLAN.md` | intake | develop |
 | `DECISIONS.md` | any stage | any stage |
-| `impl/QA_HANDOFF.md` | develop | qa-automation |
-| `impl/PR.md` | pr-open | qa-automation, human |
-| `impl/REVIEW.md` | code-review | develop |
-| `qa/QA_PLAN.md` | qa-automation | qa-automation (next session) |
-| `qa/RUNS.md` | qa-automation | qa-automation, human |
-| `qa/QA_RESULT.md` | qa-automation | human, archive |
+| `develop/HANDOFF.md` | develop | code-review, pr-open, qa-automation |
+| `code-review/REVIEW.md` | code-review | develop, pr-open |
+| `pr-open/PR.md` | pr-open | pr-repair, qa-automation, human |
+| `qa-automation/PLAN.md` | qa-automation | qa-automation (next session) |
+| `qa-automation/RUNS.md` | qa-automation | qa-automation, human |
+| `qa-automation/RESULT.md` | qa-automation | human, archive |
 
 ---
 

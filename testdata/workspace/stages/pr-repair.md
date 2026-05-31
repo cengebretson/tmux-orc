@@ -1,4 +1,4 @@
-# Workflow: pr-repair
+# Stage: pr-repair
 
 > Before starting: read `ORC.md` for state update rules and error handling.
 
@@ -6,26 +6,18 @@
 
 Repair a PR that has CI failures, review feedback, or merge conflicts.
 
-## Stages
+## Steps
 
-```
-pr_repair → (back to previous workflow stage)
-```
+**Owner:** developer agent  
+**Inputs:** `pr-open/PR.md`, CI output, review comments  
+**Outputs:** Fixed commits, updated `pr-open/PR.md`
 
-### pr_repair
-
-**Owner:** bob-developer (or bob-fast-fixer for small fixes)  
-**Inputs:** `impl/PR.md`, CI output, review comments  
-**Outputs:** Fixed commits, updated `impl/PR.md`
-
-Steps:
-1. Read `impl/PR.md` for PR URL and current status.
+1. Read `pr-open/PR.md` for PR URL and current status.
 2. Identify the failure: CI, review feedback, or conflict.
 3. Apply fixes in the app worktree.
 4. Run local validation for the changed files.
 5. Push fixes and check CI.
-6. Update `impl/PR.md` with new status.
-7. Update `STATE.yaml` — if repaired, advance back to the previous stage; if blocked, set `status: blocked`.
+6. Update `pr-open/PR.md` with new status.
 
 ## Cost Note
 
@@ -35,3 +27,13 @@ for test failures or logic issues. Escalate to ada-architect only for design-lev
 ## Exit Criteria
 
 CI is green and all blocking review comments are resolved.
+
+When done, run:
+```
+orc advance <ticket> --stage pr-open --owner <worker-id> --result "PR repaired — CI green"
+```
+
+If the issue cannot be resolved:
+```
+orc block <ticket> "<what is blocking and what a human needs to decide>"
+```

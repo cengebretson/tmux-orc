@@ -52,7 +52,7 @@ No ticketing system. The human fills in `TICKET.md` by hand before running
 
 When done, run:
 ```
-orc advance <ticket> --workflow develop --owner <worker-id> --result "Intake complete"
+orc advance <ticket> --stage develop --owner <worker-id> --result "Intake complete"
 ```
 
 ## Error Handling

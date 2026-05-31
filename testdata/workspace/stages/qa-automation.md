@@ -1,38 +1,36 @@
-# Workflow: qa-automation
+# Stage: qa-automation
 
 > Before starting: read `ORC.md` for state update rules and error handling.
 
 ## Purpose
 
-Implement Playwright (or other) test automation from an existing QA plan.
-Use this when the QA plan already exists and only implementation is needed.
+Plan and implement automated tests for a completed feature, then collect evidence.
+Runs after the PR has been reviewed and the `pr-open` stage hands off here.
 
-## Stages
+## Steps
 
-```
-qa_implementation → evidence
-```
+**Owner:** documentor agent  
+**Inputs:** `develop/HANDOFF.md`, `TICKET.md`, QA repo worktree  
+**Outputs:** `qa-automation/SOURCE_CONTEXT.md`, `qa-automation/PLAN.md`, `qa-automation/RUNS.md`, `qa-automation/RESULT.md`
 
-### qa_implementation
+**QA Planning**
+1. Read `develop/HANDOFF.md` and `TICKET.md`.
+2. Write `qa-automation/SOURCE_CONTEXT.md` with repo context the QA agent will need.
+3. Draft `qa-automation/PLAN.md` with test cases, coverage goals, and tooling notes.
 
-**Owner:** bob-developer  
-**Inputs:** `qa/QA_PLAN.md`, `qa/SOURCE_CONTEXT.md`, QA repo worktree  
-**Outputs:** Tests committed, `qa/RUNS.md` updated
+**Implementation**
+4. Read `qa-automation/PLAN.md` and `qa-automation/SOURCE_CONTEXT.md`.
+5. Implement test cases in the QA repo worktree.
+6. Run tests and record results in `qa-automation/RUNS.md`.
+7. Push and confirm CI passes.
 
-Steps:
-1. Read `qa/QA_PLAN.md` and `qa/SOURCE_CONTEXT.md`.
-2. Implement test cases in the QA repo worktree.
-3. Run tests locally or against staging.
-4. Record result in `qa/RUNS.md`.
-5. Open a PR in the QA repo.
-6. Update `STATE.yaml` to `evidence`.
-
-### evidence
-
-**Owner:** human or fred-documentor  
-**Inputs:** `qa/RUNS.md`, CI artifacts  
-**Outputs:** `qa/QA_RESULT.md`, Jira comment
+**Evidence**
+8. Read `qa-automation/RUNS.md` and CI results.
+9. Write `qa-automation/RESULT.md` with pass/fail summary and coverage notes.
+10. Update the ticket in the source system (see `TOOLS.md` for the MCP server to use).
+11. Run `orc archive <ticket>` to close out the feature.
 
 ## Exit Criteria
 
-`qa/QA_RESULT.md` is complete and Jira is updated with evidence.
+`qa-automation/RESULT.md` is complete with passing status, ticket is updated, and
+`orc archive` has been run.
