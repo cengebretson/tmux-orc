@@ -665,9 +665,35 @@ func runShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Stage")
-	fmt.Printf("  Workflow:  %s\n", resolveWorkflow(root, s.Workflow))
+	pname := resolveWorkflow(root, s.Workflow)
+	fmt.Printf("  Workflow:  %s\n", pname)
 	fmt.Printf("  Name:      %s\n", s.Stage.Name)
 	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
+	if wfCfg, err := config.Load(root); err == nil {
+		if next := wfCfg.NextStage(pname, s.Stage.Name); next != "" {
+			sc, _ := wfCfg.StageConfig(pname, next)
+			advance := sc.Advance
+			if advance == "" {
+				advance = "auto"
+			}
+			fmt.Printf("  Next:      %s  (%s)\n", next, advance)
+		}
+	}
+
+	if len(s.Repos) > 0 {
+		fmt.Println()
+		fmt.Println("Repos")
+		for name, r := range s.Repos {
+			fmt.Printf("  %s\n", name)
+			if r.Main != "" {
+				fmt.Printf("    main:     %s\n", r.Main)
+			}
+			if r.Worktree != "" {
+				fmt.Printf("    worktree: %s\n", r.Worktree)
+				fmt.Printf("    branch:   %s\n", r.Branch)
+			}
+		}
+	}
 
 	if len(s.Inputs.Ready)+len(s.Inputs.Required)+len(s.Inputs.Completed) > 0 {
 		fmt.Println()
@@ -700,16 +726,23 @@ func runShow(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Next")
 	switch s.Status {
-	case "waiting_for_human":
-		fmt.Printf("  Waiting: %s\n", s.NextAction.Prompt)
-		fmt.Println("  Run `orc next` after resolving to continue.")
-	case "blocked":
-		fmt.Printf("  Blocked: %s\n", s.NextAction.Prompt)
+	case "waiting_for_human", "blocked":
+		label := "Waiting"
+		if s.Status == "blocked" {
+			label = "Blocked"
+		}
+		reason := ""
+		if len(s.History) > 0 {
+			reason = s.History[len(s.History)-1].Result
+		}
+		if reason == "" {
+			reason = s.NextAction.Prompt
+		}
+		fmt.Printf("  %s: %s\n", label, reason)
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	default:
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
 		wfCfg, _ := config.Load(root)
-		pname := resolveWorkflow(root, s.Workflow)
 		sc, _ := wfCfg.StageConfig(pname, s.Stage.Name)
 		workerID := s.Stage.Owner
 		if workerID == "" {
