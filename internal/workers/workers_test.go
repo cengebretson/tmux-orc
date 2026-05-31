@@ -36,8 +36,8 @@ func TestLoad_ParsesFrontmatter(t *testing.T) {
 	if bob.Product != "codex" {
 		t.Errorf("product = %q, want codex", bob.Product)
 	}
-	if bob.CostTier != "medium" {
-		t.Errorf("cost_tier = %q, want medium", bob.CostTier)
+	if bob.ServiceTier != "medium" {
+		t.Errorf("service_tier = %q, want medium", bob.ServiceTier)
 	}
 }
 

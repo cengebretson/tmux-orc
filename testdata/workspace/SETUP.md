@@ -114,7 +114,7 @@ id: intake-agent-claude
 name: Intake Agent (Claude)
 product: claude
 model: <chosen model>
-cost_tier: <low/medium/high>
+service_tier: <low/medium/high>
 workflows:
   - intake
 stages:
@@ -153,7 +153,7 @@ id: intake-agent-codex
 name: Intake Agent (Codex)
 product: codex
 model: <chosen model or omit for default>
-cost_tier: <low/medium/high>
+service_tier: <low/medium/high>
 workflows:
   - intake
 stages:

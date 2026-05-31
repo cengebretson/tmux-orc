@@ -4,7 +4,7 @@ name: Zach the Reviewer
 product: claude
 kind: agent
 model: claude-sonnet-4-6
-cost_tier: medium
+service_tier: medium
 launch_mode: foreground
 ---
 

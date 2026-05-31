@@ -5,7 +5,7 @@ product: codex
 kind: agent
 model: gpt-5.5
 reasoning_effort: high
-cost_tier: medium
+service_tier: medium
 default_tmux_window: app-codex
 launch_mode: foreground
 ---

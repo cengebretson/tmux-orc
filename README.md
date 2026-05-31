@@ -390,7 +390,7 @@ id: bob-developer
 name: Bob the Developer
 product: codex
 model: gpt-5.5
-cost_tier: medium
+service_tier: medium
 launch_mode: foreground
 ---
 

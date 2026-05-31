@@ -1613,7 +1613,7 @@ func renderWorkerFile(path string, width int) (string, error) {
 		add("id", w.ID)
 		add("product", w.Product)
 		add("model", w.Model)
-		add("cost tier", w.CostTier)
+		add("cost tier", w.ServiceTier)
 		add("reasoning", w.ReasoningEffort)
 		add("launch mode", w.LaunchMode)
 		// Measure label column width.

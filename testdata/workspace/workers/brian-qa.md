@@ -4,7 +4,7 @@ name: Brian QA
 product: claude
 kind: agent
 model: claude-sonnet-4-6
-cost_tier: medium
+service_tier: medium
 default_tmux_window: claude
 launch_mode: foreground
 ---
