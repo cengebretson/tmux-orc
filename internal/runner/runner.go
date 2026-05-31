@@ -3,6 +3,7 @@ package runner
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
@@ -41,7 +42,10 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 		return nil, fmt.Errorf("loading workers: %w", err)
 	}
 
-	workflow := resolveWorkflow(cfg, s.Workflow)
+	workflow, err := resolveWorkflow(cfg, s.Workflow)
+	if err != nil {
+		return nil, err
+	}
 	stageCfg, _ := cfg.StageConfig(workflow, s.Stage.Name)
 	nextStage := cfg.NextStage(workflow, s.Stage.Name)
 
@@ -69,16 +73,25 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 }
 
 // ResolveWorkflow returns the ticket's workflow name, using the workspace default if unset.
+// Returns an error if the resolved workflow is not defined in orc.yaml.
 // Exported so callers that already have a config can avoid a second load.
-func ResolveWorkflow(cfg *config.Config, ticketWorkflow string) string {
+func ResolveWorkflow(cfg *config.Config, ticketWorkflow string) (string, error) {
 	return resolveWorkflow(cfg, ticketWorkflow)
 }
 
-func resolveWorkflow(cfg *config.Config, ticketWorkflow string) string {
-	if ticketWorkflow != "" {
-		return ticketWorkflow
+func resolveWorkflow(cfg *config.Config, ticketWorkflow string) (string, error) {
+	name := ticketWorkflow
+	if name == "" {
+		name = cfg.DefaultWorkflow()
 	}
-	return cfg.DefaultWorkflow()
+	if _, ok := cfg.Workflows[name]; !ok {
+		known := cfg.Names()
+		if len(known) > 0 {
+			return "", fmt.Errorf("workflow %q not found in orc.yaml (available: %s)", name, strings.Join(known, ", "))
+		}
+		return "", fmt.Errorf("workflow %q not found in orc.yaml", name)
+	}
+	return name, nil
 }
 
 func resolveWorker(allWorkers []*workers.Worker, flagOverride, stageOwner, configWorker, stageName string) (*workers.Worker, string, error) {
