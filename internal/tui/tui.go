@@ -182,16 +182,25 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "r":
 			return m, loadData(m.root)
 
-		case "tab":
+		case "tab", "shift+tab":
 			navigable := m.navigableSections()
 			if len(navigable) == 0 {
 				break
 			}
+			forward := msg.String() == "tab"
 			if m.focusedPane == "features" {
-				m.focusedPane = "section"
-				m.sectionFocus = navigable[0]
-				m.sectionCursor = 0
-				m.expanded[navigable[0]] = true
+				if forward {
+					m.focusedPane = "section"
+					m.sectionFocus = navigable[0]
+					m.sectionCursor = 0
+					m.expanded[navigable[0]] = true
+				} else {
+					m.focusedPane = "section"
+					last := navigable[len(navigable)-1]
+					m.sectionFocus = last
+					m.sectionCursor = 0
+					m.expanded[last] = true
+				}
 			} else {
 				idx := -1
 				for i, k := range navigable {
@@ -200,8 +209,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						break
 					}
 				}
-				next := idx + 1
-				if next >= len(navigable) {
+				var next int
+				if forward {
+					next = idx + 1
+				} else {
+					next = idx - 1
+				}
+				if next < 0 || next >= len(navigable) {
 					m.focusedPane = "features"
 					m.sectionFocus = ""
 				} else {
@@ -449,9 +463,10 @@ func (m Model) viewDashboard() string {
 	b.WriteString("\n" + headerBlock + "\n")
 
 	// ── Collapsible section boxes ─────────────────────────────────────
+	healthFocused := m.focusedPane == "section" && m.sectionFocus == "health"
 	b.WriteString(m.sectionBox("health", "1", "Health",
 		fmt.Sprintf("%d checks", len(m.healthItems)),
-		m.renderHealthLines(innerW-4), outerW, false) + "\n")
+		m.renderHealthLines(innerW-4), outerW, healthFocused) + "\n")
 
 	wfFocused := m.focusedPane == "section" && m.sectionFocus == "workflows"
 	var wfContent []string
