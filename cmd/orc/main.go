@@ -492,7 +492,13 @@ func runWork(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Created: features/%s/\n\n", result.Slug)
 
-	if workTmux {
+	useTmux := workTmux
+	if !useTmux {
+		if cfg, err := config.Load(root); err == nil {
+			useTmux = cfg.Settings.AutoTmux
+		}
+	}
+	if useTmux {
 		if err := state.SetRuntime(result.FeatureDir, result.Slug); err != nil {
 			fmt.Printf("warning: could not write tmux runtime to STATE.yaml: %v\n", err)
 		}
