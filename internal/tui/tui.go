@@ -50,14 +50,15 @@ const (
 
 type tickMsg time.Time
 type dataMsg struct {
-	features      []*featureRow
-	healthItems   []health.Result
-	workflowNames []string
-	workerNames   []string
-	allWorkers    []*workers.Worker
-	workflows     []workflowChain
-	repos         []config.Repo
-	sectionItems  map[string][]sectionItem
+	features        []*featureRow
+	healthItems     []health.Result
+	workflowNames   []string
+	workerNames     []string
+	allWorkers      []*workers.Worker
+	workflows       []workflowChain
+	repos           []config.Repo
+	sectionItems    map[string][]sectionItem
+	refreshInterval time.Duration
 }
 
 type routeStep struct {
@@ -103,21 +104,22 @@ type featureRow struct {
 // ── model ─────────────────────────────────────────────────────────
 
 type Model struct {
-	root          string
-	view          viewState
-	features      []*featureRow
-	healthItems   []health.Result
-	workflowNames []string
-	workerNames   []string
-	allWorkers    []*workers.Worker
-	workflows     []workflowChain
-	repos         []config.Repo
-	expanded      map[string]bool
-	cursor        int
-	showArchived  bool
-	lastRefresh   time.Time
-	width         int
-	height        int
+	root            string
+	view            viewState
+	features        []*featureRow
+	healthItems     []health.Result
+	workflowNames   []string
+	workerNames     []string
+	allWorkers      []*workers.Worker
+	workflows       []workflowChain
+	repos           []config.Repo
+	expanded        map[string]bool
+	cursor          int
+	showArchived    bool
+	lastRefresh     time.Time
+	refreshInterval time.Duration
+	width           int
+	height          int
 
 	// section pane navigation
 	focusedPane   string // "features" or "section"
@@ -181,8 +183,10 @@ func Run(root string) error {
 
 // ── Init ─────────────────────────────────────────────────────────
 
+const defaultRefreshInterval = 60 * time.Second
+
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(loadData(m.root), tickEvery(5*time.Second))
+	return tea.Batch(loadData(m.root), tickEvery(defaultRefreshInterval))
 }
 
 // ── Update ───────────────────────────────────────────────────────
@@ -198,7 +202,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		return m, tea.Batch(loadData(m.root), tickEvery(5*time.Second))
+		interval := m.refreshInterval
+		if interval == 0 {
+			interval = defaultRefreshInterval
+		}
+		return m, tea.Batch(loadData(m.root), tickEvery(interval))
 
 	case dataMsg:
 		m.features = msg.features
@@ -209,6 +217,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workflows = msg.workflows
 		m.repos = msg.repos
 		m.sectionItems = msg.sectionItems
+		m.refreshInterval = msg.refreshInterval
 		m.lastRefresh = time.Now()
 		if rows := m.visibleFeatures(); m.cursor >= len(rows) && len(rows) > 0 {
 			m.cursor = len(rows) - 1
@@ -250,6 +259,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "r":
+			return m, loadData(m.root)
 		case "/":
 			if m.focusedPane == "features" {
 				m.searching = true
@@ -1421,14 +1432,15 @@ func loadData(root string) tea.Cmd {
 		}
 
 		return dataMsg{
-			features:      features,
-			healthItems:   report.Results,
-			workflowNames: wfNames,
-			workerNames:   workerNames,
-			allWorkers:    allWorkers,
-			workflows:     chains,
-			repos:         repos,
-			sectionItems:  si,
+			features:        features,
+			healthItems:     report.Results,
+			workflowNames:   wfNames,
+			workerNames:     workerNames,
+			allWorkers:      allWorkers,
+			workflows:       chains,
+			repos:           repos,
+			sectionItems:    si,
+			refreshInterval: workflowCfg.TuiRefreshInterval(),
 		}
 	}
 }

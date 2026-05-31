@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,6 +21,7 @@ type Repo struct {
 type Settings struct {
 	DefaultWorkflow string `yaml:"default_workflow"`
 	AutoArchive     bool   `yaml:"auto_archive"`
+	TuiRefresh      int    `yaml:"tui_refresh"` // seconds; 0 means use default (60)
 }
 
 // WorkflowDef is a named sequence of stages.
@@ -47,6 +49,14 @@ type Config struct {
 	Settings     Settings                  `yaml:"settings"`
 	Workflows    map[string]WorkflowDef    `yaml:"workflows"`
 	RepairStages map[string]RepairStageDef `yaml:"repair_stages"`
+}
+
+// TuiRefreshInterval returns the configured auto-refresh interval, defaulting to 60s.
+func (c *Config) TuiRefreshInterval() time.Duration {
+	if c.Settings.TuiRefresh > 0 {
+		return time.Duration(c.Settings.TuiRefresh) * time.Second
+	}
+	return 60 * time.Second
 }
 
 // DefaultWorkflow returns the configured default workflow name, falling back to "default".
