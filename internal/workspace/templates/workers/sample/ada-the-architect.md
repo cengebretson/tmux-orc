@@ -4,7 +4,6 @@ name: Ada the Architect
 product: claude
 kind: agent
 model: claude-opus-4-7
-thinking: high
 service_tier: high
 default_tmux_window: claude
 launch_mode: foreground

@@ -111,7 +111,9 @@
       "Bash(sed -n '395,415p' /Users/chris/Desktop/projects/orc/cmd/orc/main.go)",
       "Bash(sed -n '500,520p' /Users/chris/Desktop/projects/orc/cmd/orc/main.go)",
       "Bash(make build *)",
-      "Bash(make check *)"
+      "Bash(make check *)",
+      "Bash(codex --help)",
+      "Bash(rg *)"
     ]
   }
 }

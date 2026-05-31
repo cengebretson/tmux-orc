@@ -17,7 +17,6 @@ type Worker struct {
 	Model   string `yaml:"model"`
 
 	ReasoningEffort string `yaml:"reasoning_effort"`
-	Thinking        string `yaml:"thinking"`
 	ServiceTier     string `yaml:"service_tier"`
 
 	DefaultTmuxWindow string `yaml:"default_tmux_window"`
@@ -85,10 +84,10 @@ func LaunchArgs(w *Worker, workspaceRoot, cwd, prompt string) []string {
 		}
 		args := []string{"codex", "--model", model}
 		if w.ReasoningEffort != "" {
-			args = append(args, "--reasoning-effort", w.ReasoningEffort)
+			args = append(args, "-c", "reasoning_effort="+w.ReasoningEffort)
 		}
 		if w.ServiceTier != "" {
-			args = append(args, "--service-tier", w.ServiceTier)
+			args = append(args, "-c", "service_tier="+w.ServiceTier)
 		}
 		return append(args, "--cd", cwd, prompt)
 	case "cursor":

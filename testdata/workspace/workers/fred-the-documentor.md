@@ -4,7 +4,6 @@ name: Fred the Documentor
 product: claude
 kind: agent
 model: claude-sonnet-4-6
-thinking: high
 service_tier: medium
 default_tmux_window: claude
 launch_mode: foreground
