@@ -21,7 +21,7 @@ Before starting, check whether `impl/REVIEW.md` exists in the feature folder.
 **If `impl/REVIEW.md` does not exist** — this is the initial implementation pass.
 Follow the steps below and end with `orc wait` for human approval before code review.
 
-**If `impl/REVIEW.md` exists with verdict `needs-changes` or `blocked`** — this is a
+**If `impl/REVIEW.md` exists with `verdict: needs-changes` or `verdict: blocked`** — this is a
 rework pass in response to review feedback. Read the findings carefully, address every
 item marked `[bug]`, `[spec]`, or `[risk]` before anything else. `[style]` and `[minor]`
 items should be fixed if straightforward. When done, advance directly to code-review

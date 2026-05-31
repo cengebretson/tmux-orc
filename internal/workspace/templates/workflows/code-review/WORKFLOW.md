@@ -35,7 +35,8 @@ Before reviewing, count how many times `code-review` appears in `STATE.yaml` his
 4. Review the code changes in the worktree (`git diff main` or the feature branch).
 5. Check for: correctness, spec compliance, edge cases, security issues, test coverage.
 6. Write `impl/REVIEW.md` with findings using tags: `[bug]` `[spec]` `[style]` `[risk]` `[minor]`
-7. Set verdict: `approved`, `needs-changes`, or `blocked`.
+7. Set the verdict line: `**verdict: approved**`, `**verdict: needs-changes**`, or `**verdict: blocked**`.
+   Valid values are defined in `impl/REVIEW.md` — do not use custom verdicts.
 
 ## Exit Criteria
 
