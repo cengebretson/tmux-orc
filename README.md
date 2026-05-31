@@ -335,7 +335,7 @@ Worker resolution order:
 1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
 2. `stage.owner` in STATE.yaml — set by a previous `orc advance --owner`
 3. `worker:` for the current stage in `workflows.yaml`
-4. Fallback: match by `workflows:` list in worker frontmatter
+4. Fallback: match by `workflows:` or `stages:` list in worker frontmatter
 
 Use `--dry` to preview the command without launching.
 
