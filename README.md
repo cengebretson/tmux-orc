@@ -283,6 +283,7 @@ my-workspace/
     qa-automation.md implement and run automated tests
     # plain markdown — no frontmatter; flow control lives in workflows.yaml
 
+  orc.yaml           workspace config — repos, paths, and purposes
   workflows.yaml     named pipelines: stage sequence, worker per stage, advance mode
   ORC.md             agent state contract — read at session start
 

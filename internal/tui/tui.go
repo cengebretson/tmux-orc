@@ -17,6 +17,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/tmux"
@@ -55,7 +56,7 @@ type dataMsg struct {
 	workflowNames []string
 	workerNames   []string
 	workflows     []workflowChain
-	repos         []repoEntry
+	repos         []config.Repo
 	sectionItems  map[string][]sectionItem
 }
 
@@ -75,10 +76,6 @@ type workflowChain struct {
 	loops  []repairLoop
 }
 
-type repoEntry struct {
-	name    string
-	purpose string
-}
 
 type sectionItem struct {
 	label string
@@ -104,7 +101,7 @@ type Model struct {
 	workflowNames []string
 	workerNames   []string
 	workflows     []workflowChain
-	repos         []repoEntry
+	repos         []config.Repo
 	expanded      map[string]bool
 	cursor        int
 	showArchived  bool
@@ -903,74 +900,19 @@ func renderNameList(maxW int, names []string) []string {
 	return rows
 }
 
-// parseRouterRepos reads ROUTER.md and extracts the first table under any
-// section heading that contains "repo". Works with any column layout —
-// uses the first column as name and the last non-empty column as purpose.
-// Placeholder rows (name wrapped in underscores) are skipped.
-func parseRouterRepos(path string) []repoEntry {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	lines := strings.Split(string(data), "\n")
-	inRepos := false
-	pastHeader := false
-	var repos []repoEntry
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "## ") {
-			if inRepos {
-				break // left the section
-			}
-			if strings.Contains(strings.ToLower(trimmed), "repo") {
-				inRepos = true
-				pastHeader = false
-			}
-			continue
-		}
-		if !inRepos || !strings.HasPrefix(trimmed, "|") {
-			continue
-		}
-		// separator row marks end of header
-		if strings.Contains(trimmed, "---") {
-			pastHeader = true
-			continue
-		}
-		if !pastHeader {
-			continue // skip column header row
-		}
-		cols := strings.Split(trimmed, "|")
-		// collect non-empty inner cells (cols[0] and cols[last] are always "")
-		var cells []string
-		for _, c := range cols[1 : len(cols)-1] {
-			cells = append(cells, strings.Trim(strings.TrimSpace(c), "_*` "))
-		}
-		if len(cells) == 0 || cells[0] == "" {
-			continue
-		}
-		name := cells[0]
-		purpose := cells[len(cells)-1]
-		if name == purpose {
-			purpose = "" // single-column table
-		}
-		repos = append(repos, repoEntry{name: name, purpose: purpose})
-	}
-	return repos
-}
-
 // renderRepoList renders repos as "name — purpose" lines.
-func renderRepoList(repos []repoEntry, maxW int) []string {
+func renderRepoList(repos []config.Repo, maxW int) []string {
 	if len(repos) == 0 {
-		return []string{styleDim.Render("No repos configured. Run SETUP.md to populate ROUTER.md.")}
+		return []string{styleDim.Render("No repos configured. Edit orc.yaml to add repos.")}
 	}
 	var lines []string
 	for _, r := range repos {
-		name := styleSubtext.Render(r.name)
+		name := styleSubtext.Render(r.Name)
 		sep := styleDivider.Render("  —  ")
-		purpose := styleDim.Render(r.purpose)
+		purpose := styleDim.Render(r.Purpose)
 		line := name + sep + purpose
 		if lipgloss.Width(line) > maxW {
-			purpose = styleDim.Render(truncate(r.purpose, maxW-lipgloss.Width(name+sep)))
+			purpose = styleDim.Render(truncate(r.Purpose, maxW-lipgloss.Width(name+sep)))
 			line = name + sep + purpose
 		}
 		lines = append(lines, line)
@@ -1360,7 +1302,10 @@ func loadData(root string) tea.Cmd {
 			workerNames = append(workerNames, name)
 		}
 
-		repos := parseRouterRepos(filepath.Join(root, "ROUTER.md"))
+		var repos []config.Repo
+		if cfg, err := config.Load(root); err == nil {
+			repos = cfg.Repos
+		}
 
 		// section items for navigable file viewer
 		si := map[string][]sectionItem{}

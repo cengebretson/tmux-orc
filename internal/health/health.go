@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/workflow"
 )
 
@@ -65,6 +66,9 @@ func Run(root string) *Report {
 
 	// workers/
 	report.Results = append(report.Results, checkDirWithCount(root, "workers", "*.md", "worker"))
+
+	// orc.yaml
+	report.Results = append(report.Results, checkOrcConfig(root))
 
 	// workflows.yaml + stages/
 	report.Results = append(report.Results, checkWorkflowsFile(root))
@@ -181,6 +185,21 @@ func checkOptionalDir(root, name string) Result {
 		return Result{Name: name + "/", Status: OK}
 	}
 	return Result{Name: name + "/", Status: Empty, Detail: "not created yet"}
+}
+
+func checkOrcConfig(root string) Result {
+	cfg, err := config.Load(root)
+	if err != nil {
+		return Result{Name: config.Filename, Status: Missing, Detail: "missing — run `orc init`"}
+	}
+	if len(cfg.Repos) == 0 {
+		return Result{Name: config.Filename, Status: Empty, Detail: "no repos defined — edit orc.yaml to add repos"}
+	}
+	names := make([]string, len(cfg.Repos))
+	for i, r := range cfg.Repos {
+		names[i] = r.Name
+	}
+	return Result{Name: config.Filename, Status: OK, Detail: fmt.Sprintf("%d repo(s): %s", len(names), strings.Join(names, ", "))}
 }
 
 func checkWorkflowsFile(root string) Result {

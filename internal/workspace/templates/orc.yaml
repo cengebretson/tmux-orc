@@ -1,0 +1,9 @@
+# orc.yaml — workspace configuration
+#
+# Repos this workspace orchestrates. Run `orc health` to verify the workspace.
+# After editing, the TUI picks up changes on the next auto-refresh.
+
+repos:
+  - name: my-app
+    path: ../my-app
+    purpose: Application code, APIs, tests

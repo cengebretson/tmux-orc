@@ -17,6 +17,7 @@ Policy lives in files (`RULES.md`, `AGENTS.md`, worker definitions), not in code
 orc/
   cmd/orc/main.go                 CLI entry point (Cobra)
   internal/
+    config/                       orc.yaml parsing (workspace config, repo list)
     health/                       workspace filesystem health checks
     state/                        STATE.yaml parsing and mutations
     workers/                      worker definition parsing and matching
@@ -26,6 +27,7 @@ orc/
       templates/                  embedded workspace scaffold templates
         AGENTS.md, CLAUDE.md, ROUTER.md, TOOLS.md, RULES.md
         ORC.md                    agent state contract
+        orc.yaml                  workspace config — repos, paths, and purposes
         workflows.yaml            named pipelines with stage sequences
         features/_template/       feature context pack template
         workers/                  worker definition templates
@@ -88,7 +90,7 @@ built, what's planned, and where we deliberately diverged from the original plan
 |------|-------------|
 | Workspace scaffold | `orc init` with embedded templates, `--with-sample-workers`, `--dry-run`, `--force` |
 | Configuration | `SETUP.md` — agent-driven setup (not in original design, added improvement) |
-| Health check | `orc health` — filesystem validation, setup status, `workflows.yaml` check, `stages/` count |
+| Health check | `orc health` — filesystem validation, setup status, `orc.yaml` repo check, `workflows.yaml` check, `stages/` count |
 | Feature lifecycle | `orc work`, `orc show`, `orc next`, `orc advance`, `orc wait`, `orc start`, `orc block`, `orc archive` |
 | Status dashboard | `orc status` — active and archived features, table view |
 | Worker routing | `workflows.yaml` owns default worker per stage; overridden by `stage.owner` or `orc next --worker` |

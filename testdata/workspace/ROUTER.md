@@ -15,14 +15,24 @@ and approval requirements.
 
 ## Repos
 
-These are the repositories this workspace orchestrates. Paths may be absolute or
-relative to this workspace root. Run code commands with the repo path as cwd.
+Repos and their paths are declared in `orc.yaml`. Read that file to find repo names,
+filesystem paths, and purposes. Use the path from `orc.yaml` as `cwd` when running
+code commands — do not guess paths.
 
-<!-- TODO: Run SETUP.md to populate this table. -->
+For ticket work, use the worktree path from `STATE.yaml` → `next_action.cwd`, not
+the repo path directly.
 
-| Name | Path | Purpose |
-|------|------|---------|
-| _example_ | _../my-app_ | _Application code, APIs, tests_ |
+---
+
+## Routing
+
+When deciding which repo owns a task, start with the ticket's feature folder:
+
+1. Read `features/<ticket-slug>/STATE.yaml` — `next_action.cwd` is the worktree to use.
+2. If there is no active ticket, check `orc.yaml` for repo purposes and pick the one
+   that matches the work type.
+3. Run code commands (tests, lint, build) from the worktree or repo path, not the
+   workspace root.
 
 ---
 
@@ -32,7 +42,6 @@ For ticket work, never edit a repo directly. Use an isolated git worktree so
 branches stay clean and multiple tickets can run in parallel.
 
 Worktrees live inside this workspace under `worktrees/<repo-name>/<ticket-slug>`.
-They are branched off the main repo, which may live anywhere on the filesystem.
 
 To create a worktree for a ticket:
 ```
@@ -44,23 +53,7 @@ The worktree path for the active ticket is always recorded in `STATE.yaml` under
 
 ---
 
-## Feature State
-
-Feature context lives in `features/<ticket-slug>/`. Read `STATE.yaml` for current
-stage, owner, and worktree path. Read `TICKET.md`, `SPEC.md`, and `PLAN.md` for
-background. Do not reconstruct state from memory — always read the files.
-
----
-
 ## Stages
 
 Stage definitions live in `stages/<name>.md`. Flow control (order, worker per
 stage, advance mode, repair loops) is declared in `workflows.yaml`.
-
-| Stage          | Purpose                           |
-|----------------|-----------------------------------|
-| intake         | Load ticket context               |
-| develop        | Feature implementation            |
-| pr-open        | Open and submit a pull request    |
-| pr-repair      | Fix CI failures or review feedback|
-| qa-automation  | QA planning and test execution    |
