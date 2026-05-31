@@ -1167,7 +1167,44 @@ func (m Model) viewDetail() string {
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
 			styleDetailLabel.Render(" Next    "), styleDim.Render("last stage")))
 	}
+	if s.Status == "waiting_for_human" || s.Status == "blocked" {
+		reason := ""
+		if len(s.History) > 0 {
+			reason = s.History[len(s.History)-1].Result
+		}
+		if reason == "" {
+			reason = s.NextAction.Prompt
+		}
+		label := " Waiting "
+		if s.Status == "blocked" {
+			label = " Blocked "
+		}
+		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
+			styleDetailLabel.Render(label), styleStatusWaiting.Render(truncate(reason, innerW-16))))
+	}
 	b.WriteString(drawBox(styleSection.Render(" State "), stateLines, outerW) + "\n")
+
+	// Repos
+	if len(s.Repos) > 0 {
+		var repoLines []string
+		repoNames := make([]string, 0, len(s.Repos))
+		for name := range s.Repos {
+			repoNames = append(repoNames, name)
+		}
+		sort.Strings(repoNames)
+		for _, name := range repoNames {
+			r := s.Repos[name]
+			repoLines = append(repoLines, "  "+styleSubtext.Render(name))
+			if r.Main != "" {
+				repoLines = append(repoLines, fmt.Sprintf("    %s  %s", styleDetailLabel.Render("main    "), styleDim.Render(r.Main)))
+			}
+			if r.Worktree != "" {
+				repoLines = append(repoLines, fmt.Sprintf("    %s  %s", styleDetailLabel.Render("worktree"), styleDim.Render(r.Worktree)))
+				repoLines = append(repoLines, fmt.Sprintf("    %s  %s", styleDetailLabel.Render("branch  "), styleDim.Render(r.Branch)))
+			}
+		}
+		b.WriteString(drawBox(styleSection.Render(" Repos "), repoLines, outerW) + "\n")
+	}
 
 	// History
 	if len(s.History) > 0 {
