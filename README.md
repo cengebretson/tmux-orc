@@ -165,7 +165,7 @@ flowchart TD
     pr-open      -.->|CI failures| pr-repair
     pr-repair    -->|auto|        pr-open
 
-    qa-automation --> A([orc archive])
+    qa-automation -->|auto| A([orc archive])
 
     style W           fill:#313244,stroke:#a6e3a1,color:#cdd6f4
     style A           fill:#313244,stroke:#a6e3a1,color:#cdd6f4
@@ -188,6 +188,9 @@ flowchart TD
 
 `auto` — agent calls `orc advance`, next stage picks up immediately  
 `manual ●` — agent calls `orc wait`; a human approves before continuing
+
+Most teams start with a manual gate after `develop` and flip everything else to `auto`
+as confidence grows. Advance mode is set per-stage in `workflows.yaml`.
 
 ---
 

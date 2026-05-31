@@ -15,7 +15,7 @@ workflows:
         advance: auto
       - name: qa-automation
         worker: fred-documentor
-        advance: manual
+        advance: auto
 
 repair_stages:
   pr-repair:
