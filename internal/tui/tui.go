@@ -191,6 +191,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.focusedPane = "section"
 				m.sectionFocus = navigable[0]
 				m.sectionCursor = 0
+				m.expanded[navigable[0]] = true
 			} else {
 				idx := -1
 				for i, k := range navigable {
@@ -206,6 +207,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				} else {
 					m.sectionFocus = navigable[next]
 					m.sectionCursor = 0
+					m.expanded[navigable[next]] = true
 				}
 			}
 
@@ -364,7 +366,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) navigableSections() []string {
 	var out []string
 	for _, key := range []string{"workflows", "workers", "routes"} {
-		if m.expanded[key] && len(m.sectionItems[key]) > 0 {
+		if len(m.sectionItems[key]) > 0 {
 			out = append(out, key)
 		}
 	}
