@@ -284,7 +284,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 		case "esc", "b":
-			if m.focusedPane == "section" {
+			if m.search.Value() != "" {
+				m.search.SetValue("")
+				m.cursor = 0
+			} else if m.focusedPane == "section" {
 				m.focusedPane = "features"
 				m.sectionFocus = ""
 				m.sectionCursor = 0
