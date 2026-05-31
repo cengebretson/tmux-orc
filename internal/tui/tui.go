@@ -454,7 +454,7 @@ func (m Model) viewDashboard() string {
 
 	// ── Column widths ────────────────────────────────────────────────
 	const logoW = 30
-	const rightBoxOuter = logoW + 2 // box border adds 2
+	const rightBoxOuter = logoW + 4 // border (2) + 1-space padding each side (2)
 	const logoGap = 1
 	useLogo := outerW > rightBoxOuter+logoGap+44
 
@@ -532,8 +532,8 @@ func (m Model) viewDashboard() string {
 		leftStr := left.String()
 		leftHeight := lipgloss.Height(leftStr)
 
-		const rightInnerW = logoW // logo is exactly 30 wide
-		rightBoxOuter := rightInnerW + 2
+		// innerW = logoW + 2 so 1-space padding fits on each side of the 30-wide logo.
+		const rightInnerW = logoW + 2
 
 		// Build content lines for the right box.
 		logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(surface1))
@@ -541,12 +541,12 @@ func (m Model) viewDashboard() string {
 
 		var rightLines []string
 		for _, l := range strings.Split(logo, "\n") {
-			rightLines = append(rightLines, logoStyle.Render(l))
+			rightLines = append(rightLines, " "+logoStyle.Render(l))
 		}
 		rightLines = append(rightLines, "") // blank separator
 		if m.quote != "" {
-			for _, l := range strings.Split(wrapText(m.quote, rightInnerW), "\n") {
-				rightLines = append(rightLines, quoteStyle.Render(l))
+			for _, l := range strings.Split(wrapText(m.quote, logoW), "\n") {
+				rightLines = append(rightLines, " "+quoteStyle.Render(l))
 			}
 		}
 
