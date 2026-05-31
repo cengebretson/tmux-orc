@@ -665,6 +665,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Stage")
+	fmt.Printf("  Workflow:  %s\n", resolveWorkflow(root, s.Workflow))
 	fmt.Printf("  Name:      %s\n", s.Stage.Name)
 	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
 

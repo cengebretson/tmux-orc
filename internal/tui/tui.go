@@ -549,9 +549,8 @@ func (m Model) viewDashboard() string {
 	} else {
 		for _, pc := range m.workflows {
 			lines := renderRouteChain(pc.steps, pc.loops, leftInnerW-4)
-			if pc.name != "" && pc.name != "default" {
-				label := styleDim.Render(pc.name + ":")
-				wfContent = append(wfContent, label)
+			if pc.name != "" {
+				wfContent = append(wfContent, styleDim.Render(pc.name+":"))
 			}
 			wfContent = append(wfContent, lines...)
 			wfContent = append(wfContent, "")
@@ -1026,7 +1025,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 		padRight(styleTableHeader.Render("Ticket"), wTicket) + "  " +
 		padRight(styleTableHeader.Render("Name"), wName) + "  " +
 		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
-		padRight(styleTableHeader.Render("Workflow"), wWorkflow) + "  " +
+		padRight(styleTableHeader.Render("Stage"), wWorkflow) + "  " +
 		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
 		styleTableHeader.Render("Tmux")
 
@@ -1041,6 +1040,11 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 
 		icon := statusIcon(s.Status)
 		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
+		wf := s.Workflow
+		if wf == "" {
+			wf = "default"
+		}
+		stageCell := wf + "/" + s.Stage.Name
 
 		plainWorker := row.workerName
 		if plainWorker == "" {
@@ -1061,7 +1065,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
 				padRight(truncate(name, wName), wName) + "  " +
 				padRight(truncate(icon+" "+s.Status, wStatus), wStatus) + "  " +
-				padRight(truncate(s.Stage.Name, wWorkflow), wWorkflow) + "  " +
+				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
 				padRight(truncate(plainWorker, wWorker), wWorker) + "  " +
 				plainTmux
 			lines = append(lines, styleRowSelected.Width(w).Render(line))
@@ -1083,7 +1087,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
 				padRight(nameCell, wName) + "  " +
 				padRight(statusCell, wStatus) + "  " +
-				padRight(truncate(s.Stage.Name, wWorkflow), wWorkflow) + "  " +
+				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
 				padRight(workerCell, wWorker) + "  " +
 				tmuxCell
 			lines = append(lines, line)
@@ -1108,10 +1112,15 @@ func (m Model) viewDetail() string {
 
 	// State fields
 	var stateLines []string
+	resolvedWF := s.Workflow
+	if resolvedWF == "" {
+		resolvedWF = "default"
+	}
 	fields := []struct{ label, value string }{
 		{" Ticket  ", s.Ticket},
 		{" Status  ", statusStyle(s.Status).Render(statusIcon(s.Status) + " " + s.Status)},
-		{" Workflow", s.Stage.Name},
+		{" Workflow", resolvedWF},
+		{" Stage   ", s.Stage.Name},
 		{" Owner   ", s.Stage.Owner},
 	}
 	for _, f := range fields {
@@ -1263,9 +1272,15 @@ func loadData(root string) tea.Cmd {
 				inThisChain[stageName] = true
 				allStages[stageName] = true
 			}
-			// repair loops from repair_stages section
+			// repair loops from repair_stages section (sorted for stable order)
 			var loops []repairLoop
-			for rname, rdef := range workflowCfg.RepairStages {
+			repairNames := make([]string, 0, len(workflowCfg.RepairStages))
+			for rname := range workflowCfg.RepairStages {
+				repairNames = append(repairNames, rname)
+			}
+			sort.Strings(repairNames)
+			for _, rname := range repairNames {
+				rdef := workflowCfg.RepairStages[rname]
 				if inThisChain[rdef.Repairs] {
 					loops = append(loops, repairLoop{name: rname, target: rdef.Repairs})
 				}
