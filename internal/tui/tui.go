@@ -243,8 +243,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "r":
-			return m, loadData(m.root)
 		case "/":
 			if m.focusedPane == "features" {
 				m.searching = true
@@ -703,7 +701,7 @@ func (m Model) viewDashboard() string {
 			helpItem("t", "attach"),
 			helpItem("a", "archived"),
 			helpItem("1-4", "expand/collapse"),
-			helpItem("r", "refresh"),
+	
 			helpItem("q", "quit"),
 		)
 		if m.search.Value() != "" {
