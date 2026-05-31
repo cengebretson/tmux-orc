@@ -231,6 +231,11 @@ func (m Model) View() string {
 // ── Dashboard view ────────────────────────────────────────────────
 
 func (m Model) viewDashboard() string {
+	if m.width == 0 {
+		return ""
+	}
+	innerW := m.width - 4 // account for box borders + 1-cell padding each side
+
 	var b strings.Builder
 
 	// Header bar
@@ -246,23 +251,28 @@ func (m Model) viewDashboard() string {
 	)
 	b.WriteString(header + "\n")
 
-	// Health strip
-	b.WriteString("\n" + styleSection.Render("Health") + "\n")
-	b.WriteString(m.renderHealthStrip() + "\n")
+	// Health box
+	healthTitle := styleSection.Render(" Health ")
+	healthContent := m.renderHealthStrip()
+	healthBox := styleBox.Width(innerW).Render(healthContent)
+	b.WriteString("\n" + styleSectionBox(healthTitle, healthBox, innerW) + "\n")
 
-	// Features table
-	archiveLabel := styleDim.Render("  [a] show archived")
+	// Features box
+	archiveToggle := styleDim.Render(" [a] show archived")
 	if m.showArchived {
-		archiveLabel = styleDim.Render("  [a] hide archived")
+		archiveToggle = styleDim.Render(" [a] hide archived")
 	}
-	b.WriteString("\n" + styleSection.Render("Features") + archiveLabel + "\n\n")
+	featuresTitle := styleSection.Render(" Features ") + archiveToggle
 
 	rows := m.visibleFeatures()
+	var featuresContent string
 	if len(rows) == 0 {
-		b.WriteString(styleDim.Render("  No features found. Start one with orc work <ticket>.") + "\n")
+		featuresContent = styleDim.Render("  No features found. Start one with orc work <ticket>.")
 	} else {
-		b.WriteString(m.renderTable(rows))
+		featuresContent = m.renderTable(rows, innerW-2)
 	}
+	featuresBox := styleBox.Width(innerW).Render(featuresContent)
+	b.WriteString(styleSectionBox(featuresTitle, featuresBox, innerW) + "\n")
 
 	// Help
 	help := strings.Join([]string{
@@ -273,9 +283,37 @@ func (m Model) viewDashboard() string {
 		helpItem("r", "refresh"),
 		helpItem("q", "quit"),
 	}, "  ")
-	b.WriteString("\n" + styleHelp.Render("  "+help))
+	b.WriteString(styleHelp.Render("  " + help))
 
 	return b.String()
+}
+
+// styleSectionBox renders a titled box. title is already-rendered (with ANSI),
+// content is the pre-rendered inner block, w is the outer width.
+func styleSectionBox(title, content string, w int) string {
+	// Build a rounded box manually so we can put the title in the top border.
+	// lipgloss doesn't support border titles natively, so we overlay it.
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(surface1)).
+		Width(w).
+		Render(content)
+
+	// Splice the title into the first line of the box (after "╭")
+	lines := strings.SplitN(box, "\n", 2)
+	if len(lines) == 2 {
+		top := lines[0]
+		// Replace the characters after "╭" with the title then fill the rest
+		titlePlain := lipgloss.Width(title)
+		topPlain := lipgloss.Width(top)
+		if titlePlain+4 < topPlain {
+			// "╭" + title + "─…─╮"
+			suffix := strings.Repeat("─", topPlain-titlePlain-2)
+			top = styleDivider.Render("╭") + title + styleDivider.Render(suffix+"╮")
+		}
+		box = top + "\n" + lines[1]
+	}
+	return box
 }
 
 func (m Model) renderHealthStrip() string {
@@ -296,35 +334,32 @@ func (m Model) renderHealthStrip() string {
 		}
 		parts = append(parts, s.Render(icon+" "+strings.TrimSpace(item.Name)))
 	}
-	// wrap into rows of ~4
 	var rows []string
-	row := "  "
+	row := ""
 	for i, p := range parts {
 		row += p
 		if (i+1)%5 == 0 {
 			rows = append(rows, row)
-			row = "  "
+			row = ""
 		} else if i < len(parts)-1 {
 			row += styleDivider.Render("  ·  ")
 		}
 	}
-	if row != "  " {
+	if row != "" {
 		rows = append(rows, row)
 	}
 	return strings.Join(rows, "\n")
 }
 
-func (m Model) renderTable(rows []*featureRow) string {
-	// Column widths
+func (m Model) renderTable(rows []*featureRow, w int) string {
 	const (
 		wTicket   = 16
 		wStatus   = 18
 		wWorkflow = 20
 		wWorker   = 20
-		wTmux     = 4
 	)
 
-	header := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %s",
+	header := fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %s",
 		wTicket, styleTableHeader.Render("Ticket"),
 		wStatus, styleTableHeader.Render("Status"),
 		wWorkflow, styleTableHeader.Render("Workflow"),
@@ -332,7 +367,7 @@ func (m Model) renderTable(rows []*featureRow) string {
 		styleTableHeader.Render("Tmux"),
 	)
 
-	div := styleDivider.Render("  " + strings.Repeat("─", m.width-4))
+	div := styleDivider.Render(strings.Repeat("─", w))
 
 	var lines []string
 	lines = append(lines, header, div)
@@ -341,11 +376,9 @@ func (m Model) renderTable(rows []*featureRow) string {
 		s := row.s
 		selected := i == m.cursor
 
-		// Status cell
 		icon := statusIcon(s.Status)
 		statusCell := statusStyle(s.Status).Render(icon + " " + s.Status)
 
-		// Tmux cell
 		var tmuxCell string
 		if s.Runtime.Tmux != nil {
 			if row.tmuxLive {
@@ -362,7 +395,7 @@ func (m Model) renderTable(rows []*featureRow) string {
 			worker = styleDim.Render("—")
 		}
 
-		line := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %s",
+		line := fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %s",
 			wTicket, truncate(s.Ticket, wTicket),
 			wStatus+10, statusCell, // +10 for ANSI escape overhead
 			wWorkflow, truncate(s.Stage.Workflow, wWorkflow),
@@ -371,12 +404,12 @@ func (m Model) renderTable(rows []*featureRow) string {
 		)
 
 		if selected {
-			line = styleRowSelected.Render(line)
+			line = styleRowSelected.Width(w).Render(line)
 		}
 		lines = append(lines, line)
 	}
 
-	return strings.Join(lines, "\n") + "\n"
+	return strings.Join(lines, "\n")
 }
 
 // ── Detail view ───────────────────────────────────────────────────
@@ -386,13 +419,15 @@ func (m Model) viewDetail() string {
 		return ""
 	}
 	s := m.detail.s
+	innerW := m.width - 4
 	var b strings.Builder
 
-	// Title
-	title := styleDetailTitle.Render(s.Slug)
-	b.WriteString("\n  " + title + "\n\n")
+	// Title in header bar style
+	title := styleDetailTitle.Render(" " + s.Slug + " ")
+	b.WriteString("\n" + styleSectionBox(title, "", innerW) + "\n")
 
-	// State fields
+	// State fields box
+	var stateLines strings.Builder
 	fields := []struct{ label, value string }{
 		{"Ticket  ", s.Ticket},
 		{"Status  ", statusStyle(s.Status).Render(statusIcon(s.Status) + " " + s.Status)},
@@ -400,57 +435,58 @@ func (m Model) viewDetail() string {
 		{"Owner   ", s.Stage.Owner},
 	}
 	for _, f := range fields {
-		b.WriteString(fmt.Sprintf("  %s  %s\n",
+		stateLines.WriteString(fmt.Sprintf("%s  %s\n",
 			styleDetailLabel.Render(f.label),
 			f.value,
 		))
 	}
-
-	// Session
 	if s.Runtime.Tmux != nil {
 		if m.detail.tmuxLive {
 			hint := styleTmuxLive.Render("tmux attach -t " + s.Runtime.Tmux.Session + ":" + s.Stage.Workflow)
-			b.WriteString(fmt.Sprintf("  %s  %s\n", styleDetailLabel.Render("Session "), hint))
+			stateLines.WriteString(fmt.Sprintf("%s  %s\n", styleDetailLabel.Render("Session "), hint))
 		} else {
-			b.WriteString(fmt.Sprintf("  %s  %s\n",
+			stateLines.WriteString(fmt.Sprintf("%s  %s\n",
 				styleDetailLabel.Render("Session "),
 				styleTmuxDead.Render("not running — run orc next "+s.Ticket+" to restart"),
 			))
 		}
 	}
-
-	// Next action
 	if s.NextAction.Prompt != "" {
 		prompt := s.NextAction.Prompt
-		if len(prompt) > m.width-20 {
-			prompt = prompt[:m.width-23] + "…"
+		if len(prompt) > innerW-20 {
+			prompt = prompt[:innerW-23] + "…"
 		}
-		b.WriteString(fmt.Sprintf("  %s  %s\n",
+		stateLines.WriteString(fmt.Sprintf("%s  %s\n",
 			styleDetailLabel.Render("Next    "),
 			styleSubtext.Render(prompt),
 		))
 	}
+	stateBox := styleBox.Width(innerW).Render(strings.TrimRight(stateLines.String(), "\n"))
+	b.WriteString(styleSectionBox(styleSection.Render(" State "), stateBox, innerW) + "\n")
 
-	// History
+	// History box
 	if len(s.History) > 0 {
-		b.WriteString("\n  " + styleSection.Render("History") + "\n\n")
+		var histLines strings.Builder
 		for _, h := range s.History {
 			ts := h.At
 			if len(ts) > 10 {
 				ts = ts[:10]
 			}
-			b.WriteString(fmt.Sprintf("  %s  %-20s  %-18s  %s\n",
+			histLines.WriteString(fmt.Sprintf("%s  %-20s  %-18s  %s\n",
 				styleDim.Render(ts),
 				styleSubtext.Render(truncate(h.Workflow, 20)),
 				styleDim.Render(truncate(h.Owner, 18)),
-				styleSubtext.Render(truncate(h.Result, m.width-80)),
+				styleSubtext.Render(truncate(h.Result, innerW-70)),
 			))
 		}
+		histBox := styleBox.Width(innerW).Render(strings.TrimRight(histLines.String(), "\n"))
+		b.WriteString(styleSectionBox(styleSection.Render(" History "), histBox, innerW) + "\n")
 	}
 
-	// Files
+	// Files box
 	if len(m.detailFiles) > 0 {
-		b.WriteString("\n  " + styleSection.Render("Files") + "\n\n  ")
+		var fileLines strings.Builder
+		fileLines.WriteString(" ")
 		for i, f := range m.detailFiles {
 			var chip string
 			exists := fileExists(f.path)
@@ -461,18 +497,18 @@ func (m Model) viewDetail() string {
 			} else {
 				chip = styleFileMissing.Render(f.label)
 			}
-			b.WriteString(chip + " ")
+			fileLines.WriteString(chip + " ")
 		}
-		b.WriteString("\n")
-		// hint for selected file
 		if m.fileIdx < len(m.detailFiles) {
 			f := m.detailFiles[m.fileIdx]
 			if fileExists(f.path) {
-				b.WriteString("\n  " + styleDim.Render("enter to view "+f.label))
+				fileLines.WriteString("\n " + styleDim.Render("enter to view "+f.label))
 			} else {
-				b.WriteString("\n  " + styleDim.Render(f.label+" does not exist yet"))
+				fileLines.WriteString("\n " + styleDim.Render(f.label+" does not exist yet"))
 			}
 		}
+		filesBox := styleBox.Width(innerW).Render(fileLines.String())
+		b.WriteString(styleSectionBox(styleSection.Render(" Files "), filesBox, innerW) + "\n")
 	}
 
 	// Help
@@ -483,7 +519,7 @@ func (m Model) viewDetail() string {
 		helpItem("esc", "back"),
 		helpItem("q", "quit"),
 	}, "  ")
-	b.WriteString("\n\n" + styleHelp.Render("  "+help))
+	b.WriteString(styleHelp.Render("  " + help))
 
 	return b.String()
 }
@@ -491,11 +527,12 @@ func (m Model) viewDetail() string {
 // ── File viewer ───────────────────────────────────────────────────
 
 func (m Model) viewFile() string {
+	innerW := m.width - 4
 	var b strings.Builder
-	title := styleDetailTitle.Render(m.detail.s.Ticket) +
+	title := styleDetailTitle.Render(" "+m.detail.s.Ticket+" ") +
 		styleDim.Render(" · ") +
 		styleSubtext.Render(m.viewerTitle)
-	b.WriteString("\n  " + title + "\n\n")
+	b.WriteString("\n" + styleSectionBox(title, "", innerW) + "\n")
 	b.WriteString(m.viewport.View())
 	help := strings.Join([]string{
 		helpItem("↑↓/pgup/pgdn", "scroll"),

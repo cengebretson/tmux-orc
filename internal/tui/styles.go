@@ -147,6 +147,10 @@ var (
 	// Border/divider
 	styleDivider = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(surface1))
+
+	// Section box — inner content area (no border; border added by styleSectionBox)
+	styleBox = lipgloss.NewStyle().
+			Padding(0, 1)
 )
 
 func statusStyle(status string) lipgloss.Style {
