@@ -131,7 +131,7 @@ func buildPrompt(s *state.State, nextStage, advanceMode string) string {
 	}
 
 	preamble := fmt.Sprintf(
-		"Before starting: read AGENTS.md and ORC.md. Run `orc start %s` to mark in_progress.\n\n",
+		"Before starting: read AGENTS.md and ORC.md. Run `orc mark %s start` to mark in_progress.\n\n",
 		s.Ticket,
 	)
 
@@ -144,12 +144,12 @@ func endInstruction(ticket, nextStage, advanceMode string) string {
 	}
 	if advanceMode == "manual" {
 		return fmt.Sprintf(
-			"\n\nWhen this stage is complete, run:\n  orc wait %s \"<summary — human will review before advancing to %s>\"",
+			"\n\nWhen this stage is complete, run:\n  orc mark %s wait \"<summary — human will review before advancing to %s>\"",
 			ticket, nextStage,
 		)
 	}
 	return fmt.Sprintf(
-		"\n\nWhen this stage is complete, run:\n  orc advance %s --owner <worker-id> --result \"<summary>\"",
+		"\n\nWhen this stage is complete, run:\n  orc mark %s advance --owner <worker-id> --result \"<summary>\"",
 		ticket,
 	)
 }

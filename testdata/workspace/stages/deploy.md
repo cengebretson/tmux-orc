@@ -23,7 +23,7 @@ Merge the hotfix branch and confirm the fix is live in production.
    - Confirmation the issue is resolved
 6. When complete, run:
    ```
-   orc advance TICKET --result "deployed — <one-line summary>"
+   orc mark TICKET advance --result "deployed — <one-line summary>"
    ```
 
 ## Exit Criteria

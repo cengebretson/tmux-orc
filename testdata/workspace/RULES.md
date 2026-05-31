@@ -84,7 +84,7 @@ A stage doc should have:
 - **Explicit output definitions** — which files get written and where
 - **Unambiguous signals** — structured fields like `verdict:` that downstream
   stages can read without interpretation
-- **Exact commands** — `orc advance`, `orc wait`, or `orc block` for every outcome,
+- **Exact commands** — `orc mark ... advance`, `orc mark ... wait`, or `orc mark ... block` for every outcome,
   with no ambiguity about which to use
 
 The sample workflows are a starting point. Tune them to your stack, review

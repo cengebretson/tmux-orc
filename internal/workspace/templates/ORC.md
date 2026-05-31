@@ -12,16 +12,16 @@ Also read:
 
 **Start every session:**
 ```
-orc start <ticket>
+orc mark <ticket> start
 orc show <ticket> --json
 ```
 Read `stages/<stage>.md` for the current stage instructions.
 
 **End every session with exactly one of:**
 ```
-orc advance <ticket> --owner <next-owner> --result "<what was done>"   # stage complete
-orc wait <ticket> "<what you need from the human>"                     # need input/approval
-orc block <ticket> "<what is blocking progress>"                       # external blocker
+orc mark <ticket> advance --owner <next-owner> --result "<what was done>"   # stage complete
+orc mark <ticket> wait "<what you need from the human>"                     # need input/approval
+orc mark <ticket> block "<what is blocking progress>"                       # external blocker
 ```
 Never end a session without updating state. Never hand-edit STATE.yaml directly.
 
@@ -86,7 +86,7 @@ Rules:
 - Set `next_action.cwd` to the worktree path when the next agent should continue there.
 - Record the branch and worktree path before ending the session.
 - Do not manually delete worktrees during feature work; `orc archive` handles cleanup.
-- If the correct repo, branch, or worktree path is unclear, use `orc wait` and ask.
+- If the correct repo, branch, or worktree path is unclear, use `orc mark ... wait` and ask.
 
 ---
 
@@ -108,7 +108,7 @@ Read `STATE.yaml` and `TICKET.md` at the start of every session. Read `SPEC.md` 
 
 ## Stage Handoff
 
-The feature folder is the handoff medium between stages. Read previous stage outputs before starting work. If a required input is missing, `orc wait` — do not proceed.
+The feature folder is the handoff medium between stages. Read previous stage outputs before starting work. If a required input is missing, `orc mark ... wait` — do not proceed.
 
 Each stage writes its outputs to a subfolder matching its name: `<stage-name>/`. This makes provenance unambiguous — if you need to find what `develop` produced, look in `develop/`.
 

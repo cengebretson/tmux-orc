@@ -22,15 +22,15 @@ Never put product-specific instructions here — those belong in worker definiti
 At the start of every ticket session, before doing any work:
 
 1. Identify the ticket from your prompt or context
-2. Run `orc start <ticket>` to mark the ticket in_progress
+2. Run `orc mark <ticket> start` to mark the ticket in_progress
 3. Run `orc show <ticket> --json` to read current state — note `stage.name`
 4. Read `features/<ticket-slug>/STATE.yaml` for full feature context
 5. Read `stages/<stage>.md` for the current stage instructions
 
 At the end of every session, run exactly one of:
-- `orc advance <ticket> --owner <who> --result "<what was done>"` — stage complete
-- `orc wait <ticket> "<what you need from the human>"` — need human input or approval
-- `orc block <ticket> "<what is preventing progress>"` — external blocker
+- `orc mark <ticket> advance --owner <who> --result "<what was done>"` — stage complete
+- `orc mark <ticket> wait "<what you need from the human>"` — need human input or approval
+- `orc mark <ticket> block "<what is preventing progress>"` — external blocker
 
 Never end a session without updating state. Never hand-edit STATE.yaml directly.
 

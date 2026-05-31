@@ -13,7 +13,7 @@ work back for rework.
 Before starting, check whether `code-review/REVIEW.md` exists in the feature folder.
 
 **If `code-review/REVIEW.md` does not exist** — this is the initial implementation pass.
-Follow the steps below and end with `orc wait` for human approval before code review.
+Follow the steps below and end with `orc mark ... wait` for human approval before code review.
 
 **If `code-review/REVIEW.md` exists with `verdict: needs-changes` or `verdict: blocked`** — this is a
 rework pass in response to review feedback. Read the findings carefully, address every
@@ -42,10 +42,10 @@ Code is committed, `develop/HANDOFF.md` is written, and local tests pass.
 
 **Initial pass** — run:
 ```
-orc wait <ticket> "Implementation complete — human review before code review"
+orc mark <ticket> wait "Implementation complete — human review before code review"
 ```
 
 **Rework pass** — run:
 ```
-orc advance <ticket> --stage code-review --owner <worker-id> --result "Rework complete — addressed review findings"
+orc mark <ticket> advance --stage code-review --owner <worker-id> --result "Rework complete — addressed review findings"
 ```

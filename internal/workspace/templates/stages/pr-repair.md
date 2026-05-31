@@ -30,10 +30,10 @@ CI is green and all blocking review comments are resolved.
 
 When done, run:
 ```
-orc advance <ticket> --stage pr-open --owner <worker-id> --result "PR repaired — CI green"
+orc mark <ticket> advance --stage pr-open --owner <worker-id> --result "PR repaired — CI green"
 ```
 
 If the issue cannot be resolved:
 ```
-orc block <ticket> "<what is blocking and what a human needs to decide>"
+orc mark <ticket> block "<what is blocking and what a human needs to decide>"
 ```

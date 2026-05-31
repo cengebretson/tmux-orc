@@ -76,7 +76,7 @@ func TestCompute_PromptContainsPreamble(t *testing.T) {
 		t.Fatalf("Compute: %v", err)
 	}
 
-	if !strings.Contains(plan.Prompt, "orc start") {
+	if !strings.Contains(plan.Prompt, "orc mark") {
 		t.Errorf("prompt missing preamble orc start instruction")
 	}
 	if !strings.Contains(plan.Prompt, "AGENTS.md") {

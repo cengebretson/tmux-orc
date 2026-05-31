@@ -12,4 +12,4 @@ args:
 Fetches ticket context from the source system and populates the feature folder.
 
 Read `stages/intake.md` for source system instructions before starting.
-If the ticket cannot be found, run `orc wait <ticket> "<reason>"` and stop.
+If the ticket cannot be found, run `orc mark <ticket> wait "<reason>"` and stop.

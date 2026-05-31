@@ -120,49 +120,20 @@ var (
 	showJSON      bool
 )
 
-var startCmd = &cobra.Command{
-	Use:    "start <ticket>",
-	Short:  "Mark a ticket as in_progress",
-	Args:   cobra.ExactArgs(1),
-	RunE:   runStart,
-	Hidden: true,
-}
+var markCmd = &cobra.Command{
+	Use:   "mark <ticket> <start|wait|block|advance> [reason]",
+	Short: "Update ticket state — start | wait <reason> | block <reason> | advance [--owner] [--result] [--stage]",
+	Args:  cobra.MinimumNArgs(2),
+	RunE:  runMark,
 
-var startWorkspace string
-
-var waitCmd = &cobra.Command{
-	Use:    "wait <ticket> <reason>",
-	Short:  "Mark a ticket as waiting for human input or approval",
-	Args:   cobra.MinimumNArgs(2),
-	RunE:   runWait,
-	Hidden: true,
-}
-
-var waitWorkspace string
-
-var blockCmd = &cobra.Command{
-	Use:    "block <ticket> <reason>",
-	Short:  "Mark a ticket as blocked with a reason",
-	Args:   cobra.MinimumNArgs(2),
-	RunE:   runBlock,
-	Hidden: true,
-}
-
-var blockWorkspace string
-
-var advanceCmd = &cobra.Command{
-	Use:    "advance <ticket>",
-	Short:  "Mark current workflow complete and move to the next — writes STATE.yaml",
-	Args:   cobra.ExactArgs(1),
-	RunE:   runAdvance,
 	Hidden: true,
 }
 
 var (
-	advanceWorkspace string
-	advanceOwner     string
-	advanceResult    string
-	advanceStage     string
+	markWorkspace string
+	markOwner     string
+	markResult    string
+	markStage     string
 )
 
 var archiveCmd = &cobra.Command{
@@ -267,13 +238,10 @@ func init() {
 	workCmd.Flags().StringVar(&workWorkflow, "workflow", "", "Workflow to use (default: settings.default_workflow in orc.yaml, or \"default\")")
 	showCmd.Flags().StringVar(&showWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
-	startCmd.Flags().StringVar(&startWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	waitCmd.Flags().StringVar(&waitWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	blockCmd.Flags().StringVar(&blockWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	advanceCmd.Flags().StringVar(&advanceWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	advanceCmd.Flags().StringVar(&advanceOwner, "owner", "", "Worker or role that owns the new stage")
-	advanceCmd.Flags().StringVar(&advanceResult, "result", "", "Summary of what was accomplished in the previous stage")
-	advanceCmd.Flags().StringVar(&advanceStage, "stage", "", "New stage name (required when crossing workflow boundaries)")
+	markCmd.Flags().StringVar(&markWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+	markCmd.Flags().StringVar(&markOwner, "owner", "", "Worker or role that owns the new stage (advance only)")
+	markCmd.Flags().StringVar(&markResult, "result", "", "Summary of what was accomplished (advance only)")
+	markCmd.Flags().StringVar(&markStage, "stage", "", "New stage name (advance only — required when crossing workflow boundaries)")
 	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	attachCmd.Flags().StringVar(&attachWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	tuiCmd.Flags().StringVar(&tuiWorkspace, "workspace", ".", "Workspace root (default: current directory)")
@@ -286,10 +254,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(workCmd)
 	rootCmd.AddCommand(showCmd)
-	rootCmd.AddCommand(startCmd)
-	rootCmd.AddCommand(waitCmd)
-	rootCmd.AddCommand(blockCmd)
-	rootCmd.AddCommand(advanceCmd)
+	rootCmd.AddCommand(markCmd)
 	rootCmd.AddCommand(archiveCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(tuiCmd)
@@ -818,105 +783,79 @@ func fileCheck(featureDir, relPath string) string {
 	return "✗"
 }
 
-func runStart(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(startWorkspace)
+func runMark(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(markWorkspace)
 	if err != nil {
 		return err
 	}
 
-	featureDir, err := state.FindFeatureDir(root, args[0])
+	ticket := args[0]
+	action := strings.ToLower(args[1])
+
+	featureDir, err := state.FindFeatureDir(root, ticket)
 	if err != nil {
 		return err
 	}
 
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
+	switch action {
+	case "start":
+		s, err := state.Load(featureDir)
+		if err != nil {
+			return err
+		}
+		if err := state.Start(featureDir); err != nil {
+			return err
+		}
+		pname := resolveWorkflow(root, s.Workflow)
+		fmt.Printf("Ticket:   %s\n", s.Ticket)
+		fmt.Printf("Status:   in_progress\n")
+		fmt.Printf("Workflow: %s\n", pname)
+		fmt.Printf("Stage:    %s\n", s.Stage.Name)
+		fmt.Printf("Owner:    %s\n", s.Stage.Owner)
+		return nil
 
-	if err := state.Start(featureDir); err != nil {
-		return err
-	}
+	case "wait":
+		s, err := state.Load(featureDir)
+		if err != nil {
+			return err
+		}
+		if err := state.ValidateRepos(s, root); err != nil {
+			return err
+		}
+		reason := strings.Join(args[2:], " ")
+		if err := state.WaitForHuman(featureDir, reason); err != nil {
+			return err
+		}
+		fmt.Printf("Ticket:  %s\n", s.Ticket)
+		fmt.Printf("Status:  waiting_for_human\n")
+		fmt.Printf("Needs:   %s\n", reason)
+		fmt.Printf("\nRun `orc mark %s advance` to continue once resolved.\n", s.Ticket)
+		return nil
 
-	startPname := resolveWorkflow(root, s.Workflow)
-	fmt.Printf("Ticket:   %s\n", s.Ticket)
-	fmt.Printf("Status:   in_progress\n")
-	fmt.Printf("Workflow: %s\n", startPname)
-	fmt.Printf("Stage:    %s\n", s.Stage.Name)
-	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
-	return nil
+	case "block":
+		reason := strings.Join(args[2:], " ")
+		if err := state.Block(featureDir, reason); err != nil {
+			return err
+		}
+		s, err := state.Load(featureDir)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Ticket:  %s\n", s.Ticket)
+		fmt.Printf("Status:  blocked\n")
+		fmt.Printf("Reason:  %s\n", reason)
+		fmt.Printf("\nRun `orc mark %s advance` to unblock when resolved.\n", s.Ticket)
+		return nil
+
+	case "advance":
+		return runAdvance(root, featureDir)
+
+	default:
+		return fmt.Errorf("unknown action %q — use: start | wait <reason> | block <reason> | advance", action)
+	}
 }
 
-func runWait(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(waitWorkspace)
-	if err != nil {
-		return err
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
-	if err := state.ValidateRepos(s, root); err != nil {
-		return err
-	}
-
-	reason := strings.Join(args[1:], " ")
-	if err := state.WaitForHuman(featureDir, reason); err != nil {
-		return err
-	}
-
-	fmt.Printf("Ticket:  %s\n", s.Ticket)
-	fmt.Printf("Status:  waiting_for_human\n")
-	fmt.Printf("Needs:   %s\n", reason)
-	fmt.Printf("\nRun `orc advance %s` to continue once resolved.\n", s.Ticket)
-	return nil
-}
-
-func runBlock(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(blockWorkspace)
-	if err != nil {
-		return err
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-
-	reason := strings.Join(args[1:], " ")
-	if err := state.Block(featureDir, reason); err != nil {
-		return err
-	}
-
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Ticket:  %s\n", s.Ticket)
-	fmt.Printf("Status:  blocked\n")
-	fmt.Printf("Reason:  %s\n", reason)
-	fmt.Printf("\nRun `orc advance %s` to unblock when resolved.\n", s.Ticket)
-	return nil
-}
-
-func runAdvance(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(advanceWorkspace)
-	if err != nil {
-		return err
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-
+func runAdvance(root, featureDir string) error {
 	s, err := state.Load(featureDir)
 	if err != nil {
 		return err
@@ -939,23 +878,23 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 	prevStage := s.Stage.Name
 
 	// If --stage is given manually, validate it exists in the workflow or repair stages.
-	if advanceStage != "" {
-		if _, ok := workflowCfg.StageConfig(pname, advanceStage); !ok {
-			return fmt.Errorf("stage %q not found in workflow %q — check orc.yaml", advanceStage, pname)
+	if markStage != "" {
+		if _, ok := workflowCfg.StageConfig(pname, markStage); !ok {
+			return fmt.Errorf("stage %q not found in workflow %q — check orc.yaml", markStage, pname)
 		}
 	}
 
 	// Auto-advance to next stage in the feature's pipeline.
-	nextStage := advanceStage
+	nextStage := markStage
 	if nextStage == "" {
 		nextStage = workflowCfg.NextStage(pname, prevStage)
 	}
 
-	// Guard: manual gate — agent must call orc wait, not orc advance.
+	// Guard: manual gate — agent must call orc mark wait, not orc mark advance.
 	if nextStage != "" {
 		if sc, ok := workflowCfg.StageConfig(pname, prevStage); ok && sc.Advance == "manual" {
 			return fmt.Errorf(
-				"stage %q has advance: manual — use `orc wait %s \"<reason>\"` so a human can review before continuing",
+				"stage %q has advance: manual — use `orc mark %s wait \"<reason>\"` so a human can review before continuing",
 				prevStage, s.Ticket,
 			)
 		}
@@ -966,13 +905,13 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 		count := s.StageCounts[prevStage]
 		if count >= rs.MaxRetries {
 			return fmt.Errorf(
-				"repair stage %q has reached max_retries (%d) — resolve manually or use `orc block %s`",
+				"repair stage %q has reached max_retries (%d) — resolve manually or use `orc mark %s block`",
 				prevStage, rs.MaxRetries, s.Ticket,
 			)
 		}
 	}
 
-	result := advanceResult
+	result := markResult
 	if result == "" {
 		if nextStage != "" && nextStage != prevStage {
 			result = fmt.Sprintf("advanced from %s to %s", prevStage, nextStage)
@@ -981,7 +920,7 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := state.Advance(featureDir, nextStage, advanceOwner, result); err != nil {
+	if err := state.Advance(featureDir, nextStage, markOwner, result); err != nil {
 		return err
 	}
 
@@ -991,8 +930,8 @@ func runAdvance(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("Stage:    %s  (unchanged)\n", prevStage)
 	}
-	if advanceOwner != "" {
-		fmt.Printf("Owner:    %s\n", advanceOwner)
+	if markOwner != "" {
+		fmt.Printf("Owner:    %s\n", markOwner)
 	}
 	// Auto-archive if the pipeline is complete and the workspace opts in.
 	if nextStage == "" {

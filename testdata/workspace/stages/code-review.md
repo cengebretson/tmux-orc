@@ -14,7 +14,7 @@ Before reviewing, count how many times `code-review` appears in `STATE.yaml` his
 (entries where `stage: code-review`). This is the current cycle number.
 
 - Cycle 1–2: if changes needed, route back to `develop` automatically
-- Cycle 3: if still not approved, call `orc wait` — a human must resolve
+- Cycle 3: if still not approved, call `orc mark ... wait` — a human must resolve
 
 ## Steps
 
@@ -38,20 +38,20 @@ Before reviewing, count how many times `code-review` appears in `STATE.yaml` his
 
 **If approved** — run:
 ```
-orc advance <ticket> --stage pr-open --owner <worker-id> --result "Code review passed"
+orc mark <ticket> advance --stage pr-open --owner <worker-id> --result "Code review passed"
 ```
 
 **If needs-changes, cycle 1 or 2** — run:
 ```
-orc advance <ticket> --stage develop --owner <worker-id> --result "Review cycle <N>: changes needed — see code-review/REVIEW.md"
+orc mark <ticket> advance --stage develop --owner <worker-id> --result "Review cycle <N>: changes needed — see code-review/REVIEW.md"
 ```
 
 **If needs-changes, cycle 3** — run:
 ```
-orc wait <ticket> "3 review cycles failed — see code-review/REVIEW.md for unresolved findings"
+orc mark <ticket> wait "3 review cycles failed — see code-review/REVIEW.md for unresolved findings"
 ```
 
 **If blocked** (design issue, spec conflict, missing requirement) — run:
 ```
-orc wait <ticket> "Review blocked — <reason>. Human decision required before continuing."
+orc mark <ticket> wait "Review blocked — <reason>. Human decision required before continuing."
 ```

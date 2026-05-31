@@ -24,7 +24,7 @@ Runs after `intake` confirms the issue and scope.
    - Verification steps
 6. When complete, run:
    ```
-   orc wait TICKET "patch ready for deploy — <one-line summary>"
+   orc mark TICKET wait "patch ready for deploy — <one-line summary>"
    ```
 
 ## Exit Criteria

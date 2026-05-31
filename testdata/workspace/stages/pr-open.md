@@ -16,7 +16,7 @@ writes the PR description, opens the PR, and hands off for human review.
 **Preflight**
 1. Read `features/<ticket-slug>/STATE.yaml` for the active worktree and branch.
 2. Run local validation: tests, lint, type checks for changed files only.
-3. If checks fail, run `orc block <ticket> "<failure details>"` and stop — do not open a PR against a broken branch.
+3. If checks fail, run `orc mark <ticket> block "<failure details>"` and stop — do not open a PR against a broken branch.
 4. Ensure branch is rebased or merged against the base branch with no conflicts.
 5. Push the branch to the remote.
 
@@ -34,9 +34,9 @@ PR is open and `pr-open/PR.md` has the URL.
 
 When done, run:
 ```
-orc wait <ticket> "PR open — waiting for human review"
+orc mark <ticket> wait "PR open — waiting for human review"
 ```
 
 If preflight checks fail:
-- Run `orc block <ticket> "<specific failure and what needs fixing>"`
+- Run `orc mark <ticket> block "<specific failure and what needs fixing>"`
 - Do not push or open a PR
