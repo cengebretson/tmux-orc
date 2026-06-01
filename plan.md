@@ -19,6 +19,10 @@
 
 ## Up next
 
+### adhoc jobs?
+
+do one off stages with a particular worker, orc adhoc <ticket> --worker bob "make sure fred did a good job"
+
 ### Helpful plugins
 
 Add a list of mcp/plugins that help this workflow work. For example context-mode will save on tokens. I am sure there are others.
