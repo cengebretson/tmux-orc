@@ -163,25 +163,23 @@ orc tui
 
 ```mermaid
 flowchart TD
-    W([orc work]) --> intake
+    W(["orc work"]) --> intake
+    intake -->|auto| develop
+    develop -->|manual| codeReview["code-review"]
+    codeReview -->|auto| prOpen["pr-open"]
+    prOpen -->|manual| qaAuto["qa-automation"]
+    prOpen -.->|CI failures| prRepair["pr-repair"]
+    prRepair -->|auto| prOpen
+    qaAuto -->|auto| A(["orc archive"])
 
-    intake      -->|auto|         develop
-    develop     -->|manual|       codeReview[code-review]
-    codeReview  -->|auto|         prOpen[pr-open]
-    prOpen      -->|manual|       qaAuto[qa-automation]
-    prOpen      -.->|CI failures| prRepair[pr-repair]
-    prRepair    -->|auto|         prOpen
-
-    qaAuto -->|auto| A([orc archive])
-
-    style W          fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style A          fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style intake     fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style develop    fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style W fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style A fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style intake fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style develop fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style codeReview fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style prOpen     fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style prRepair   fill:#313244,stroke:#f38ba8,color:#cdd6f4
-    style qaAuto     fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style prOpen fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style prRepair fill:#313244,stroke:#f38ba8,color:#cdd6f4
+    style qaAuto fill:#313244,stroke:#cba6f7,color:#cdd6f4
 
     linkStyle 0 stroke:#a6e3a1
     linkStyle 1 stroke:#a6e3a1
