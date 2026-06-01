@@ -238,6 +238,50 @@ Use `--dry` to preview the full prompt and launch command without executing, and
 
 ---
 
+### Helpful plugins
+
+These tools work well alongside `orc` and are worth setting up before you start.
+
+#### context-mode
+
+[context-mode](https://github.com/mksglu/context-mode) is a Claude Code plugin that keeps large tool outputs out of your context window and captures session state for resumption. It matters here because orc sessions are long — agents read `STATE.yaml`, stage docs, history, and file trees. Without context-mode, that output accumulates and pushes earlier context out of the window. With it, only summaries land in context; raw output stays in a local knowledge base the model can search on demand.
+
+Install once, then it runs automatically in every session:
+
+```bash
+claude mcp add context-mode -- npx -y @context-mode/mcp@latest
+```
+
+Enable in settings:
+
+```json
+{
+  "enabledPlugins": {
+    "context-mode@context-mode": true
+  }
+}
+```
+
+Key commands: `/ctx-stats` to see how much context was saved, `/ctx-upgrade` to update.
+
+---
+
+#### GitHub MCP
+
+The [GitHub MCP server](https://github.com/github/github-mcp-server) gives agents native access to GitHub — PRs, issues, review comments, CI run status — without shelling out to `gh`. In an orc workflow this matters most during `pr-open`, `pr-repair`, and `code-review` stages: agents can read PR state, post review comments, and check CI results directly through the MCP tool rather than constructing shell commands and parsing their output.
+
+Install:
+
+```bash
+claude mcp add github -s user -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
+```
+
+Or via the Claude Desktop settings if you prefer the UI. Requires a GitHub personal access token with `repo` and `pull_requests` scopes.
+
+Once connected, agents in your workspace will automatically use `mcp__github__*` tools when they need PR or issue context — no changes to stage docs required.
+
+---
+
 ## Gallery
 
 ### Dashboard (`orc tui`)
