@@ -33,6 +33,7 @@ type Result struct {
 	Name   string
 	Status Status
 	Detail string
+	Group  string // section header — printed once when the group changes
 }
 
 type Report struct {
@@ -67,11 +68,16 @@ func Run(root string) *Report {
 	// workers/
 	report.Results = append(report.Results, checkDirWithCount(root, "workers", "*.md", "worker"))
 
-	// orc.yaml (repos + workflows)
-	report.Results = append(report.Results, checkOrcConfig(root))
-	report.Results = append(report.Results, checkRepoPaths(root))
-	report.Results = append(report.Results, checkWorkflowRefs(root))
-	report.Results = append(report.Results, checkDirWithCount(root, "stages", "*.md", "stage"))
+	// orc.yaml (repos + workflows) — grouped under their own section
+	for _, r := range []Result{
+		checkOrcConfig(root),
+		checkRepoPaths(root),
+		checkWorkflowRefs(root),
+		checkDirWithCount(root, "stages", "*.md", "stage"),
+	} {
+		r.Group = "orc.yaml"
+		report.Results = append(report.Results, r)
+	}
 
 	// optional dirs — note presence but don't fail if missing
 	report.Results = append(report.Results, checkOptionalDir(root, "worktrees"))
@@ -82,11 +88,22 @@ func Run(root string) *Report {
 // Print renders the report to stdout.
 func Print(r *Report) {
 	fmt.Printf("Workspace: %s\n\n", r.Root)
+	var currentGroup string
 	for _, res := range r.Results {
+		if res.Group != currentGroup {
+			currentGroup = res.Group
+			if currentGroup != "" {
+				fmt.Printf("\n  %s\n", currentGroup)
+			}
+		}
+		indent := "  "
+		if res.Group != "" {
+			indent = "    "
+		}
 		if res.Detail != "" {
-			fmt.Printf("  %s  %-20s %s\n", res.Status, res.Name, res.Detail)
+			fmt.Printf("%s%s  %-20s %s\n", indent, res.Status, res.Name, res.Detail)
 		} else {
-			fmt.Printf("  %s  %s\n", res.Status, res.Name)
+			fmt.Printf("%s%s  %s\n", indent, res.Status, res.Name)
 		}
 	}
 }
