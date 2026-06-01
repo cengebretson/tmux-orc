@@ -39,6 +39,7 @@ const (
 	viewDetail
 	viewFile
 	viewWorkflowDetail
+	viewCharacterSheet
 )
 
 // ── messages ─────────────────────────────────────────────────────
@@ -170,6 +171,9 @@ type Model struct {
 	// easter egg: type "orc" on the dashboard to trigger rainbow logo
 	keyBuffer   [3]string
 	rainbowStep int // 0=off, counts down from rainbowSteps
+
+	// easter egg: press "!" on a focused worker to open Bard's Tale character sheet
+	charSheetWorker *workers.Worker
 }
 
 type detailFile struct {
@@ -445,6 +449,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case "!":
+			if m.focusedPane == "section" && m.sectionFocus == "workers" {
+				items := m.sectionItems["workers"]
+				if m.sectionCursor < len(items) {
+					m.charSheetWorker = workerForPath(items[m.sectionCursor].path, m.allWorkers)
+					m.view = viewCharacterSheet
+				}
+			}
+
 		case "enter":
 			if m.focusedPane == "section" {
 				items := m.sectionItems[m.sectionFocus]
@@ -585,6 +598,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viewport, cmd = m.viewport.Update(msg)
 			return m, cmd
 		}
+
+	case viewCharacterSheet:
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "!", "esc", "b":
+			m.view = viewDashboard
+		}
 	}
 
 	return m, nil
@@ -625,6 +646,11 @@ func (m Model) View() string {
 		return m.viewFile()
 	case viewWorkflowDetail:
 		return m.viewWorkflowDetailPage()
+	case viewCharacterSheet:
+		if m.charSheetWorker != nil {
+			return renderCharacterSheet(m, m.charSheetWorker)
+		}
+		return m.viewDashboard()
 	default:
 		return m.viewDashboard()
 	}
