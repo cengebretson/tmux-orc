@@ -55,7 +55,7 @@ func Build(root, featureDir string) (*Context, error) {
 func buildPrompt(root, featureDir string, s *state.State, ctx *Context) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "Before starting: read AGENTS.md and ORC.md. Run `orc mark %s start` to mark in_progress.\n\n", s.Ticket)
+	fmt.Fprintf(&b, "Before starting: read AGENTS.md and ORC.md. Run `orc mark %s start` to mark active.\n\n", s.Ticket)
 	fmt.Fprintf(&b, "## Resuming %s — stage: %s\n\n", s.Ticket, s.Stage.Name)
 	fmt.Fprintf(&b, "This session was interrupted. Status was `%s` when it stopped.\n\n", s.Status)
 
@@ -96,9 +96,8 @@ func buildPrompt(root, featureDir string, s *state.State, ctx *Context) string {
 	// End-of-session instruction.
 	b.WriteString("### When done\n\n")
 	b.WriteString("Run one of:\n")
-	fmt.Fprintf(&b, "  orc mark %s advance --owner <worker-id> --result \"<summary>\"\n", s.Ticket)
-	fmt.Fprintf(&b, "  orc mark %s wait \"<what you need from the human>\"\n", s.Ticket)
-	fmt.Fprintf(&b, "  orc mark %s block \"<what is preventing progress>\"\n", s.Ticket)
+	fmt.Fprintf(&b, "  orc mark %s next --worker <worker-id> --result \"<summary>\"\n", s.Ticket)
+	fmt.Fprintf(&b, "  orc mark %s pause \"<what you need from the human or what is blocking>\"\n", s.Ticket)
 
 	_ = root // reserved for future use (e.g. resolving relative paths)
 	return b.String()

@@ -98,7 +98,6 @@ var (
 	styleStatusReady      lipgloss.Style
 	styleStatusInProgress lipgloss.Style
 	styleStatusWaiting    lipgloss.Style
-	styleStatusBlocked    lipgloss.Style
 	styleStatusArchived   lipgloss.Style
 	styleStatusPending    lipgloss.Style
 
@@ -139,7 +138,6 @@ func initStyles() {
 	styleStatusReady = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Blue))
 	styleStatusInProgress = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Mauve))
 	styleStatusWaiting = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
-	styleStatusBlocked = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Red))
 	styleStatusArchived = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Overlay0))
 	styleStatusPending = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Peach))
 
@@ -169,12 +167,12 @@ func statusStyle(status string) lipgloss.Style {
 	switch status {
 	case "ready":
 		return styleStatusReady
-	case "in_progress":
+	case "active":
 		return styleStatusInProgress
-	case "waiting_for_human":
+	case "paused":
 		return styleStatusWaiting
-	case "blocked":
-		return styleStatusBlocked
+	case "done":
+		return styleStatusArchived
 	case "archived":
 		return styleStatusArchived
 	case "pending":
@@ -188,12 +186,12 @@ func statusIcon(status string) string {
 	switch status {
 	case "ready":
 		return "●"
-	case "in_progress":
+	case "active":
 		return "▶"
-	case "waiting_for_human":
+	case "paused":
 		return "◐"
-	case "blocked":
-		return "✗"
+	case "done":
+		return "✓"
 	case "archived":
 		return "✓"
 	case "pending":

@@ -28,11 +28,15 @@ At the start of every ticket session, before doing any work:
 5. Read `stages/<stage>.md` for the current stage instructions
 
 At the end of every session, run exactly one of:
-- `orc mark <ticket> advance --owner <who> --result "<what was done>"` — stage complete
-- `orc mark <ticket> wait "<what you need from the human>"` — need human input or approval
-- `orc mark <ticket> block "<what is preventing progress>"` — external blocker
+- `orc mark <ticket> next --worker <who> --result "<what was done>"` — stage complete
+- `orc mark <ticket> pause "<what you need or what is blocking>"` — human needed
+- `orc mark <ticket> done [--result "<what was done>"]` — all stages complete
 
 Never end a session without updating state. Never hand-edit STATE.yaml directly.
+
+**Before any human interaction:** run `orc mark <ticket> pause "<what you need>"` before
+asking a human for input, approval, or a decision. State must reflect reality even if
+the session ends before the human responds.
 
 ## Feature Context
 

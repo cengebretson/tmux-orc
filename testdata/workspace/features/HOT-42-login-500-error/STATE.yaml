@@ -1,7 +1,7 @@
 schema_version: 1
 ticket: HOT-42
 slug: HOT-42-login-500-error
-status: in_progress
+status: active
 workflow: hotfix
 stage:
   owner: bob-developer

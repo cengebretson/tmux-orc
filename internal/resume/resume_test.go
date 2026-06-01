@@ -86,7 +86,7 @@ func TestBuild_PromptContainsAllEndInstructions(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 
-	for _, want := range []string{"advance", "wait", "block"} {
+	for _, want := range []string{"next", "pause"} {
 		if !strings.Contains(ctx.Prompt, want) {
 			t.Errorf("prompt missing end instruction %q", want)
 		}

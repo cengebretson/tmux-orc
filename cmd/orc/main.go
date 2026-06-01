@@ -120,8 +120,8 @@ var (
 )
 
 var markCmd = &cobra.Command{
-	Use:   "mark <ticket> <start|wait|block|advance> [reason]",
-	Short: "Update ticket state — start | wait <reason> | block <reason> | advance [--owner] [--result] [--stage]",
+	Use:   "mark <ticket> <start|next|pause|done> [reason]",
+	Short: "Update ticket state — start | next [--result] [--stage] [--worker] | pause <reason> | done [--result]",
 	Args:  cobra.MinimumNArgs(2),
 	RunE:  runMark,
 
@@ -129,7 +129,7 @@ var markCmd = &cobra.Command{
 }
 
 var (
-	markOwner  string
+	markWorker string
 	markResult string
 	markStage  string
 )
@@ -226,9 +226,9 @@ func init() {
 	workCmd.Flags().BoolVar(&workTmux, "tmux", false, "Enable tmux session for this ticket — session created automatically on first orc next")
 	workCmd.Flags().BoolVar(&workNext, "next", false, "Immediately launch the first stage after creating the feature")
 	workCmd.Flags().StringVar(&workWorkflow, "workflow", "", "Workflow to use (default: settings.default_workflow in orc.yaml)")
-	markCmd.Flags().StringVar(&markOwner, "owner", "", "Worker or role that owns the new stage (advance only)")
-	markCmd.Flags().StringVar(&markResult, "result", "", "Summary of what was accomplished (advance only)")
-	markCmd.Flags().StringVar(&markStage, "stage", "", "New stage name (advance only — required when crossing workflow boundaries)")
+	markCmd.Flags().StringVar(&markWorker, "worker", "", "Worker ID that owns the new stage (next only)")
+	markCmd.Flags().StringVar(&markResult, "result", "", "Summary of what was accomplished (next/done only)")
+	markCmd.Flags().StringVar(&markStage, "stage", "", "New stage name (next only — required when crossing workflow boundaries)")
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
@@ -370,7 +370,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		fmt.Println("Intake has not run yet. Launching intake agent:")
 
-	case "in_progress":
+	case "active":
 		sessionActive := s.Runtime.Tmux != nil && tmux.Available() && tmux.SessionExists(s.Runtime.Tmux.Session)
 		if sessionActive {
 			fmt.Println()
@@ -387,7 +387,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 			return tmux.Attach(s.Runtime.Tmux.Session)
 		} else {
 			fmt.Println()
-			fmt.Println("⚠ Ticket is in_progress but no active session found — likely interrupted.")
+			fmt.Println("⚠ Ticket is active but no session found — likely interrupted.")
 			if interactive {
 				ans := promptLine("  Launch with recovery context? [Y/n]: ")
 				ans = strings.ToLower(strings.TrimSpace(ans))
@@ -399,13 +399,13 @@ func runNext(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-	case "waiting_for_human", "blocked":
+	case "paused":
 		reason := s.NextAction.Prompt
 		if len(s.History) > 0 {
 			reason = s.History[len(s.History)-1].Result
 		}
 		fmt.Println()
-		fmt.Printf("⚠ Ticket is waiting:\n  %s\n", reason)
+		fmt.Printf("⚠ Ticket is paused:\n  %s\n", reason)
 		if interactive {
 			ans := promptLine("  Launch with recovery context? [Y/n]: ")
 			ans = strings.ToLower(strings.TrimSpace(ans))
@@ -759,7 +759,7 @@ func printShow(root, featureDir string, s *state.State) error {
 	fmt.Println()
 	fmt.Println("Next")
 	switch s.Status {
-	case "waiting_for_human", "blocked":
+	case "paused":
 		reason := ""
 		if len(s.History) > 0 {
 			reason = s.History[len(s.History)-1].Result
@@ -767,7 +767,7 @@ func printShow(root, featureDir string, s *state.State) error {
 		if reason == "" {
 			reason = s.NextAction.Prompt
 		}
-		fmt.Printf("  Waiting: %s\n", reason)
+		fmt.Printf("  Paused:  %s\n", reason)
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	default:
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
@@ -829,8 +829,8 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if (action == "wait" || action == "block") && len(args) < 3 {
-		return fmt.Errorf("orc mark %s %s requires a reason — e.g. orc mark %s %s \"<reason>\"", ticket, action, ticket, action)
+	if action == "pause" && len(args) < 3 {
+		return fmt.Errorf("orc mark %s pause requires a reason — e.g. orc mark %s pause \"<reason>\"", ticket, ticket)
 	}
 
 	switch action {
@@ -844,12 +844,12 @@ func runMark(cmd *cobra.Command, args []string) error {
 		}
 		workflow := resolveWorkflow(root, s.Workflow)
 		fmt.Printf("Ticket:   %s\n", s.Ticket)
-		fmt.Printf("Status:   in_progress\n")
+		fmt.Printf("Status:   active\n")
 		fmt.Printf("Stage:    %s · %s\n", workflow, s.Stage.Name)
 		fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 		return nil
 
-	case "wait":
+	case "pause":
 		s, err := state.Load(featureDir)
 		if err != nil {
 			return err
@@ -858,47 +858,48 @@ func runMark(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		reason := strings.Join(args[2:], " ")
-		if err := state.WaitForHuman(featureDir, reason); err != nil {
+		if err := state.Pause(featureDir, reason); err != nil {
 			return err
 		}
 		fmt.Printf("Ticket:  %s\n", s.Ticket)
-		fmt.Printf("Status:  waiting_for_human\n")
-		fmt.Printf("Needs:   %s\n", reason)
-		fmt.Printf("\nRun `orc mark %s advance` to continue once resolved.\n", s.Ticket)
+		fmt.Printf("Status:  paused\n")
+		fmt.Printf("Reason:  %s\n", reason)
+		fmt.Printf("\nRun `orc next %s` to resume once resolved.\n", s.Ticket)
 		return nil
 
-	case "block":
-		reason := strings.Join(args[2:], " ")
-		if err := state.Block(featureDir, reason); err != nil {
-			return err
-		}
+	case "next":
+		return runMarkNext(root, featureDir)
+
+	case "done":
 		s, err := state.Load(featureDir)
 		if err != nil {
 			return err
 		}
+		result := markResult
+		if result == "" {
+			result = "done"
+		}
+		if err := state.Done(featureDir, result); err != nil {
+			return err
+		}
 		fmt.Printf("Ticket:  %s\n", s.Ticket)
-		fmt.Printf("Status:  blocked\n")
-		fmt.Printf("Reason:  %s\n", reason)
-		fmt.Printf("\nRun `orc mark %s advance` to unblock when resolved.\n", s.Ticket)
+		fmt.Printf("Status:  done\n")
 		return nil
 
-	case "advance":
-		return runAdvance(root, featureDir)
-
 	default:
-		return fmt.Errorf("unknown action %q — use: start | wait <reason> | block <reason> | advance", action)
+		return fmt.Errorf("unknown action %q — use: start | next [--result] [--stage] [--worker] | pause <reason> | done [--result]", action)
 	}
 }
 
-func runAdvance(root, featureDir string) error {
+func runMarkNext(root, featureDir string) error {
 	s, err := state.Load(featureDir)
 	if err != nil {
 		return err
 	}
 
-	// Guard: archived tickets cannot be advanced.
-	if s.Status == "archived" {
-		return fmt.Errorf("ticket %s is archived — cannot advance", s.Ticket)
+	// Guard: archived or done tickets cannot be advanced.
+	if s.Status == "archived" || s.Status == "done" {
+		return fmt.Errorf("ticket %s is %s — cannot advance", s.Ticket, s.Status)
 	}
 
 	if err := state.ValidateRepos(s, root); err != nil {
@@ -925,11 +926,11 @@ func runAdvance(root, featureDir string) error {
 		nextStage = workflowCfg.NextStage(workflow, prevStage)
 	}
 
-	// Guard: manual gate — agent must call orc mark wait, not orc mark advance.
+	// Guard: manual gate — agent must call orc mark pause, not orc mark next.
 	if nextStage != "" {
 		if sc, ok := workflowCfg.StageConfig(workflow, prevStage); ok && sc.Advance == "manual" {
 			return fmt.Errorf(
-				"stage %q has advance: manual — use `orc mark %s wait \"<reason>\"` so a human can review before continuing",
+				"stage %q has advance: manual — use `orc mark %s pause \"<reason>\"` so a human can review before continuing",
 				prevStage, s.Ticket,
 			)
 		}
@@ -940,7 +941,7 @@ func runAdvance(root, featureDir string) error {
 		count := s.StageCounts[prevStage]
 		if count >= rs.MaxRetries {
 			return fmt.Errorf(
-				"repair stage %q has reached max_retries (%d) — resolve manually or use `orc mark %s block`",
+				"repair stage %q has reached max_retries (%d) — resolve manually or use `orc mark %s pause`",
 				prevStage, rs.MaxRetries, s.Ticket,
 			)
 		}
@@ -955,18 +956,21 @@ func runAdvance(root, featureDir string) error {
 		}
 	}
 
-	if err := state.Advance(featureDir, nextStage, markOwner, result); err != nil {
+	if err := state.Next(featureDir, nextStage, markWorker, result); err != nil {
 		return err
 	}
 
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	if nextStage != "" && nextStage != prevStage {
 		fmt.Printf("Stage:    %s → %s\n", prevStage, nextStage)
+	} else if nextStage == "" {
+		fmt.Printf("Stage:    %s  (final)\n", prevStage)
+		fmt.Printf("Status:   done\n")
 	} else {
 		fmt.Printf("Stage:    %s  (unchanged)\n", prevStage)
 	}
-	if markOwner != "" {
-		fmt.Printf("Owner:    %s\n", markOwner)
+	if markWorker != "" {
+		fmt.Printf("Worker:   %s\n", markWorker)
 	}
 	// Auto-archive if the pipeline is complete and the workspace opts in.
 	if nextStage == "" {
@@ -979,6 +983,7 @@ func runAdvance(root, featureDir string) error {
 			}
 			return archiveFeature(root, featureDir, s)
 		}
+		return nil
 	}
 
 	fmt.Printf("\nRun `orc next %s` to launch the next worker.\n", s.Ticket)

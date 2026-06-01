@@ -650,13 +650,13 @@ func (m Model) viewDashboard() string {
 	// ── Header stats ─────────────────────────────────────────────────
 	since := time.Since(m.lastRefresh)
 	ago := since.Round(time.Second)
-	active, blocked := 0, 0
+	active, paused := 0, 0
 	for _, f := range m.features {
 		switch f.s.Status {
-		case "in_progress", "ready", "waiting_for_human":
+		case "active", "ready":
 			active++
-		case "blocked":
-			blocked++
+		case "paused":
+			paused++
 		}
 	}
 	orcLabel := styleHeader.Render("orc")
@@ -671,7 +671,7 @@ func (m Model) viewDashboard() string {
 		styleDim.Render("  ·  ") +
 		styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
 		styleDim.Render("  ·  ") +
-		styleStatusBlocked.Render(fmt.Sprintf("%d blocked", blocked)) +
+		styleStatusWaiting.Render(fmt.Sprintf("%d paused", paused)) +
 		stalenessStyle(since).Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
 
 	// ── Left column: header + sections ───────────────────────────────
@@ -1304,7 +1304,7 @@ func (m Model) viewDetail() string {
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
 			styleDetailLabel.Render(" Next    "), styleDim.Render("last stage")))
 	}
-	if s.Status == "waiting_for_human" || s.Status == "blocked" {
+	if s.Status == "paused" {
 		reason := ""
 		if len(s.History) > 0 {
 			reason = s.History[len(s.History)-1].Result
@@ -1312,12 +1312,8 @@ func (m Model) viewDetail() string {
 		if reason == "" {
 			reason = s.NextAction.Prompt
 		}
-		label := " Waiting "
-		if s.Status == "blocked" {
-			label = " Blocked "
-		}
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
-			styleDetailLabel.Render(label), styleStatusWaiting.Render(truncate(reason, innerW-16))))
+			styleDetailLabel.Render(" Paused  "), styleStatusWaiting.Render(truncate(reason, innerW-16))))
 	}
 	b.WriteString(drawBox(styleSection.Render(" State "), stateLines, outerW) + "\n")
 

@@ -42,10 +42,10 @@ Code is committed, `develop/HANDOFF.md` is written, and local tests pass.
 
 **Initial pass** — run:
 ```
-orc mark <ticket> wait "Implementation complete — human review before code review"
+orc mark <ticket> pause "Implementation complete — human review before code review"
 ```
 
 **Rework pass** — run:
 ```
-orc mark <ticket> advance --stage code-review --owner <worker-id> --result "Rework complete — addressed review findings"
+orc mark <ticket> next --stage code-review --worker <worker-id> --result "Rework complete — addressed review findings"
 ```

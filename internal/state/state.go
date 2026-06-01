@@ -95,7 +95,7 @@ func Load(featureDir string) (*State, error) {
 	return &s, nil
 }
 
-// Start marks the feature as in_progress and records a history entry.
+// Start marks the feature as active and records a history entry.
 func Start(featureDir string) error {
 	path := filepath.Join(featureDir, Filename)
 	data, err := os.ReadFile(path)
@@ -114,7 +114,7 @@ func Start(featureDir string) error {
 		Owner:  s.Stage.Owner,
 		Result: "started",
 	})
-	s.Status = "in_progress"
+	s.Status = "active"
 
 	out, err := yaml.Marshal(&s)
 	if err != nil {
@@ -124,8 +124,8 @@ func Start(featureDir string) error {
 	return os.WriteFile(path, out, 0644)
 }
 
-// WaitForHuman marks the feature as waiting_for_human and records a history entry.
-func WaitForHuman(featureDir, reason string) error {
+// Pause marks the feature as paused (waiting for human input or external blocker).
+func Pause(featureDir, reason string) error {
 	path := filepath.Join(featureDir, Filename)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -141,10 +141,10 @@ func WaitForHuman(featureDir, reason string) error {
 		At:     timeNow(),
 		Stage:  s.Stage.Name,
 		Owner:  s.Stage.Owner,
-		Result: "waiting_for_human — " + reason,
+		Result: "paused — " + reason,
 	})
 
-	s.Status = "waiting_for_human"
+	s.Status = "paused"
 	s.NextAction.Worker = "human"
 	s.NextAction.Prompt = reason
 
@@ -156,41 +156,9 @@ func WaitForHuman(featureDir, reason string) error {
 	return os.WriteFile(path, out, 0644)
 }
 
-// Block marks the feature as waiting_for_human with a blocked reason.
-// Both wait and block produce the same status — the reason captures the distinction.
-func Block(featureDir, reason string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-
-	s.History = append(s.History, HistoryEntry{
-		At:     timeNow(),
-		Stage:  s.Stage.Name,
-		Owner:  s.Stage.Owner,
-		Result: "blocked — " + reason,
-	})
-
-	s.Status = "waiting_for_human"
-	s.NextAction.Worker = "human"
-	s.NextAction.Prompt = reason
-
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, out, 0644)
-}
-
-// Advance moves the feature to the next workflow, records a history entry, and saves STATE.yaml.
-func Advance(featureDir, stageName, owner, result string) error {
+// Next advances the feature to the next stage, records a history entry, and saves STATE.yaml.
+// When stageName is empty (no stages remain), status is set to "done".
+func Next(featureDir, stageName, worker, result string) error {
 	path := filepath.Join(featureDir, Filename)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -215,11 +183,43 @@ func Advance(featureDir, stageName, owner, result string) error {
 			s.StageCounts = map[string]int{}
 		}
 		s.StageCounts[stageName]++
+		s.Status = "ready"
+	} else {
+		s.Status = "done"
 	}
-	if owner != "" {
-		s.Stage.Owner = owner
+	if worker != "" {
+		s.Stage.Owner = worker
 	}
-	s.Status = "ready"
+	s.NextAction = NextAction{}
+
+	out, err := yaml.Marshal(&s)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, out, 0644)
+}
+
+// Done marks the feature as done (all stages complete or explicitly closed).
+func Done(featureDir, result string) error {
+	path := filepath.Join(featureDir, Filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	var s State
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	s.History = append(s.History, HistoryEntry{
+		At:     timeNow(),
+		Stage:  s.Stage.Name,
+		Owner:  s.Stage.Owner,
+		Result: result,
+	})
+	s.Status = "done"
 	s.NextAction = NextAction{}
 
 	out, err := yaml.Marshal(&s)

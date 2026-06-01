@@ -26,8 +26,8 @@ func TestLoad(t *testing.T) {
 	if s.Ticket != "STORY-123" {
 		t.Errorf("ticket = %q, want STORY-123", s.Ticket)
 	}
-	if s.Status != "in_progress" {
-		t.Errorf("status = %q, want in_progress", s.Status)
+	if s.Status != "active" {
+		t.Errorf("status = %q, want active", s.Status)
 	}
 	if s.Stage.Name != "develop" {
 		t.Errorf("stage.name = %q, want develop", s.Stage.Name)
@@ -122,25 +122,25 @@ func writeLegacyState(t *testing.T, featureDir, content string) {
 
 // Legacy STATE.yaml files (written before the workflow field existed) have no workflow key.
 // Advance must still work and must not overwrite the stage when stageName is empty.
-func TestAdvance_LegacyStateNoWorkflowField(t *testing.T) {
+func TestNext_LegacyStateNoWorkflowField(t *testing.T) {
 	dir := t.TempDir()
 	featureDir := filepath.Join(dir, "features", "OLD-001")
 	writeLegacyState(t, featureDir, `
 ticket: OLD-001
 slug: OLD-001
-status: in_progress
+status: active
 stage:
   owner: bob-developer
   name: develop
 `)
 
-	if err := state.Advance(featureDir, "pr-open", "bob-developer", "done"); err != nil {
-		t.Fatalf("Advance: %v", err)
+	if err := state.Next(featureDir, "pr-open", "bob-developer", "done"); err != nil {
+		t.Fatalf("Next: %v", err)
 	}
 
 	s, err := state.Load(featureDir)
 	if err != nil {
-		t.Fatalf("Load after Advance: %v", err)
+		t.Fatalf("Load after Next: %v", err)
 	}
 	if s.Stage.Name != "pr-open" {
 		t.Errorf("stage.name = %q, want pr-open", s.Stage.Name)
@@ -258,33 +258,32 @@ func TestValidateRepos_CWDSkippedWhenNoWorktrees(t *testing.T) {
 	}
 }
 
-// When stageName is empty (last stage in pipeline), Advance should leave the
-// current stage name unchanged and still mark the ticket ready.
-func TestAdvance_EmptyStageNamePreservesCurrentStage(t *testing.T) {
+// When stageName is empty (last stage in pipeline), Next should set status to "done".
+func TestNext_EmptyStageSetsDone(t *testing.T) {
 	dir := t.TempDir()
 	featureDir := filepath.Join(dir, "features", "DONE-001")
 	writeLegacyState(t, featureDir, `
 ticket: DONE-001
 slug: DONE-001
-status: in_progress
+status: active
 workflow: default
 stage:
   owner: bob-developer
   name: qa-automation
 `)
 
-	if err := state.Advance(featureDir, "", "bob-developer", "all tests pass"); err != nil {
-		t.Fatalf("Advance: %v", err)
+	if err := state.Next(featureDir, "", "bob-developer", "all tests pass"); err != nil {
+		t.Fatalf("Next: %v", err)
 	}
 
 	s, err := state.Load(featureDir)
 	if err != nil {
-		t.Fatalf("Load after Advance: %v", err)
+		t.Fatalf("Load after Next: %v", err)
 	}
 	if s.Stage.Name != "qa-automation" {
 		t.Errorf("stage.name = %q, want qa-automation (unchanged)", s.Stage.Name)
 	}
-	if s.Status != "ready" {
-		t.Errorf("status = %q, want ready", s.Status)
+	if s.Status != "done" {
+		t.Errorf("status = %q, want done", s.Status)
 	}
 }

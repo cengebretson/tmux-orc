@@ -55,8 +55,8 @@ feature folder is the source of truth. `orc mark ... start` / `orc status <ticke
 agent a complete picture in seconds.
 
 **Each stage has one job and clear handoffs.** Stage docs define inputs, outputs,
-exit criteria, and the exact `orc mark ... advance` command to run when done. Agents don't
-decide what to do next — the workspace tells them.
+exit criteria, and the exact `orc mark ... next` command to run when done. Agents don't
+decide what to do next ��� the workspace tells them.
 
 **Policy lives in files, not code.** Stage docs are plain markdown, and
 `orc.yaml` declares the stage order, default worker, and advance mode. Change the
@@ -67,9 +67,9 @@ session picks it up immediately.
 review, a specialist for QA. Each worker is configured independently in a markdown
 file. Use `--worker` to override for a single run.
 
-**Human-in-the-loop where it counts.** `orc mark ... wait` creates explicit review gates.
+**Human-in-the-loop where it counts.** `orc mark ... pause` creates explicit review gates.
 Agents call it when they need a human decision — not at every step, and not never.
-`orc mark ... advance` continues when you're ready.
+`orc mark ... next` continues when you're ready.
 
 **Agent-agnostic by design.** Works with Claude, Codex, or anything that can read
 a file and run a shell command. No SDK dependency, no lock-in.
@@ -193,8 +193,8 @@ flowchart TD
     linkStyle 7 stroke:#a6e3a1
 ```
 
-`auto` — agent calls `orc mark ... advance`, next stage picks up immediately  
-`manual ●` — agent calls `orc mark ... wait`; a human approves before continuing
+`auto` ��� agent calls `orc mark ... next`, next stage picks up immediately  
+`manual ●` — agent calls `orc mark ... pause`; a human approves before continuing
 
 Most teams start with a manual gate after `develop` and flip everything else to `auto`
 as confidence grows. Advance mode is set per-stage in `orc.yaml`.
@@ -207,13 +207,13 @@ as confidence grows. Advance mode is set per-stage in `orc.yaml`.
 flowchart TD
     N([orc next]) -->|prints launch command| R[Agent runs]
 
-    R --> AD[orc mark advance\nstage complete]
-    R --> WT[orc mark wait\nneed human input]
-    R --> BL[orc mark block\nexternal blocker]
+    R --> AD[orc mark next\nstage complete]
+    R --> WT[orc mark pause\nhuman needed]
+    R --> DN[orc mark done\nfinal stage]
 
     AD -->|status: ready| N
-    WT -->|human resolves\norc mark advance| N
-    BL -->|issue resolved\norc mark advance| N
+    WT -->|human resolves\norc mark next| N
+    DN -->|status: done| END([done])
 
     style N fill:#313244,stroke:#a6e3a1,color:#cdd6f4
     style R fill:#313244,stroke:#89b4fa,color:#cdd6f4
@@ -263,13 +263,13 @@ These are called by agents at the end of each session. They are hidden from `orc
 
 | Command | Description |
 |---------|-------------|
-| `orc mark <ticket> start` | Mark a ticket as in_progress — run at the start of every session |
-| `orc mark <ticket> advance` | Mark the current stage complete and move to the next |
-| `orc mark <ticket> advance --stage <name>` | Advance to a specific stage (e.g. crossing workflow boundaries) |
-| `orc mark <ticket> advance --owner <id>` | Persist a worker as stage owner for future sessions |
-| `orc mark <ticket> advance --result "<summary>"` | Record what was done in history |
-| `orc mark <ticket> wait "<reason>"` | Pause for human review — used when `advance: manual` or input is needed |
-| `orc mark <ticket> block "<reason>"` | Same as wait — both set waiting_for_human; use whichever reads better |
+| `orc mark <ticket> start` | Mark a ticket as `active` — run at the start of every session |
+| `orc mark <ticket> next` | Mark the current stage complete and move to the next (`done` if no stages remain) |
+| `orc mark <ticket> next --stage <name>` | Jump to a specific stage (e.g. send back to develop after review) |
+| `orc mark <ticket> next --worker <id>` | Override the worker for the next stage |
+| `orc mark <ticket> next --result "<summary>"` | Record what was done in history |
+| `orc mark <ticket> pause "<reason>"` | Pause for human — input, approval, or external blocker |
+| `orc mark <ticket> done` | Mark a ticket as done — force-close at any point |
 
 ## Workspace layout
 
@@ -362,8 +362,8 @@ repair_stages:
 
 `default_workflow` is used by `orc work <ticket>` when `--workflow` is omitted.
 If it is not set, `orc work` returns an error. `advance: auto` tells agents to
-run `orc mark ... advance` when a stage is complete; `advance: manual` tells agents to
-run `orc mark ... wait` so a human can review before continuing.
+run `orc mark ... next` when a stage is complete; `advance: manual` tells agents to
+run `orc mark ... pause` so a human can review before continuing.
 
 ## STATE.yaml
 
@@ -373,7 +373,7 @@ route work to the right agent.
 ```yaml
 ticket: STORY-123
 slug: STORY-123-add-login
-status: in_progress
+status: active
 workflow: default
 
 stage:
@@ -410,7 +410,7 @@ stage entry. `orc next` looks up that worker, builds the prompt, and launches it
 
 Worker resolution order:
 1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
-2. `stage.owner` in STATE.yaml — set by a previous `orc mark <ticket> advance --owner`
+2. `stage.owner` in STATE.yaml — set by a previous `orc mark <ticket> next --worker`
 3. `worker:` for the current stage in `orc.yaml`
 
 If no worker is found at any step, `orc next` exits with a clear error pointing to `orc.yaml`.
