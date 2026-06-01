@@ -13,7 +13,7 @@
 
 ## Agent TODO
 
-- [ ] `orc delete <ticket>` — permanently remove a feature folder; only allowed when status is `done` or `archived`
+- [x] `orc delete <ticket>` — permanently remove a feature folder; only allowed when status is `done` or `archived`
 
 ---
 

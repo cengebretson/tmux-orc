@@ -138,6 +138,13 @@ var archiveCmd = &cobra.Command{
 	RunE:  runArchive,
 }
 
+var deleteCmd = &cobra.Command{
+	Use:   "delete <ticket>",
+	Short: "Permanently delete a feature folder (only allowed when status is done or archived)",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDelete,
+}
+
 var attachCmd = &cobra.Command{
 	Use:   "attach <ticket>",
 	Short: "Attach to the tmux session for a ticket",
@@ -226,6 +233,7 @@ func init() {
 	rootCmd.AddCommand(workCmd)
 	rootCmd.AddCommand(markCmd)
 	rootCmd.AddCommand(archiveCmd)
+	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(helpAllCmd)
@@ -1039,6 +1047,81 @@ func archiveFeature(root, featureDir string, s *state.State) error {
 
 	fmt.Printf("Archived: features/_archive/%s/\n", slug)
 	return nil
+}
+
+func runDelete(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(globalWorkspace)
+	if err != nil {
+		return err
+	}
+
+	featureDir, err := findFeatureDirWithArchive(root, args[0])
+	if err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	if s.Status != "done" && s.Status != "archived" {
+		return fmt.Errorf("cannot delete %q: status is %q (must be done or archived)", s.Slug, s.Status)
+	}
+
+	rel, _ := filepath.Rel(root, featureDir)
+	if isTTY() {
+		ans := promptLine(fmt.Sprintf("Permanently delete %s? [y/N]: ", rel))
+		ans = strings.ToLower(strings.TrimSpace(ans))
+		if ans != "y" && ans != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	if err := os.RemoveAll(featureDir); err != nil {
+		return fmt.Errorf("deleting feature folder: %w", err)
+	}
+
+	fmt.Printf("Deleted: %s/\n", rel)
+	return nil
+}
+
+// findFeatureDirWithArchive searches both features/ and features/_archive/ for a ticket match.
+func findFeatureDirWithArchive(workspaceRoot, query string) (string, error) {
+	query = strings.ToUpper(strings.TrimSpace(query))
+	featuresDir := filepath.Join(workspaceRoot, "features")
+
+	var matches []string
+	searchDirs := []string{featuresDir, filepath.Join(featuresDir, "_archive")}
+	for _, dir := range searchDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
+				continue
+			}
+			upper := strings.ToUpper(e.Name())
+			if upper == query || strings.HasPrefix(upper, query) {
+				matches = append(matches, filepath.Join(dir, e.Name()))
+			}
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no feature found matching %q", query)
+	case 1:
+		return matches[0], nil
+	default:
+		names := make([]string, len(matches))
+		for i, m := range matches {
+			names[i] = filepath.Base(m)
+		}
+		return "", fmt.Errorf("ambiguous slug %q matches multiple features:\n  %s\nUse the full slug", query, strings.Join(names, "\n  "))
+	}
 }
 
 func runTui(cmd *cobra.Command, args []string) error {
