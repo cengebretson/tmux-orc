@@ -212,43 +212,38 @@ or human picks up exactly where the last one left off.
 
 ### Human commands
 
-| Command | Description |
-|---------|-------------|
-| `orc init` | Scaffold a new workspace |
-| `orc init --workspace <path>` | Scaffold at a specific path |
-| `orc init --with-sample-workers` | Include sample worker files |
-| `orc init --dry-run` | Preview without writing |
-| `orc init --force` | Overwrite existing files |
-| `orc health` | Check workspace filesystem health |
-| `orc health <ticket>` | Validate a ticket's state — checks workflow, stage, worker, worktrees |
-| `orc status` | Show all features and their current workflow/stage |
-| `orc status [--json]` | Output the list as JSON |
-| `orc status <ticket>` | Show full details for a specific ticket |
-| `orc status <ticket> --json` | Full ticket details as JSON |
-| `orc work <ticket>` | Create the feature folder for a ticket |
-| `orc work <ticket> --workflow <name>` | Use a named workflow instead of the configured default |
-| `orc work <ticket> --tmux` | Also enable tmux session for this ticket |
-| `orc work <ticket> --next` | Create the feature folder and immediately launch the first stage |
-| `orc next <ticket>` | Launch the next agent for a ticket |
-| `orc next <ticket> --dry` | Preview the launch command without running it |
-| `orc next <ticket> --json` | Next action as JSON for CI or scripting |
-| `orc next <ticket> --worker <id>` | Override the selected worker for one launch |
-| `orc attach <ticket>` | Attach to the tmux session for a ticket |
-| `orc archive <ticket>` | Archive a completed feature, remove worktrees |
-| `orc tui` | Open the interactive dashboard |
+- `orc init` — scaffold a new workspace
+- `orc init --workspace <path>` — scaffold at a specific path
+- `orc init --with-sample-workers` — include sample worker files
+- `orc init --dry-run` — preview without writing
+- `orc init --force` — overwrite existing files
+- `orc health` — check workspace filesystem health
+- `orc health <ticket>` — validate a ticket's state: workflow, stage, worker, worktrees
+- `orc status` — show all features and their current workflow/stage
+- `orc status <ticket>` — show full details for a specific ticket
+- `orc status [--json]` / `orc status <ticket> --json` — output as JSON for scripting
+- `orc work <ticket>` — create the feature folder for a ticket
+- `orc work <ticket> --workflow <name>` — use a named workflow instead of the configured default
+- `orc work <ticket> --tmux` — also enable a tmux session for this ticket
+- `orc work <ticket> --next` — create the feature folder and immediately launch the first stage
+- `orc next <ticket>` — launch the next agent for a ticket
+- `orc next <ticket> --dry` — preview the launch command without running it
+- `orc next <ticket> --json` — next action as JSON for CI or scripting
+- `orc next <ticket> --worker <id>` — override the selected worker for one launch
+- `orc attach <ticket>` — attach to the tmux session for a ticket
+- `orc archive <ticket>` — archive a completed feature, remove worktrees
+- `orc tui` — open the interactive dashboard
 
 ### Agent commands
 
 These are called by agents at the end of each session. They are hidden from `orc --help` but visible via `orc help-all`.
 
-| Command | Description |
-|---------|-------------|
-| `orc mark <ticket> next` | Mark the current stage complete and move to the next (`done` if no stages remain) |
-| `orc mark <ticket> next --stage <name>` | Jump to a specific stage (e.g. send back to develop after review) |
-| `orc mark <ticket> next --worker <id>` | Override the worker for the next stage |
-| `orc mark <ticket> next --result "<summary>"` | Record what was done in history |
-| `orc mark <ticket> pause "<reason>"` | Pause for human — input, approval, or external blocker |
-| `orc mark <ticket> done` | Mark a ticket as done — force-close at any point |
+- `orc mark <ticket> next` — mark the current stage complete and advance (`done` if no stages remain)
+- `orc mark <ticket> next --stage <name>` — jump to a specific stage (e.g. send back to develop after review)
+- `orc mark <ticket> next --worker <id>` — override the worker for the next stage
+- `orc mark <ticket> next --result "<summary>"` — record what was accomplished in history
+- `orc mark <ticket> pause "<reason>"` — pause for human input, approval, or an external blocker
+- `orc mark <ticket> done` — mark a ticket as done — force-close at any point
 
 ## Workspace layout
 
