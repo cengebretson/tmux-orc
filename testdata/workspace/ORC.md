@@ -13,7 +13,7 @@ Also read:
 **Start every session:**
 ```
 orc mark <ticket> start
-orc show <ticket> --json
+orc status <ticket> --json
 ```
 Read `stages/<stage>.md` for the current stage instructions.
 
@@ -24,6 +24,22 @@ orc mark <ticket> wait "<what you need from the human>"                     # ne
 orc mark <ticket> block "<what is blocking progress>"                       # external blocker
 ```
 Never end a session without updating state. Never hand-edit STATE.yaml directly.
+
+---
+
+## orc mark — Command Reference
+
+```
+orc mark <ticket> start                                           # begin session, sets in_progress
+orc mark <ticket> advance --result "<what was done>"             # stage complete, move to next
+orc mark <ticket> advance --stage <name> --owner <id>            # jump to a specific stage
+orc mark <ticket> wait "<what you need from the human>"          # pause for human input/approval
+orc mark <ticket> block "<what is preventing progress>"          # external blocker, nothing can proceed
+```
+
+Use `advance` when the stage exit criteria are met.
+Use `wait` when you need a human decision, approval, or information before you can continue.
+Use `block` when an external condition (service down, access missing, dependency unavailable) prevents any progress.
 
 ---
 
@@ -54,6 +70,39 @@ Write a history entry for every stage transition, block, or wait:
 ```
 
 Also update `stage.name`, `stage.owner`, `next_action`, and `repos` whenever those change.
+
+---
+
+## Worktrees
+
+Agents may create Git worktrees when a stage requires repository changes. Worktrees
+are created by agents, but they must be tracked in `STATE.yaml` so later stages
+and `orc archive` know what happened.
+
+Create worktrees under the workspace:
+
+```
+worktrees/<repo-name>/<ticket-slug>/
+```
+
+Use repo names from `orc.yaml`. When you create or use a worktree, update
+`STATE.yaml`:
+
+```yaml
+repos:
+  <repo-name>:
+    main: /absolute/path/to/main/repo
+    worktree: worktrees/<repo-name>/<ticket-slug>
+    branch: <branch-name>
+```
+
+Rules:
+
+- Use the worktree as `cwd` for repo-specific package, test, and git commands.
+- Set `next_action.cwd` to the worktree path when the next agent should continue there.
+- Record the branch and worktree path before ending the session.
+- Do not manually delete worktrees during feature work; `orc archive` handles cleanup.
+- If the correct repo, branch, or worktree path is unclear, use `orc mark ... wait` and ask.
 
 ---
 

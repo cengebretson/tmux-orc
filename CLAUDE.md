@@ -83,10 +83,10 @@ To add a new template file, drop it under `internal/workspace/templates/` and re
 - The workspace scaffold must be readable and actionable by both without modification.
 - `CLAUDE.md` imports `AGENTS.md` as the shared source of truth. Codex reads `AGENTS.md`
   directly. The two must never diverge.
-- `orc` CLI output must be correct for whichever product the worker specifies — never
+- `orc` CLI output must be correct for whichever engine the worker specifies — never
   assume Claude.
 - Do not add features or template content that only makes sense for one product.
-  Gate product-specific behavior behind the worker's `product` field at runtime.
+  Gate product-specific behavior behind the worker's `engine` field at runtime.
 
 ## Design Principles
 
@@ -96,7 +96,7 @@ To add a new template file, drop it under `internal/workspace/templates/` and re
 - **Human-in-the-loop first.** Background execution comes last, after logging and recovery
   are solid.
 - **Stage-assigned workers by default.** Override with `--worker` for a single run or
-  set `stage.owner` via `orc advance --owner` to persist across sessions.
+  set `stage.owner` via `orc mark <ticket> advance --owner` to persist across sessions.
 - **Product-agnostic by default.** Every decision that could couple `orc` to a single
   agent product should be reconsidered.
 

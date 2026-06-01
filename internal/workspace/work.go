@@ -75,6 +75,9 @@ func Work(opts WorkOptions) (*WorkResult, error) {
 		return nil, fmt.Errorf("workflow %q not found in orc.yaml%s", workflowName, suffix)
 	}
 	stages := cfg.StageNames(workflowName)
+	if len(stages) == 0 {
+		return nil, fmt.Errorf("workflow %q has no stages defined in orc.yaml", workflowName)
+	}
 	firstStage := stages[0]
 
 	if err := copyDir(templateDir, featureDir); err != nil {

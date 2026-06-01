@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
@@ -61,8 +62,9 @@ var (
 )
 
 var healthCmd = &cobra.Command{
-	Use:   "health",
-	Short: "Check workspace and integration health",
+	Use:   "health [ticket]",
+	Short: "Check workspace health, or validate a ticket's state when a ticket ID is given",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runHealth,
 }
 
@@ -83,8 +85,9 @@ var (
 )
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show all features and their current stage",
+	Use:   "status [ticket]",
+	Short: "Show all features and their current stage, or full details for a specific ticket",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runStatus,
 }
 
@@ -106,18 +109,6 @@ var (
 	workTmux      bool
 	workNext      bool
 	workWorkflow  string
-)
-
-var showCmd = &cobra.Command{
-	Use:   "show <slug>",
-	Short: "Show full details for a feature ticket",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runShow,
-}
-
-var (
-	showWorkspace string
-	showJSON      bool
 )
 
 var markCmd = &cobra.Command{
@@ -163,15 +154,6 @@ var tuiCmd = &cobra.Command{
 
 var tuiWorkspace string
 
-var validateCmd = &cobra.Command{
-	Use:   "validate <ticket>",
-	Short: "Validate a ticket's state against the workspace — checks workflow, stage, worker, and worktrees",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runValidate,
-}
-
-var validateWorkspace string
-
 var resumeCmd = &cobra.Command{
 	Use:   "resume <ticket>",
 	Short: "Generate a recovery prompt for a stuck or interrupted ticket",
@@ -198,22 +180,29 @@ var helpAllCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Println("Human commands:")
-		fmt.Println()
-		fmt.Printf("  %-30s  %s\n", "COMMAND", "DESCRIPTION")
-		fmt.Printf("  %-30s  %s\n", "-------", "-----------")
-		for _, c := range human {
-			fmt.Printf("  %-30s  %s\n", c.UseLine(), c.Short)
+		colWidth := func(cmds []*cobra.Command) int {
+			w := len("COMMAND")
+			for _, c := range cmds {
+				if n := len(c.UseLine()); n > w {
+					w = n
+				}
+			}
+			return w
+		}
+		printSection := func(title string, cmds []*cobra.Command) {
+			w := colWidth(cmds)
+			fmt.Println(title)
+			fmt.Println()
+			fmt.Printf("  %-*s  %s\n", w, "COMMAND", "DESCRIPTION")
+			fmt.Printf("  %-*s  %s\n", w, strings.Repeat("-", w), strings.Repeat("-", len("DESCRIPTION")))
+			for _, c := range cmds {
+				fmt.Printf("  %-*s  %s\n", w, c.UseLine(), c.Short)
+			}
 		}
 
+		printSection("Human commands:", human)
 		fmt.Println()
-		fmt.Println("Agent commands  (called by agents, hidden from orc --help):")
-		fmt.Println()
-		fmt.Printf("  %-30s  %s\n", "COMMAND", "DESCRIPTION")
-		fmt.Printf("  %-30s  %s\n", "-------", "-----------")
-		for _, c := range agent {
-			fmt.Printf("  %-30s  %s\n", c.UseLine(), c.Short)
-		}
+		printSection("Agent commands  (called by agents, hidden from orc --help):", agent)
 		fmt.Println()
 	},
 }
@@ -235,9 +224,7 @@ func init() {
 	workCmd.Flags().StringVar(&workSlug, "slug", "", "Optional slug suffix (e.g. add-user-export → TICKET-123-add-user-export)")
 	workCmd.Flags().BoolVar(&workTmux, "tmux", false, "Enable tmux session for this ticket — session created automatically on first orc next")
 	workCmd.Flags().BoolVar(&workNext, "next", false, "Immediately launch the first stage after creating the feature")
-	workCmd.Flags().StringVar(&workWorkflow, "workflow", "", "Workflow to use (default: settings.default_workflow in orc.yaml, or \"default\")")
-	showCmd.Flags().StringVar(&showWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
+	workCmd.Flags().StringVar(&workWorkflow, "workflow", "", "Workflow to use (default: settings.default_workflow in orc.yaml)")
 	markCmd.Flags().StringVar(&markWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	markCmd.Flags().StringVar(&markOwner, "owner", "", "Worker or role that owns the new stage (advance only)")
 	markCmd.Flags().StringVar(&markResult, "result", "", "Summary of what was accomplished (advance only)")
@@ -245,7 +232,6 @@ func init() {
 	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	attachCmd.Flags().StringVar(&attachWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	tuiCmd.Flags().StringVar(&tuiWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	validateCmd.Flags().StringVar(&validateWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	resumeCmd.Flags().StringVar(&resumeWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 
 	rootCmd.AddCommand(initCmd)
@@ -253,12 +239,10 @@ func init() {
 	rootCmd.AddCommand(nextCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(workCmd)
-	rootCmd.AddCommand(showCmd)
 	rootCmd.AddCommand(markCmd)
 	rootCmd.AddCommand(archiveCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(tuiCmd)
-	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(helpAllCmd)
 }
@@ -319,6 +303,19 @@ func runHealth(cmd *cobra.Command, args []string) error {
 	root, err := resolveRoot(healthWorkspace)
 	if err != nil {
 		return err
+	}
+
+	if len(args) == 1 {
+		featureDir, err := state.FindFeatureDir(root, args[0])
+		if err != nil {
+			return err
+		}
+		report := validate.Run(root, featureDir)
+		validate.Print(report)
+		if !report.OK() {
+			return fmt.Errorf("validation failed")
+		}
+		return nil
 	}
 
 	report := health.Run(root)
@@ -513,6 +510,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if len(args) == 1 {
+		featureDir, err := state.FindFeatureDir(root, args[0])
+		if err != nil {
+			return err
+		}
+		s, err := state.Load(featureDir)
+		if err != nil {
+			return err
+		}
+		if statusJSON {
+			return printJSON(s)
+		}
+		return printShow(root, featureDir, s)
+	}
+
 	type row struct {
 		ticket   string
 		status   string
@@ -632,26 +644,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runShow(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(showWorkspace)
-	if err != nil {
-		return err
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
-
-	if showJSON {
-		return printJSON(s)
-	}
-
+func printShow(root, featureDir string, s *state.State) error {
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Slug:     %s\n", s.Slug)
 	fmt.Printf("Status:   %s\n", s.Status)
@@ -666,13 +659,12 @@ func runShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Stage")
-	pname := resolveWorkflow(root, s.Workflow)
-	fmt.Printf("  Workflow:  %s\n", pname)
-	fmt.Printf("  Name:      %s\n", s.Stage.Name)
+	workflow := resolveWorkflow(root, s.Workflow)
+	fmt.Printf("  Stage:     %s · %s\n", workflow, s.Stage.Name)
 	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
 	if wfCfg, err := config.Load(root); err == nil {
-		if next := wfCfg.NextStage(pname, s.Stage.Name); next != "" {
-			sc, _ := wfCfg.StageConfig(pname, next)
+		if next := wfCfg.NextStage(workflow, s.Stage.Name); next != "" {
+			sc, _ := wfCfg.StageConfig(workflow, next)
 			advance := sc.Advance
 			if advance == "" {
 				advance = "auto"
@@ -744,7 +736,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 	default:
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
 		wfCfg, _ := config.Load(root)
-		sc, _ := wfCfg.StageConfig(pname, s.Stage.Name)
+		sc, _ := wfCfg.StageConfig(workflow, s.Stage.Name)
 		workerID := s.Stage.Owner
 		if workerID == "" {
 			workerID = sc.Worker
@@ -769,7 +761,11 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		fmt.Println("History")
 		for _, h := range s.History {
-			fmt.Printf("  %s  %-24s  %-20s  %s\n", h.At, h.Stage, h.Owner, h.Result)
+			ts := h.At
+			if t, err := time.Parse(time.RFC3339, h.At); err == nil {
+				ts = t.Format("2006-01-02 15:04")
+			}
+			fmt.Printf("  %-16s  %-20s  %-20s  %s\n", ts, h.Stage, h.Owner, h.Result)
 		}
 	}
 
@@ -797,6 +793,10 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if (action == "wait" || action == "block") && len(args) < 3 {
+		return fmt.Errorf("orc mark %s %s requires a reason — e.g. orc mark %s %s \"<reason>\"", ticket, action, ticket, action)
+	}
+
 	switch action {
 	case "start":
 		s, err := state.Load(featureDir)
@@ -806,11 +806,10 @@ func runMark(cmd *cobra.Command, args []string) error {
 		if err := state.Start(featureDir); err != nil {
 			return err
 		}
-		pname := resolveWorkflow(root, s.Workflow)
+		workflow := resolveWorkflow(root, s.Workflow)
 		fmt.Printf("Ticket:   %s\n", s.Ticket)
 		fmt.Printf("Status:   in_progress\n")
-		fmt.Printf("Workflow: %s\n", pname)
-		fmt.Printf("Stage:    %s\n", s.Stage.Name)
+		fmt.Printf("Stage:    %s · %s\n", workflow, s.Stage.Name)
 		fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 		return nil
 
@@ -874,25 +873,25 @@ func runAdvance(root, featureDir string) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
-	pname := resolveWorkflow(root, s.Workflow)
+	workflow := resolveWorkflow(root, s.Workflow)
 	prevStage := s.Stage.Name
 
 	// If --stage is given manually, validate it exists in the workflow or repair stages.
 	if markStage != "" {
-		if _, ok := workflowCfg.StageConfig(pname, markStage); !ok {
-			return fmt.Errorf("stage %q not found in workflow %q — check orc.yaml", markStage, pname)
+		if _, ok := workflowCfg.StageConfig(workflow, markStage); !ok {
+			return fmt.Errorf("stage %q not found in workflow %q — check orc.yaml", markStage, workflow)
 		}
 	}
 
 	// Auto-advance to next stage in the feature's pipeline.
 	nextStage := markStage
 	if nextStage == "" {
-		nextStage = workflowCfg.NextStage(pname, prevStage)
+		nextStage = workflowCfg.NextStage(workflow, prevStage)
 	}
 
 	// Guard: manual gate — agent must call orc mark wait, not orc mark advance.
 	if nextStage != "" {
-		if sc, ok := workflowCfg.StageConfig(pname, prevStage); ok && sc.Advance == "manual" {
+		if sc, ok := workflowCfg.StageConfig(workflow, prevStage); ok && sc.Advance == "manual" {
 			return fmt.Errorf(
 				"stage %q has advance: manual — use `orc mark %s wait \"<reason>\"` so a human can review before continuing",
 				prevStage, s.Ticket,
@@ -1024,25 +1023,6 @@ func archiveFeature(root, featureDir string, s *state.State) error {
 	}
 
 	fmt.Printf("Archived: features/_archive/%s/\n", slug)
-	return nil
-}
-
-func runValidate(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(validateWorkspace)
-	if err != nil {
-		return err
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-
-	report := validate.Run(root, featureDir)
-	validate.Print(report)
-	if !report.OK() {
-		return fmt.Errorf("validation failed")
-	}
 	return nil
 }
 

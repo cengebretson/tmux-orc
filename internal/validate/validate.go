@@ -78,11 +78,11 @@ func Run(root, featureDir string) *Report {
 	r.Checks = append(r.Checks, ok("orc.yaml"))
 
 	// Resolve workflow name and verify it exists in orc.yaml.
-	pname := s.Workflow
-	if pname == "" {
-		pname = cfg.DefaultWorkflow()
+	workflow := s.Workflow
+	if workflow == "" {
+		workflow = cfg.DefaultWorkflow()
 	}
-	if pname == "" {
+	if workflow == "" {
 		known := cfg.Names()
 		detail := "no default_workflow set in orc.yaml"
 		if len(known) > 0 {
@@ -91,17 +91,17 @@ func Run(root, featureDir string) *Report {
 		r.Checks = append(r.Checks, fail("workflow", detail))
 		return r
 	}
-	if _, ok := cfg.Workflows[pname]; !ok {
+	if _, ok := cfg.Workflows[workflow]; !ok {
 		known := cfg.Names()
-		detail := fmt.Sprintf("%q not found in orc.yaml", pname)
+		detail := fmt.Sprintf("%q not found in orc.yaml", workflow)
 		if len(known) > 0 {
 			detail += fmt.Sprintf(" (available: %s)", strings.Join(known, ", "))
 		}
 		r.Checks = append(r.Checks, fail("workflow", detail))
 		return r
 	}
-	r.Checks = append(r.Checks, okd("workflow", pname))
-	stageNames := cfg.StageNames(pname)
+	r.Checks = append(r.Checks, okd("workflow", workflow))
+	stageNames := cfg.StageNames(workflow)
 
 	// Current stage exists in the workflow.
 	stageName := s.Stage.Name
@@ -119,7 +119,7 @@ func Run(root, featureDir string) *Report {
 		}
 	}
 	if !stageInWorkflow && len(stageNames) > 0 {
-		r.Checks = append(r.Checks, fail("stage in workflow", fmt.Sprintf("%q not found in %q pipeline", stageName, pname)))
+		r.Checks = append(r.Checks, fail("stage in workflow", fmt.Sprintf("%q not found in %q pipeline", stageName, workflow)))
 	} else if stageInWorkflow {
 		r.Checks = append(r.Checks, okd("stage in workflow", stageName))
 	}
@@ -133,7 +133,7 @@ func Run(root, featureDir string) *Report {
 	}
 
 	// Worker exists.
-	sc, _ := cfg.StageConfig(pname, stageName)
+	sc, _ := cfg.StageConfig(workflow, stageName)
 	workerID := s.Stage.Owner
 	if workerID == "" {
 		workerID = sc.Worker

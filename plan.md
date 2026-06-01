@@ -2,46 +2,6 @@
 
 ---
 
-## ~~1. Unify config parsing~~ ✓ Done
-
-`internal/workflow` deleted. All workflow types and methods moved into
-`internal/config`. All callers use a single `config.Load` call.
-
----
-
-## ~~2. Worktree contract validation~~ ✓ Done
-
-`state.ValidateRepos(s, root)` added. Called by `orc advance` and `orc wait`
-before writing state. Checks main path existence, worktree under `worktrees/`,
-non-empty branch when worktree is set, cwd under a recorded worktree. 7 tests.
-
----
-
-## ~~3. Extract next-action planning from `main.go`~~ ✓ Done
-
-`internal/runner` package created. `runner.Compute` resolves workflow, stage
-config, worker, prompt, and launch args. `runNext` and `runNextAction` collapsed
-into `runNext` + `printDryRun`. 6 tests added.
-
----
-
-## ~~4. Generic worker args map~~ ✓ Done
-
-Replaced per-field `reasoning_effort` / `service_tier` / `thinking` with
-`args: map[string]string`. Codex renders as `-c key=value`; Claude renders as
-`--key value`. `engine` replaces `product`.
-
----
-
-## ~~5. TUI polish~~ ✓ Done
-
-Workflow pipeline order, hotfix fixture workflow, configurable auto-refresh
-(`tui_refresh` in orc.yaml, default 60s), `r` key for manual refresh, active
-stories on worker detail view, interactive stage drill-in from workflow detail
-(`▶` cursor, enter opens stage file with pipeline context in title).
-
----
-
 ## Up next
 
 ### Agent completion notification
@@ -93,11 +53,96 @@ Lower priority — worth revisiting once the core is solid.
 
 | Idea | Notes |
 |------|-------|
-| ~~Quotes in `orc.yaml`~~ ✓ Done | `settings.quotes: [...]` — troll quotes ship as default in the workspace template. |
-| ~~Rainbow logo easter egg~~ ✓ Done | Type `orc` on the dashboard — logo and header title cycle through all 12 Catppuccin palette colors for ~4 seconds. |
+| Workspace packs — share workers/workflows across a team | `orc pack push/pull` or `orc pack apply <repo>` — see spec below. |
+| Workspace packs — share workers/workflows across a team | `orc pack push/pull` — see spec below. |
 | Bard's Tale character sheet easter egg | Press `!` on the worker detail page to reveal a retro RPG character sheet. See spec below. |
-| ~~Theme configuration~~ ✓ Done | Colors extracted to `internal/tui/themes/catppuccin-mocha.json`, `LoadTheme()` reads it at startup, `settings.theme` in orc.yaml controls which file loads. |
-| ~~Ticket system config~~ ✓ Done | Moved to `ROUTER.md` — a dedicated **Ticket System** section tells agents where to fetch tickets. Keeps it with repo routing info where it belongs. |
+
+### Workspace packs — share workers, workflows, and policy across a team (spec)
+
+A **pack** is a git repo (or subdirectory of one) that contains the shareable parts
+of a workspace. Teams version it centrally; individuals pull it into their local workspace.
+
+#### What goes in a pack
+
+| File / directory | Shareable? |
+|-----------------|-----------|
+| `workers/*.md` | Yes — worker definitions are pure policy |
+| `workflows/` (from `orc.yaml`) | Yes — pipeline shape and stage assignments |
+| `stages/*.md` | Yes — stage instructions |
+| `RULES.md` | Yes — approval policy is team-wide |
+| `ROUTER.md` | Partial — repo paths are local; ticket system section is shareable |
+| `orc.yaml` settings block | Partial — `default_workflow`, quotes; not local paths |
+| `features/` | No — ticket work is always local |
+
+#### Commands
+
+```
+orc pack pull <source>   # apply a pack into the current workspace
+orc pack push <dest>     # copy shareable files out to a pack repo
+orc pack diff <source>   # show what would change before pulling
+```
+
+`<source>` / `<dest>` is a local path or a git URL (plain clone, no branch pinning needed initially).
+
+For a git URL, `orc pack pull` does a shallow clone to a temp dir, then applies. No permanent
+remote tracking — it's a one-shot copy, not a sync relationship. The workspace stays
+self-contained.
+
+#### Two-layer model: pack + user overrides
+
+Pack files live in their normal locations. User overrides live in a parallel
+`overrides/` directory that mirrors the same structure:
+
+```
+workers/           ← pack-managed (replaced on pull)
+stages/            ← pack-managed (replaced on pull)
+RULES.md           ← pack-managed (replaced on pull)
+overrides/
+  workers/         ← user-owned, never touched by pack operations
+  stages/
+  RULES.md
+```
+
+`orc` resolves files by checking `overrides/` first, then falling back to the pack
+file. This means a pull is always a clean replace of the pack layer — no merge
+logic, no prompts, no risk of clobbering local changes. Users put customizations
+in `overrides/` and they survive every pull automatically.
+
+`orc init` and `SETUP.md` explain the convention. `orc health` can warn if an
+override file shadows a pack file that has diverged significantly (future).
+
+#### Apply behavior (`pull`)
+
+- Replace `workers/*.md`, `stages/*.md`, `RULES.md` from the pack — no prompting.
+- Merge `orc.yaml` workflows block: add new entries, leave existing ones alone.
+- Merge `orc.yaml` settings named keys (`default_workflow`, `quotes`, `theme`), skip `repos`.
+- Never touch `overrides/` or `ROUTER.md` — those are always user-owned.
+
+#### Push behavior
+
+- Copies `workers/`, `stages/`, `RULES.md`, and the workflows block from `orc.yaml` to `<dest>`.
+- Strips any local-path fields before writing.
+- If `<dest>` is a git repo, `orc pack push` stages the files but does NOT commit —
+  leaves committing to the user.
+
+#### `orc.yaml` pack source (optional)
+
+```yaml
+settings:
+  pack: https://github.com/myteam/orc-pack.git   # or a local path
+```
+
+When set, `orc pack pull` with no args uses this source. Makes it easy to re-sync
+after the team updates the pack.
+
+#### Non-goals (keep it simple)
+
+- No versioning / lockfile — it's a copy, not a dependency manager.
+- No conflict resolution — the two-layer model eliminates the problem entirely.
+- No auto-pull on `orc init` — explicit opt-in only.
+- No private field encryption — sensitive credentials stay out of packs entirely.
+
+**Effort:** Medium. Mostly file I/O and a simple YAML merge; the git-URL path adds a `git clone --depth 1` subprocess.
 
 ---
 
@@ -187,8 +232,3 @@ Ship at least 3 portraits per class (warrior, ranger, bard, rogue) + 5 generic f
 
 ---
 
-~~### Theme configuration~~ ✓ Done
-
-Implemented: palette and glamour style extracted to `internal/tui/themes/catppuccin-mocha.json`.
-`LoadTheme(name)` reads the JSON at startup, `initStyles()` reinitializes all style vars.
-`settings.theme` in orc.yaml selects the theme file; defaults to `catppuccin-mocha`.

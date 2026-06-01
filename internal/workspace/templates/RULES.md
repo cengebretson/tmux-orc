@@ -55,7 +55,7 @@ Update `STATE.yaml` whenever any of these change:
 - completion state
 
 Before ending an agent session, update `STATE.yaml` so `orc status`,
-`orc next`, and `orc show` reflect reality.
+`orc next`, and `orc status` reflect reality.
 
 ---
 

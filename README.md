@@ -51,7 +51,7 @@ flowchart LR
 ## Why orc?
 
 **Context survives everything.** Session ends, agent switches, restarts — the
-feature folder is the source of truth. `orc mark ... start` / `orc show --json` gives any
+feature folder is the source of truth. `orc mark ... start` / `orc status <ticket> --json` gives any
 agent a complete picture in seconds.
 
 **Each stage has one job and clear handoffs.** Stage docs define inputs, outputs,
@@ -123,7 +123,7 @@ claude "Read SETUP.md and follow the setup instructions"
 
 The agent will ask about your ticket system (Jira, GitHub Issues, etc.), repos,
 and which Claude/Codex model to use for each stage. It creates worker files and
-updates `stages/intake.md` with the right source system instructions.
+updates `ROUTER.md` with the right ticket system retrieval instructions.
 
 ### 3. Check health
 
@@ -239,17 +239,20 @@ or human picks up exactly where the last one left off.
 | `orc init --dry-run` | Preview without writing |
 | `orc init --force` | Overwrite existing files |
 | `orc health` | Check workspace filesystem health |
-| `orc status [--json]` | Show all features and their current workflow/stage |
+| `orc health <ticket>` | Validate a ticket's state — checks workflow, stage, worker, worktrees |
+| `orc status` | Show all features and their current workflow/stage |
+| `orc status [--json]` | Output the list as JSON |
+| `orc status <ticket>` | Show full details for a specific ticket |
+| `orc status <ticket> --json` | Full ticket details as JSON |
 | `orc work <ticket>` | Create the feature folder for a ticket |
 | `orc work <ticket> --workflow <name>` | Use a named workflow instead of the configured default |
 | `orc work <ticket> --tmux` | Also enable tmux session for this ticket |
-| `orc show <ticket> [--json]` | Show full state for one ticket |
+| `orc work <ticket> --next` | Create the feature folder and immediately launch the first stage |
 | `orc next <ticket>` | Launch the next agent for a ticket |
 | `orc next <ticket> --dry` | Preview the launch command without running it |
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc next <ticket> --worker <id>` | Override the selected worker for one launch |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
-| `orc validate <ticket>` | Validate a ticket's state — checks workflow, stage, worker, worktrees |
 | `orc resume <ticket>` | Generate a recovery prompt for a stuck or interrupted ticket |
 | `orc archive <ticket>` | Archive a completed feature, remove worktrees |
 | `orc tui` | Open the interactive dashboard |
@@ -320,6 +323,10 @@ stages, and optional settings.
 settings:
   default_workflow: default
   auto_archive: false
+  auto_tmux: false       # wrap every orc next launch in a tmux session automatically
+  auto_next: false       # orc work immediately launches the first stage (same as --next)
+  tui_refresh: 60        # dashboard auto-refresh interval in seconds
+  theme: catppuccin-mocha
 
 repos:
   - name: my-app
@@ -354,7 +361,7 @@ repair_stages:
 ```
 
 `default_workflow` is used by `orc work <ticket>` when `--workflow` is omitted.
-If it is not set, `orc` falls back to `default`. `advance: auto` tells agents to
+If it is not set, `orc work` returns an error. `advance: auto` tells agents to
 run `orc mark ... advance` when a stage is complete; `advance: manual` tells agents to
 run `orc mark ... wait` so a human can review before continuing.
 

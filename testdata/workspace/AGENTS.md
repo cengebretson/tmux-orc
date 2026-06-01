@@ -23,7 +23,7 @@ At the start of every ticket session, before doing any work:
 
 1. Identify the ticket from your prompt or context
 2. Run `orc mark <ticket> start` to mark the ticket in_progress
-3. Run `orc show <ticket> --json` to read current state — note `stage.name`
+3. Run `orc status <ticket> --json` to read current state — note `stage.name`
 4. Read `features/<ticket-slug>/STATE.yaml` for full feature context
 5. Read `stages/<stage>.md` for the current stage instructions
 

@@ -1527,12 +1527,12 @@ func loadData(root string) tea.Cmd {
 		workflowCfg, _ := config.Load(root)
 		var chains []workflowChain
 		allStages := map[string]bool{}
-		for _, pname := range workflowCfg.Names() {
-			stages := workflowCfg.StageNames(pname)
+		for _, wfName := range workflowCfg.Names() {
+			stages := workflowCfg.StageNames(wfName)
 			var steps []routeStep
 			inThisChain := map[string]bool{}
 			for _, stageName := range stages {
-				sc, _ := workflowCfg.StageConfig(pname, stageName)
+				sc, _ := workflowCfg.StageConfig(wfName, stageName)
 				steps = append(steps, routeStep{name: stageName, advance: sc.Advance, workerID: sc.Worker})
 				inThisChain[stageName] = true
 				allStages[stageName] = true
@@ -1558,7 +1558,7 @@ func loadData(root string) tea.Cmd {
 					})
 				}
 			}
-			chains = append(chains, workflowChain{name: pname, steps: steps, loops: loops, repairSteps: repairs})
+			chains = append(chains, workflowChain{name: wfName, steps: steps, loops: loops, repairSteps: repairs})
 		}
 		// fallback: flat list of all stage files
 		if len(chains) == 0 {
