@@ -51,12 +51,12 @@ flowchart LR
 ## Why orc?
 
 **Context survives everything.** Session ends, agent switches, restarts — the
-feature folder is the source of truth. `orc mark ... start` / `orc status <ticket> --json` gives any
+feature folder is the source of truth. `orc next <ticket>` / `orc status <ticket> --json` gives any
 agent a complete picture in seconds.
 
 **Each stage has one job and clear handoffs.** Stage docs define inputs, outputs,
-exit criteria, and the exact `orc mark ... next` command to run when done. Agents don't
-decide what to do next ��� the workspace tells them.
+exit criteria, and the exact `orc mark <ticket> next` command to run when done. Agents don't
+decide what to do next — the workspace tells them.
 
 **Policy lives in files, not code.** Stage docs are plain markdown, and
 `orc.yaml` declares the stage order, default worker, and advance mode. Change the
@@ -67,9 +67,9 @@ session picks it up immediately.
 review, a specialist for QA. Each worker is configured independently in a markdown
 file. Use `--worker` to override for a single run.
 
-**Human-in-the-loop where it counts.** `orc mark ... pause` creates explicit review gates.
+**Human-in-the-loop where it counts.** `orc mark <ticket> pause` creates explicit review gates.
 Agents call it when they need a human decision — not at every step, and not never.
-`orc mark ... next` continues when you're ready.
+`orc mark <ticket> next` continues when you're ready.
 
 **Agent-agnostic by design.** Works with Claude, Codex, or anything that can read
 a file and run a shell command. No SDK dependency, no lock-in.
@@ -191,8 +191,8 @@ flowchart TD
     linkStyle 7 stroke:#a6e3a1
 ```
 
-`auto` — agent calls `orc mark ... next`, next stage picks up immediately  
-`manual ●` — agent calls `orc mark ... pause`; a human approves before continuing
+`auto` — agent calls `orc mark <ticket> next`, next stage picks up immediately  
+`manual` — agent calls `orc mark <ticket> pause`; a human approves before continuing
 
 Most teams start with a manual gate after `develop` and flip everything else to `auto`
 as confidence grows. Advance mode is set per-stage in `orc.yaml`.
@@ -358,8 +358,8 @@ repair_stages:
 
 `default_workflow` is used by `orc work <ticket>` when `--workflow` is omitted.
 If it is not set, `orc work` returns an error. `advance: auto` tells agents to
-run `orc mark ... next` when a stage is complete; `advance: manual` tells agents to
-run `orc mark ... pause` so a human can review before continuing.
+run `orc mark <ticket> next` when a stage is complete; `advance: manual` tells agents to
+run `orc mark <ticket> pause` so a human can review before continuing.
 
 ## STATE.yaml
 
