@@ -863,9 +863,9 @@ func runMark(cmd *cobra.Command, args []string) error {
 	ticket := args[0]
 	action := strings.ToLower(args[1])
 
-	// jit-done can target any status including archived; all other actions use features/ only.
+	// jit can target any status including archived; all other actions use features/ only.
 	var featureDir string
-	if action == "jit-done" {
+	if action == "jit" {
 		featureDir, err = state.FindFeatureDirWithArchive(root, ticket)
 	} else {
 		featureDir, err = state.FindFeatureDir(root, ticket)
@@ -916,9 +916,9 @@ func runMark(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Status:  done\n")
 		return nil
 
-	case "jit-done":
+	case "jit":
 		if len(args) < 3 {
-			return fmt.Errorf("orc mark %s jit-done requires a summary", ticket)
+			return fmt.Errorf("orc mark %s jit requires a summary", ticket)
 		}
 		s, err := state.Load(featureDir)
 		if err != nil {
@@ -939,7 +939,7 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return nil
 
 	default:
-		return fmt.Errorf("unknown action %q — use: next [--result] [--stage] [--worker] | pause <reason> | done [--result] | jit-done <summary>", action)
+		return fmt.Errorf("unknown action %q — use: next [--result] [--stage] [--worker] | pause <reason> | done [--result] | jit <summary>", action)
 	}
 }
 
@@ -1276,7 +1276,7 @@ Current pipeline stage: %s (do not advance — this is a one-off task outside th
 Write any output or notes to %s
 
 When you are done, run:
-  orc mark %s jit-done "<summary of what you did>"`,
+  orc mark %s jit "<summary of what you did>"`,
 		s.Ticket, instruction, s.Slug, s.Stage.Name, outputDir, s.Ticket)
 }
 
