@@ -53,6 +53,11 @@ workflows:
       - name: pr-open
         worker: bob-developer
         advance: manual
+        loop:
+          via: pr-repair
+          worker: bob-developer
+          max: 3
+          on_max: pause
       - name: qa-automation
         worker: brian-qa
         advance: auto
@@ -69,9 +74,3 @@ workflows:
         worker: bob-developer
         advance: auto
 
-repair_stages:
-  pr-repair:
-    repairs: pr-open
-    worker: bob-developer
-    advance: auto
-    max_retries: 3
