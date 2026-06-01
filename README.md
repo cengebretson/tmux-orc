@@ -157,7 +157,7 @@ You can also use the dashboard:
 orc tui
 ```
 
-## How it works
+## Example workflow
 
 ### Ticket lifecycle
 
@@ -191,6 +191,17 @@ flowchart TD
     linkStyle 7 stroke:#a6e3a1
 ```
 
+| Stage | Worker | Model |
+|-------|--------|-------|
+| intake | `intake-agent` | haiku |
+| develop | `bob-the-developer` | sonnet |
+| code-review | `zach-the-reviewer` | opus |
+| pr-open | `bob-the-developer` | sonnet |
+| pr-repair | `bob-the-developer` | sonnet |
+| qa-automation | `brian-qa` | sonnet |
+
+Workers are defined in `workers/` as markdown files. Each stage in `orc.yaml` names a worker; use `--worker` to override for a single run.
+
 `auto` — agent calls `orc mark <ticket> next`, next stage picks up immediately  
 `manual` — agent calls `orc mark <ticket> pause`; a human approves before continuing
 
@@ -209,7 +220,7 @@ flowchart TD
     R --> WT[orc mark pause\nhuman needed]
     R --> DN[orc mark done\nfinal stage]
 
-    AD -->|status: ready| N
+    AD -->|status: pending| N
     WT -->|human resolves\norc next| N
     DN -->|status: done| END([done])
 
