@@ -19,9 +19,111 @@
 
 ## Up next
 
-### adhoc jobs?
+### `orc jit <ticket> --worker <id> "<instruction>"` (spec)
 
-do one off stages with a particular worker, orc adhoc <ticket> --worker bob "make sure fred did a good job"
+A JIT stage — same mechanics as a normal stage (worker, prompt, output dir, history entry) but
+conjured on demand rather than declared in `orc.yaml`. Does not advance the pipeline stage.
+The agent signals completion via `orc mark <ticket> jit-done`, which writes a history entry
+so `orc status` shows the task happened.
+Useful for spot checks, secondary reviews, or exploratory tasks that don't belong in the pipeline.
+
+#### Command
+
+```
+orc jit <ticket> --worker <id> "<instruction>"
+```
+
+Flags:
+- `--worker <id>` — required; the worker to run the task
+- `--dry` — print the resolved worker and prompt without launching
+- `--tmux` — run in a tmux window (uses the ticket's existing session if one is active)
+
+#### Behavior
+
+1. Resolve the feature dir (searches both `features/` and `features/_archive/`)
+2. Resolve the named worker from `workers/` — error if not found
+3. Build the prompt from the instruction + ticket context (see below)
+4. Create output dir `features/<slug>/jit/<timestamp>/` — the agent writes here
+5. Write `runtime.jit` to STATE.yaml: `{worker: <id>, task: <instruction>, started_at: <timestamp>}`
+6. Launch the worker via the same `launchPlan` path used by `orc next`
+
+Works against any ticket status (`pending`, `active`, `paused`, `done`, `archived`) — no guard.
+
+#### CWD and orientation
+
+CWD is set to the feature dir (`features/<slug>/`). The agent starts there, reads `STATE.yaml`
+to understand the ticket, then navigates the workspace from there. No worktree resolution —
+jit tasks are not tied to a specific repo operation.
+
+#### Prompt shape
+
+```
+Before starting: read AGENTS.md and ORC.md.
+
+## JIT task: <ticket>
+
+<instruction>
+
+## Context
+
+Start in `features/<slug>/` and orient yourself by reading:
+- `STATE.yaml` — current state and history
+- `TICKET.md` — original ticket
+- `SPEC.md` — scope and requirements (if present)
+- `DECISIONS.md` — decisions made so far (if present)
+
+Current pipeline stage: <stage> (do not advance — this is a one-off task outside the pipeline)
+
+Write any output or notes to `features/<slug>/jit/<timestamp>/`.
+
+When you are done, run:
+  orc mark <ticket> jit-done "<summary of what you did>"
+```
+
+#### `orc mark <ticket> jit-done "<summary>"`
+
+New subcommand of `orc mark` (hidden, agent-facing). Does three things only:
+1. Appends a history entry: stage `"jit"`, worker ID, result = summary
+2. Clears `runtime.jit` from STATE.yaml
+3. Prints `Done: jit task recorded for <ticket>`
+
+Does NOT change ticket status or pipeline stage.
+
+#### STATE.yaml shape
+
+```yaml
+runtime:
+  jit:
+    worker: bob-the-developer
+    task: "make sure fred did a good job"
+    started_at: "2026-05-31T14:23:00Z"
+```
+
+Present while the jit job is running, absent otherwise. `orc status` shows it as a second
+active item alongside the pipeline stage. The TUI surfaces it in two places:
+- **Feature list row** — e.g. `develop + jit` or a small indicator so it's visible at a glance
+  without obscuring the pipeline stage
+- **Detail view** — full `runtime.jit` block shown as a distinct section: worker, task text,
+  and started_at, so you can see exactly what's running and when it started
+
+#### State impact
+
+- Pipeline stage and status are unchanged throughout
+- `runtime.jit` is set before launch, cleared by `jit-done`
+- One history entry lands in STATE.yaml when the agent calls `jit-done` — visible in `orc status`
+
+#### Implementation notes
+
+- Add `jitCmd` (human, visible) and `runJIT` to `cmd/orc/main.go`
+- Add `jit-done` branch to `runMark` in `cmd/orc/main.go` (alongside `next`, `pause`, `done`)
+- Worker resolution: `workers.FindByID` directly — `--worker` is required, no fallback chain
+- Prompt: `buildJITPrompt(s *state.State, workerID, instruction, outputDir string) string` — inline in `runJIT` or in `runner`
+- Output dir: `filepath.Join(featureDir, "jit", time.Now().Format("20060102-150405"))`, created with `os.MkdirAll` before launch
+- Feature dir: reuse `findFeatureDirWithArchive` (currently in `cmd/orc/main.go` — consider moving to `internal/state` so both commands share it)
+- STATE.yaml: add `JITRuntime` struct and `runtime.jit` field to the `Runtime` struct in `internal/state`; add `state.SetJIT` and `state.ClearJIT` functions
+- History: add `state.AppendHistory(featureDir, stage, workerID, result string) error` to `internal/state` — thin wrapper that loads, appends, and saves without touching any other fields
+
+**Effort:** Small-medium. No new packages. Reuses `launchPlan`, `workers.FindByID`, and existing launch infrastructure. New surface area: `buildJITPrompt`, `JITRuntime` struct, `state.SetJIT`/`ClearJIT`, `state.AppendHistory`, and the `jit-done` mark branch.
 
 ### Helpful plugins
 
