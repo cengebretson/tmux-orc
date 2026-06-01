@@ -108,7 +108,7 @@ Rules:
 - Set `next_action.cwd` to the worktree path when the next agent should continue there.
 - Record the branch and worktree path before ending the session.
 - Do not manually delete worktrees during feature work; `orc archive` handles cleanup.
-- If the correct repo, branch, or worktree path is unclear, use `orc mark ... wait` and ask.
+- If the correct repo, branch, or worktree path is unclear, use `orc mark ... pause` and ask.
 
 ---
 
@@ -130,7 +130,7 @@ Read `STATE.yaml` and `TICKET.md` at the start of every session. Read `SPEC.md` 
 
 ## Stage Handoff
 
-The feature folder is the handoff medium between stages. Read previous stage outputs before starting work. If a required input is missing, `orc mark ... wait` — do not proceed.
+The feature folder is the handoff medium between stages. Read previous stage outputs before starting work. If a required input is missing, `orc mark ... pause` — do not proceed.
 
 Each stage writes its outputs to a subfolder matching its name: `<stage-name>/`. This makes provenance unambiguous — if you need to find what `develop` produced, look in `develop/`.
 
