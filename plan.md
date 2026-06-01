@@ -23,11 +23,17 @@
 
 Add a list of mcp/plugins that help this workflow work. For example context-mode will save on tokens. I am sure there are others.
 
+### autocomplete help
+
+does autocomplete filter active tickets on tab complete?
+
 ### Agent completion notification
 
 Fire a user-defined shell command when a ticket transitions state. Most useful
 in `--tmux` mode where sessions run unattended and the user needs a signal that
 work is ready for review or is blocked.
+
+look at slackcate for an eample slackcat --channel alerts --username Grommash -m "The build is complete, warchief."
 
 #### Config shape (`orc.yaml`)
 
