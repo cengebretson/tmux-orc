@@ -406,14 +406,20 @@ args:
 Implements features, opens PRs, and repairs CI failures.
 ```
 
-`orc.yaml` declares the default worker per stage via `worker: <id>` in each
-stage entry. `orc next` looks up that worker, builds the prompt, and launches it.
+`orc.yaml` declares the default worker per stage via `worker: <id>` in each stage entry. `orc next` looks up that worker, builds the prompt, and launches it.
 
-Worker resolution order:
-1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
-2. `stage.worker` in STATE.yaml — set by a previous `orc mark <ticket> next --worker`
+**What goes into the prompt:**
+
+Every launch gets a preamble pointing the agent at `AGENTS.md` and `ORC.md`, followed by the task prompt from `STATE.yaml`'s `next_action` field (or a generated one pointing at `features/<slug>/STATE.yaml` and `stages/<stage>.md`), and a closing instruction with the exact `orc mark` command to run when done — including whether the next advance is `auto` or `manual`.
+
+When relaunching a paused or interrupted session, `orc next` builds a richer recovery prompt that also includes: recent history entries (what each prior stage did and who ran it), any partial output files already written to the current stage folder, and a checklist of key context files to read — `TICKET.md`, `SPEC.md`, `DECISIONS.md`, and the stage doc.
+
+This means no agent ever starts cold. The prompt is a complete handoff: what the ticket is, where things stand, what this stage needs to produce, and exactly what command ends the session. The agent reads the files, does the work, runs the command — and the next agent gets the same treatment.
+
+**Worker resolution order:**
+
+1. `--worker <id>` flag on `orc next` — one-off override
+2. `stage.worker` in `STATE.yaml` — set by a previous `orc mark <ticket> next --worker`
 3. `worker:` for the current stage in `orc.yaml`
 
-If no worker is found at any step, `orc next` exits with a clear error pointing to `orc.yaml`.
-
-Use `--dry` to preview the command without launching.
+If no worker is found at any step, `orc next` exits with a clear error pointing to `orc.yaml`. Use `--dry` to preview the full launch command before running it.
