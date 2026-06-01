@@ -206,6 +206,8 @@ flowchart TD
 State is always written to `STATE.yaml` before the session ends — the next agent
 or human picks up exactly where the last one left off.
 
+When a session is paused (`orc mark <ticket> pause`), the reason is recorded in history and status is set to `paused`. Running `orc next <ticket>` again will show the pause reason and offer to relaunch with a recovery prompt built from the current feature context — so the agent resumes with full awareness of what was in progress and why it stopped.
+
 ---
 
 ## Commands
