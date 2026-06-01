@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cengebretson/orc/internal/workers"
@@ -68,6 +69,22 @@ var portraits = func() map[string][]string {
 	}
 	return m
 }()
+
+// engineWeapon maps an engine name to a Bard's Tale-style weapon name.
+func engineWeapon(engine string) string {
+	switch strings.ToLower(engine) {
+	case "claude":
+		return "Arcane Tome"
+	case "codex":
+		return "Codex Blade"
+	case "cursor":
+		return "Cursor Staff"
+	case "gemini":
+		return "Gemini Orb"
+	default:
+		return "Unknown Relic"
+	}
+}
 
 // workerDescription extracts the first non-heading paragraph from a worker .md file.
 func workerDescription(path string) string {
@@ -218,6 +235,30 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 			right = rightLines[i]
 		}
 		bodyLines = append(bodyLines, styleDim.Render(fmt.Sprintf("%-10s", left))+"   "+right)
+	}
+
+	// ── equipment ────────────────────────────────────────────────────
+	bodyLines = append(bodyLines, "")
+	bodyLines = append(bodyLines, styleDetailLabel.Render("EQUIPMENT"))
+	weapon := engineWeapon(w.Engine)
+	bodyLines = append(bodyLines, fmt.Sprintf("  %s  %-22s  %s",
+		peach.Render("⚔"),
+		styleDetailValue.Render(weapon),
+		styleDim.Render(w.Model),
+	))
+	if len(w.Args) > 0 {
+		keys := make([]string, 0, len(w.Args))
+		for k := range w.Args {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			bodyLines = append(bodyLines, fmt.Sprintf("  %s  %s: %s",
+				styleDim.Render("✦"),
+				styleDim.Render(k),
+				styleSubtext.Render(w.Args[k]),
+			))
+		}
 	}
 
 	// ── quest log ────────────────────────────────────────────────────
