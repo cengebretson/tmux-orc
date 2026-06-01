@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"embed"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -10,6 +11,9 @@ import (
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/charmbracelet/lipgloss"
 )
+
+//go:embed assets/portraits/*.txt
+var portraitsFS embed.FS
 
 // bardClass returns the Bard's Tale character class for a worker.
 // If bards_tale_class is set in the worker's frontmatter, that wins.
@@ -55,69 +59,20 @@ func workerStats(id string) [5]int {
 	return out
 }
 
-// portraits holds retro ASCII art for each class. Each string is exactly 10 chars wide.
-var portraits = map[string][]string{
-	"WARRIOR": {
-		`  _____  `,
-		` /o   o\ `,
-		`| |___| |`,
-		` \_____/ `,
-		`  /|||\ `,
-		` / ||| \ `,
-		`  /   \  `,
-		` [=====] `,
-		`  |   |  `,
-		`  |___|  `,
-	},
-	"RANGER": {
-		`   /\    `,
-		`  /  \   `,
-		` | oo |  `,
-		`  \__/   `,
-		`  (||)   `,
-		` / || \  `,
-		`  /  \   `,
-		` | /\ |  `,
-		` |/  \|  `,
-		`         `,
-	},
-	"BARD": {
-		`  _~_~_  `,
-		` /o . o\ `,
-		`|  \_/  |`,
-		` \  |  / `,
-		`  | | |  `,
-		` /|_|_|\ `,
-		`  |   |  `,
-		` /|   |\ `,
-		`  ~   ~  `,
-		`  ♪   ♫  `,
-	},
-	"ROGUE": {
-		`  _____  `,
-		` / ### \ `,
-		`| ^   ^ |`,
-		` \  -  / `,
-		`  \___/  `,
-		`  /   \  `,
-		` /  |  \ `,
-		`  / | \  `,
-		` /  |  \ `,
-		`   / \   `,
-	},
-	"ADVENTURER": {
-		`    O    `,
-		`   /|\   `,
-		`  / | \  `,
-		`    |    `,
-		`   / \   `,
-		`  /   \  `,
-		`         `,
-		`         `,
-		`         `,
-		`         `,
-	},
-}
+// portraits holds retro ASCII art for each class, loaded from assets/portraits/.
+var portraits = func() map[string][]string {
+	classes := []string{"WARRIOR", "RANGER", "BARD", "ROGUE", "ADVENTURER"}
+	m := make(map[string][]string, len(classes))
+	for _, class := range classes {
+		data, err := portraitsFS.ReadFile("assets/portraits/" + strings.ToLower(class) + ".txt")
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+		m[class] = lines
+	}
+	return m
+}()
 
 // workerDescription extracts the first non-heading paragraph from a worker .md file.
 func workerDescription(path string) string {
