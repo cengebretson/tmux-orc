@@ -43,10 +43,17 @@ type State struct {
 
 type Runtime struct {
 	Tmux *TmuxRuntime `yaml:"tmux,omitempty"`
+	JIT  *JITRuntime  `yaml:"jit,omitempty"`
 }
 
 type TmuxRuntime struct {
 	Session string `yaml:"session"`
+}
+
+type JITRuntime struct {
+	Worker    string `yaml:"worker"`
+	Task      string `yaml:"task"`
+	StartedAt string `yaml:"started_at"`
 }
 
 type Stage struct {
@@ -385,6 +392,48 @@ func ClearRuntime(featureDir string) error {
 		return fmt.Errorf("parsing %s: %w", path, err)
 	}
 	s.Runtime = Runtime{}
+	out, err := yaml.Marshal(&s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0644)
+}
+
+// SetJIT writes runtime.jit to STATE.yaml before a jit task launches.
+func SetJIT(featureDir, workerID, task string) error {
+	path := filepath.Join(featureDir, Filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	var s State
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	s.Runtime.JIT = &JITRuntime{
+		Worker:    workerID,
+		Task:      task,
+		StartedAt: timeNow(),
+	}
+	out, err := yaml.Marshal(&s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0644)
+}
+
+// ClearJIT removes runtime.jit from STATE.yaml after a jit task completes.
+func ClearJIT(featureDir string) error {
+	path := filepath.Join(featureDir, Filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	var s State
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	s.Runtime.JIT = nil
 	out, err := yaml.Marshal(&s)
 	if err != nil {
 		return err

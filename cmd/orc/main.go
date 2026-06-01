@@ -145,6 +145,19 @@ var deleteCmd = &cobra.Command{
 	RunE:  runDelete,
 }
 
+var jitCmd = &cobra.Command{
+	Use:   "jit <ticket> --worker <id> \"<instruction>\"",
+	Short: "Run a one-off agent task outside the pipeline",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runJIT,
+}
+
+var (
+	jitWorker string
+	jitDry    bool
+	jitTmux   bool
+)
+
 var attachCmd = &cobra.Command{
 	Use:   "attach <ticket>",
 	Short: "Attach to the tmux session for a ticket",
@@ -225,6 +238,10 @@ func init() {
 	markCmd.Flags().StringVar(&markWorker, "worker", "", "Worker ID that owns the new stage (next only)")
 	markCmd.Flags().StringVar(&markResult, "result", "", "Summary of what was accomplished (next/done only)")
 	markCmd.Flags().StringVar(&markStage, "stage", "", "New stage name (next only — required when crossing workflow boundaries)")
+	jitCmd.Flags().StringVar(&jitWorker, "worker", "", "Worker ID to run the task (required)")
+	_ = jitCmd.MarkFlagRequired("worker")
+	jitCmd.Flags().BoolVar(&jitDry, "dry", false, "Print resolved worker and prompt without launching")
+	jitCmd.Flags().BoolVar(&jitTmux, "tmux", false, "Send to the ticket's existing tmux session instead of foreground")
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
@@ -234,6 +251,7 @@ func init() {
 	rootCmd.AddCommand(markCmd)
 	rootCmd.AddCommand(archiveCmd)
 	rootCmd.AddCommand(deleteCmd)
+	rootCmd.AddCommand(jitCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(helpAllCmd)
@@ -845,7 +863,13 @@ func runMark(cmd *cobra.Command, args []string) error {
 	ticket := args[0]
 	action := strings.ToLower(args[1])
 
-	featureDir, err := state.FindFeatureDir(root, ticket)
+	// jit-done can target any status including archived; all other actions use features/ only.
+	var featureDir string
+	if action == "jit-done" {
+		featureDir, err = state.FindFeatureDirWithArchive(root, ticket)
+	} else {
+		featureDir, err = state.FindFeatureDir(root, ticket)
+	}
 	if err != nil {
 		return err
 	}
@@ -892,8 +916,30 @@ func runMark(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Status:  done\n")
 		return nil
 
+	case "jit-done":
+		if len(args) < 3 {
+			return fmt.Errorf("orc mark %s jit-done requires a summary", ticket)
+		}
+		s, err := state.Load(featureDir)
+		if err != nil {
+			return err
+		}
+		summary := strings.Join(args[2:], " ")
+		workerID := ""
+		if s.Runtime.JIT != nil {
+			workerID = s.Runtime.JIT.Worker
+		}
+		if err := state.AppendHistory(featureDir, "jit", workerID, summary); err != nil {
+			return err
+		}
+		if err := state.ClearJIT(featureDir); err != nil {
+			return err
+		}
+		fmt.Printf("Done: jit task recorded for %s\n", s.Ticket)
+		return nil
+
 	default:
-		return fmt.Errorf("unknown action %q — use: next [--result] [--stage] [--worker] | pause <reason> | done [--result]", action)
+		return fmt.Errorf("unknown action %q — use: next [--result] [--stage] [--worker] | pause <reason> | done [--result] | jit-done <summary>", action)
 	}
 }
 
@@ -1128,6 +1174,110 @@ func runDelete(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Deleted: %s/\n", rel)
 	return nil
+}
+
+func runJIT(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(globalWorkspace)
+	if err != nil {
+		return err
+	}
+
+	ticket := args[0]
+	instruction := args[1]
+
+	featureDir, err := state.FindFeatureDirWithArchive(root, ticket)
+	if err != nil {
+		return err
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		return err
+	}
+
+	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+	if err != nil {
+		return fmt.Errorf("loading workers: %w", err)
+	}
+	w := workers.FindByID(allWorkers, jitWorker)
+	if w == nil {
+		return fmt.Errorf("worker %q not found in workers/", jitWorker)
+	}
+
+	timestamp := time.Now().Format("20060102-150405")
+	outputDir := filepath.Join(featureDir, "jit", timestamp)
+	prompt := buildJITPrompt(s, instruction, outputDir)
+	launchArgv := workers.LaunchArgs(w, root, featureDir, prompt)
+
+	if jitDry {
+		fmt.Printf("Worker:  %s (%s)\n", w.Name, w.Engine)
+		if w.Model != "" {
+			fmt.Printf("Model:   %s\n", w.Model)
+		}
+		fmt.Printf("Output:  jit/%s/\n", timestamp)
+		fmt.Println()
+		fmt.Println("Would run:")
+		fmt.Printf("  %s\n", workers.LaunchCommand(w, root, featureDir, prompt))
+		fmt.Println()
+		fmt.Println("Prompt:")
+		fmt.Println(prompt)
+		return nil
+	}
+
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("creating jit output dir: %w", err)
+	}
+	if err := state.SetJIT(featureDir, jitWorker, instruction); err != nil {
+		return fmt.Errorf("writing runtime.jit: %w", err)
+	}
+
+	fmt.Printf("Ticket:  %s\n", s.Ticket)
+	fmt.Printf("Worker:  %s (%s)\n", w.Name, w.Engine)
+	fmt.Printf("Output:  jit/%s/\n", timestamp)
+	fmt.Println()
+
+	if jitTmux && tmux.Available() && s.Runtime.Tmux != nil && tmux.SessionExists(s.Runtime.Tmux.Session) {
+		window := "jit"
+		if err := tmux.SendCommand(s.Runtime.Tmux.Session, window, featureDir, featureDir, launchArgv); err != nil {
+			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
+		} else {
+			fmt.Printf("Agent launched in tmux session %s:%s\n", s.Runtime.Tmux.Session, window)
+			fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Runtime.Tmux.Session, window))
+			return nil
+		}
+	}
+
+	fmt.Printf("Launching %s (%s)...\n", w.Name, w.Engine)
+	c := exec.Command(launchArgv[0], launchArgv[1:]...)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	c.Dir = featureDir
+	return c.Run()
+}
+
+func buildJITPrompt(s *state.State, instruction, outputDir string) string {
+	return fmt.Sprintf(`Before starting: read AGENTS.md and ORC.md.
+
+## JIT task: %s
+
+%s
+
+## Context
+
+Start in features/%s/ and orient yourself by reading:
+- STATE.yaml — current state and history
+- TICKET.md — original ticket
+- SPEC.md — scope and requirements (if present)
+- DECISIONS.md — decisions made so far (if present)
+
+Current pipeline stage: %s (do not advance — this is a one-off task outside the pipeline)
+
+Write any output or notes to %s
+
+When you are done, run:
+  orc mark %s jit-done "<summary of what you did>"`,
+		s.Ticket, instruction, s.Slug, s.Stage.Name, outputDir, s.Ticket)
 }
 
 func runTui(cmd *cobra.Command, args []string) error {
