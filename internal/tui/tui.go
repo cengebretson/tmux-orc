@@ -1533,26 +1533,20 @@ func loadData(root string) tea.Cmd {
 				inThisChain[stageName] = true
 				allStages[stageName] = true
 			}
-			// repair loops from repair_stages section (sorted for stable order)
+			// loop stages — derived from Loop blocks on pipeline stages
 			var loops []repairLoop
 			var repairs []repairStep
-			repairNames := make([]string, 0, len(workflowCfg.RepairStages))
-			for rname := range workflowCfg.RepairStages {
-				repairNames = append(repairNames, rname)
-			}
-			sort.Strings(repairNames)
-			for _, rname := range repairNames {
-				rdef := workflowCfg.RepairStages[rname]
-				if inThisChain[rdef.Repairs] {
-					loops = append(loops, repairLoop{name: rname, target: rdef.Repairs})
-					repairs = append(repairs, repairStep{
-						name:       rname,
-						workerID:   rdef.Worker,
-						advance:    rdef.Advance,
-						repairs:    rdef.Repairs,
-						maxRetries: rdef.MaxRetries,
-					})
+			for _, sc := range workflowCfg.Stages(wfName) {
+				if sc.Loop == nil || !inThisChain[sc.Name] {
+					continue
 				}
+				loops = append(loops, repairLoop{name: sc.Loop.Via, target: sc.Name})
+				repairs = append(repairs, repairStep{
+					name:       sc.Loop.Via,
+					workerID:   sc.Loop.Worker,
+					repairs:    sc.Name,
+					maxRetries: sc.Loop.Max,
+				})
 			}
 			chains = append(chains, workflowChain{name: wfName, steps: steps, loops: loops, repairSteps: repairs})
 		}

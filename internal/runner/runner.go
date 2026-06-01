@@ -48,6 +48,14 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 	}
 	stageCfg, _ := cfg.StageConfig(workflow, s.Stage.Name)
 	nextStage := cfg.NextStage(workflow, s.Stage.Name)
+	// If current stage is a loop stage, the "next" stage is the owner stage.
+	if nextStage == "" {
+		if owner, ok := cfg.OwnerStage(workflow, s.Stage.Name); ok {
+			nextStage = owner
+		}
+	}
+	loopDef, _ := cfg.LoopConfig(workflow, s.Stage.Name)
+	isLoopStage := cfg.IsLoopStage(workflow, s.Stage.Name)
 
 	worker, reason, err := resolveWorker(allWorkers, workerOverride, s.Stage.Worker, stageCfg.Worker, s.Stage.Name)
 	if err != nil {
@@ -55,7 +63,7 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 	}
 
 	cwd := s.ResolveCWD(root, featureDir)
-	prompt := buildPrompt(s, nextStage, stageCfg.Advance)
+	prompt := buildPrompt(s, nextStage, stageCfg.Advance, loopDef, isLoopStage)
 
 	plan := &Plan{
 		Ticket:         s.Ticket,
@@ -67,7 +75,7 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 		LaunchCommand:  workers.LaunchCommand(worker, root, cwd, prompt),
 		LaunchArgv:     workers.LaunchArgs(worker, root, cwd, prompt),
 		CWD:            cwd,
-		EndInstruction: endInstruction(s.Ticket, nextStage, stageCfg.Advance),
+		EndInstruction: endInstruction(s.Ticket, nextStage, stageCfg.Advance, loopDef, isLoopStage),
 	}
 	return plan, nil
 }
@@ -121,7 +129,7 @@ func resolveWorker(allWorkers []*workers.Worker, flagOverride, stageOwner, confi
 	return nil, "", fmt.Errorf("no worker assigned for stage %q — set worker: in orc.yaml", stageName)
 }
 
-func buildPrompt(s *state.State, nextStage, advanceMode string) string {
+func buildPrompt(s *state.State, nextStage, advanceMode string, loopDef *config.LoopDef, isLoopStage bool) string {
 	prompt := s.NextAction.Prompt
 	if prompt == "" {
 		prompt = fmt.Sprintf(
@@ -135,21 +143,41 @@ func buildPrompt(s *state.State, nextStage, advanceMode string) string {
 		s.Ticket,
 	)
 
-	return preamble + prompt + endInstruction(s.Ticket, nextStage, advanceMode)
+	return preamble + prompt + endInstruction(s.Ticket, nextStage, advanceMode, loopDef, isLoopStage)
 }
 
-func endInstruction(ticket, nextStage, advanceMode string) string {
+func endInstruction(ticket, nextStage, advanceMode string, loopDef *config.LoopDef, isLoopStage bool) string {
 	if nextStage == "" {
 		return ""
 	}
+	// Loop stage: fixed return to owner, no branching.
+	if isLoopStage {
+		return fmt.Sprintf(
+			"\n\nWhen your work is complete, run:\n  orc mark %s next --result \"<summary of what was done>\"",
+			ticket,
+		)
+	}
+	// Stage with a loop: branching end instruction.
+	if loopDef != nil {
+		forward := fmt.Sprintf("orc mark %s next --result \"<summary>\"", ticket)
+		loop := fmt.Sprintf("orc mark %s next --stage %s --result \"<what needs fixing>\"", ticket, loopDef.Via)
+		if advanceMode == "manual" {
+			forward = fmt.Sprintf("orc mark %s pause \"<summary — human will review before advancing to %s>\"", ticket, nextStage)
+		}
+		return fmt.Sprintf(
+			"\n\nWhen this stage is complete, run ONE of:\n\n  %s\n    → work is good, advance to %s\n\n  %s\n    → issues found, enter %s loop",
+			forward, nextStage, loop, loopDef.Via,
+		)
+	}
+	// Normal stage.
 	if advanceMode == "manual" {
 		return fmt.Sprintf(
-			"\n\nWhen this stage is complete, run:\n  orc mark %s wait \"<summary — human will review before advancing to %s>\"",
+			"\n\nWhen this stage is complete, run:\n  orc mark %s pause \"<summary — human will review before advancing to %s>\"",
 			ticket, nextStage,
 		)
 	}
 	return fmt.Sprintf(
-		"\n\nWhen this stage is complete, run:\n  orc mark %s advance --owner <worker-id> --result \"<summary>\"",
+		"\n\nWhen this stage is complete, run:\n  orc mark %s next --result \"<summary>\"",
 		ticket,
 	)
 }

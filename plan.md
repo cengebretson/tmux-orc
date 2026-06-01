@@ -125,6 +125,134 @@ active item alongside the pipeline stage. The TUI surfaces it in two places:
 
 **Effort:** Small-medium. No new packages. Reuses `launchPlan`, `workers.FindByID`, and existing launch infrastructure. New surface area: `buildJITPrompt`, `JITRuntime` struct, `state.SetJIT`/`ClearJIT`, `state.AppendHistory`, and the `jit-done` mark branch.
 
+### Pipeline loop stages (spec)
+
+A **loop stage** is a repair or review stage that sits off the happy path — only entered
+when the owning stage decides work needs to go back around. Never appears as a top-level
+step in the sequence. Can always be invoked one-off via `orc jit`.
+
+#### orc.yaml shape
+
+```yaml
+workflows:
+  default:
+    stages:
+      - name: develop
+        worker: bob-developer
+        advance: auto
+        loop:
+          via: code-review
+          worker: reviewer
+          max: 3
+          on_max: pause        # default — pause with reason; alternative: fail
+      - name: open-pr
+        worker: bob-developer
+        advance: auto
+        loop:
+          via: pr-repair
+          worker: bob-developer
+          max: 5
+      - name: qa-automation
+        worker: qa-worker
+        advance: manual
+```
+
+Loop stages (`code-review`, `pr-repair`) have their own `stages/<name>.md` instruction
+files but do NOT appear in the stage list. They are loop-only unless called via `orc jit`.
+
+#### Branching end instruction
+
+When a stage has a `loop`, `buildPrompt` renders a branching end instruction instead of
+the normal single-path one:
+
+```
+When this stage is complete, run ONE of:
+
+  orc mark <ticket> next --result "<summary>"
+    → work is good, advance to qa-automation
+
+  orc mark <ticket> next --stage pr-repair --result "<what failed>"
+    → CI failed or changes needed, enter repair loop
+```
+
+The decision criteria (what counts as passing vs needing repair) lives in the stage
+instruction file (`stages/open-pr.md`). The prompt provides the mechanics.
+
+Loop stages themselves get a fixed return instruction:
+
+```
+When repairs are complete, run:
+  orc mark <ticket> next --stage open-pr --result "<what was fixed>"
+```
+
+#### Loop count tracking
+
+STATE.yaml tracks loop count per stage under `stage.loop_count`:
+
+```yaml
+stage:
+  name: open-pr
+  worker: bob-developer
+  loop_count: 2
+```
+
+Incremented each time orc routes to the loop stage. Reset to 0 when the stage
+advances forward (not when it loops). This gives a clear audit trail of how many
+repair cycles a ticket went through.
+
+#### Max and auto-pause
+
+When the agent runs `orc mark <ticket> next --stage pr-repair` and `loop_count >= max`,
+orc blocks the loop and automatically pauses the ticket with a reason:
+
+```
+Loop limit reached (5/5 for pr-repair). Pausing for human review.
+Ticket paused: loop limit reached after 5 repair attempts on open-pr
+```
+
+No new status — uses the existing `paused` status with a descriptive reason. Human can
+then `orc jit` a different approach, adjust the plan, or bump `max` in `orc.yaml` and
+resume with `orc next`.
+
+`on_max: fail` sets status to `done` with a failure result instead of pausing — useful
+for CI pipelines where a hard stop is preferable to waiting on a human.
+
+#### orc status and TUI
+
+- `orc status` shows loop count on tickets mid-loop: `open-pr (2/5 repairs)`
+- TUI feature list row shows the same indicator
+- TUI detail view shows full loop state: owning stage, loop stage, count, max
+
+#### Implementation notes
+
+**Config (`internal/config`):**
+- Add `Loop` struct: `Via`, `Worker`, `Max int`, `OnMax string`
+- Add `Loop *Loop` field to stage config
+- Add `cfg.LoopStage(workflow, stageName) *Loop` helper
+- Add `cfg.IsLoopStage(workflow, stageName) bool` — true if stageName appears as `via` in any stage
+
+**State (`internal/state`):**
+- Add `LoopCount int` to the stage block in `State`
+- Add `state.IncrementLoopCount(featureDir string) error`
+- Add `state.ResetLoopCount(featureDir string) error`
+
+**Runner (`internal/runner`):**
+- Update `buildPrompt` to detect `loop` config and render branching end instruction
+- Update `endInstruction` to handle loop stage return (fixed back-to-owner instruction)
+
+**Mark/advance (`cmd/orc/main.go` — `runMarkNext`):**
+- When `--stage` targets a loop stage: validate it's a valid loop target for current stage
+- Check `loop_count` against `max` — if exceeded, auto-pause with reason instead of routing
+- If ok: call `state.IncrementLoopCount`, then set stage to loop stage
+- When loop stage advances back to owner: call `state.ResetLoopCount` on owner? Or keep count — probably keep it for the audit trail; just don't increment again on forward advance
+
+**Health (`internal/health`):**
+- Warn if any active ticket has `loop_count >= max - 1` (approaching limit)
+
+**Effort:** Medium. No new packages. Changes touch config, state, runner, and mark — but each change is localized. The branching prompt logic and the loop routing in `runMarkNext` are the meatiest parts.
+
+---
+
 ### Helpful plugins
 
 Add a list of mcp/plugins that help this workflow work. For example context-mode will save on tokens. I am sure there are others.

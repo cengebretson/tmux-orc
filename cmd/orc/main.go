@@ -895,21 +895,27 @@ func runMarkNext(root, featureDir string) error {
 	workflow := resolveWorkflow(root, s.Workflow)
 	prevStage := s.Stage.Name
 
-	// If --stage is given manually, validate it exists in the workflow or repair stages.
+	// If --stage is given manually, validate it exists in the workflow or as a loop stage.
 	if markStage != "" {
 		if _, ok := workflowCfg.StageConfig(workflow, markStage); !ok {
 			return fmt.Errorf("stage %q not found in workflow %q — check orc.yaml", markStage, workflow)
 		}
 	}
 
-	// Auto-advance to next stage in the feature's pipeline.
+	// Auto-advance to next stage in the pipeline.
+	// If current stage is a loop stage, auto-return to its owner when no --stage is given.
 	nextStage := markStage
 	if nextStage == "" {
 		nextStage = workflowCfg.NextStage(workflow, prevStage)
+		if nextStage == "" {
+			if owner, ok := workflowCfg.OwnerStage(workflow, prevStage); ok {
+				nextStage = owner
+			}
+		}
 	}
 
 	// Guard: manual gate — agent must call orc mark pause, not orc mark next.
-	if nextStage != "" {
+	if nextStage != "" && !workflowCfg.IsLoopStage(workflow, prevStage) {
 		if sc, ok := workflowCfg.StageConfig(workflow, prevStage); ok && sc.Advance == "manual" {
 			return fmt.Errorf(
 				"stage %q has advance: manual — use `orc mark %s pause \"<reason>\"` so a human can review before continuing",
@@ -918,14 +924,27 @@ func runMarkNext(root, featureDir string) error {
 		}
 	}
 
-	// Guard: repair stage max_retries.
-	if rs, ok := workflowCfg.RepairStage(prevStage); ok && rs.MaxRetries > 0 {
-		count := s.StageCounts[prevStage]
-		if count >= rs.MaxRetries {
-			return fmt.Errorf(
-				"repair stage %q has reached max_retries (%d) — resolve manually or use `orc mark %s pause`",
-				prevStage, rs.MaxRetries, s.Ticket,
-			)
+	// Guard: loop routing — validate target is a valid loop stage for current stage,
+	// and auto-pause when the loop limit is reached.
+	if markStage != "" && workflowCfg.IsLoopStage(workflow, markStage) {
+		owner, _ := workflowCfg.OwnerStage(workflow, markStage)
+		if owner != prevStage {
+			return fmt.Errorf("stage %q is a loop stage owned by %q, not %q", markStage, owner, prevStage)
+		}
+		if loopDef, ok := workflowCfg.LoopConfig(workflow, prevStage); ok && loopDef.Max > 0 {
+			count := s.StageCounts[markStage]
+			if count >= loopDef.Max {
+				reason := fmt.Sprintf("loop limit reached (%d/%d for %s)", count, loopDef.Max, markStage)
+				if loopDef.OnMax == "fail" {
+					result := markResult
+					if result == "" {
+						result = reason
+					}
+					return state.Done(featureDir, result)
+				}
+				fmt.Printf("Loop limit reached (%d/%d for %s). Pausing for human review.\n", count, loopDef.Max, markStage)
+				return state.Pause(featureDir, reason)
+			}
 		}
 	}
 

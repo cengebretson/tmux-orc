@@ -160,21 +160,20 @@ workflows:
 	}
 }
 
-func TestLoad_RepairStages(t *testing.T) {
+func TestLoad_LoopStages(t *testing.T) {
 	dir := t.TempDir()
 	writeOrcYAML(t, dir, `
 workflows:
   default:
     stages:
       - name: pr-open
+        worker: bob-developer
         advance: auto
-
-repair_stages:
-  pr-repair:
-    repairs: pr-open
-    worker: bob-developer
-    advance: auto
-    max_retries: 3
+        loop:
+          via: pr-repair
+          worker: bob-developer
+          max: 3
+          on_max: pause
 `)
 
 	cfg, err := config.Load(dir)
@@ -182,21 +181,42 @@ repair_stages:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	rd, ok := cfg.RepairStage("pr-repair")
+	loop, ok := cfg.LoopConfig("default", "pr-open")
 	if !ok {
-		t.Fatal("RepairStage(pr-repair) not found")
+		t.Fatal("LoopConfig(pr-open) not found")
 	}
-	if rd.Repairs != "pr-open" {
-		t.Errorf("Repairs = %q, want pr-open", rd.Repairs)
+	if loop.Via != "pr-repair" {
+		t.Errorf("Via = %q, want pr-repair", loop.Via)
 	}
-	if rd.MaxRetries != 3 {
-		t.Errorf("MaxRetries = %d, want 3", rd.MaxRetries)
+	if loop.Max != 3 {
+		t.Errorf("Max = %d, want 3", loop.Max)
 	}
-	if !cfg.IsRepairStage("pr-repair") {
-		t.Error("IsRepairStage(pr-repair) = false, want true")
+	if loop.OnMax != "pause" {
+		t.Errorf("OnMax = %q, want pause", loop.OnMax)
 	}
-	if cfg.IsRepairStage("pr-open") {
-		t.Error("IsRepairStage(pr-open) = true, want false")
+
+	if !cfg.IsLoopStage("default", "pr-repair") {
+		t.Error("IsLoopStage(pr-repair) = false, want true")
+	}
+	if cfg.IsLoopStage("default", "pr-open") {
+		t.Error("IsLoopStage(pr-open) = true, want false")
+	}
+
+	owner, ok := cfg.OwnerStage("default", "pr-repair")
+	if !ok {
+		t.Fatal("OwnerStage(pr-repair) not found")
+	}
+	if owner != "pr-open" {
+		t.Errorf("OwnerStage = %q, want pr-open", owner)
+	}
+
+	// Loop stage resolves via StageConfig.
+	sc, ok := cfg.StageConfig("default", "pr-repair")
+	if !ok {
+		t.Fatal("StageConfig(pr-repair) not found")
+	}
+	if sc.Worker != "bob-developer" {
+		t.Errorf("StageConfig worker = %q, want bob-developer", sc.Worker)
 	}
 }
 

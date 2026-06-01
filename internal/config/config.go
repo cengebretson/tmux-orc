@@ -33,26 +33,28 @@ type WorkflowDef struct {
 	Stages []StageDef `yaml:"stages"`
 }
 
-// StageDef is one step in a workflow.
-type StageDef struct {
-	Name    string `yaml:"name"`
-	Worker  string `yaml:"worker"`
-	Advance string `yaml:"advance"`
+// LoopDef configures a repair/review loop attached to a stage.
+// The loop stage (Via) runs when the owning stage needs to cycle back.
+// It is not part of the linear pipeline — only reachable via the loop or orc jit.
+type LoopDef struct {
+	Via    string `yaml:"via"`
+	Worker string `yaml:"worker"`
+	Max    int    `yaml:"max"`
+	OnMax  string `yaml:"on_max"` // "pause" (default) or "fail"
 }
 
-// RepairStageDef defines a repair loop stage.
-type RepairStageDef struct {
-	Repairs    string `yaml:"repairs"`
-	Worker     string `yaml:"worker"`
-	Advance    string `yaml:"advance"`
-	MaxRetries int    `yaml:"max_retries"`
+// StageDef is one step in a workflow.
+type StageDef struct {
+	Name    string   `yaml:"name"`
+	Worker  string   `yaml:"worker"`
+	Advance string   `yaml:"advance"`
+	Loop    *LoopDef `yaml:"loop,omitempty"`
 }
 
 type Config struct {
-	Repos        []Repo                    `yaml:"repos"`
-	Settings     Settings                  `yaml:"settings"`
-	Workflows    map[string]WorkflowDef    `yaml:"workflows"`
-	RepairStages map[string]RepairStageDef `yaml:"repair_stages"`
+	Repos     []Repo                 `yaml:"repos"`
+	Settings  Settings               `yaml:"settings"`
+	Workflows map[string]WorkflowDef `yaml:"workflows"`
 }
 
 // TuiRefreshInterval returns the configured auto-refresh interval, defaulting to 60s.
@@ -106,29 +108,50 @@ func (c *Config) NextStage(workflowName, current string) string {
 }
 
 // StageConfig returns the StageDef for a named stage in a named workflow.
-// Also checks repair stages if not found in the workflow.
+// Also resolves loop stages (stages referenced via Loop.Via on any pipeline stage).
 func (c *Config) StageConfig(workflowName, stageName string) (StageDef, bool) {
 	for _, s := range c.Workflows[workflowName].Stages {
 		if s.Name == stageName {
 			return s, true
 		}
 	}
-	if rs, ok := c.RepairStages[stageName]; ok {
-		return StageDef{Name: stageName, Worker: rs.Worker, Advance: rs.Advance}, true
+	// Check if it's a loop stage — return a synthetic StageDef with the loop's worker.
+	for _, s := range c.Workflows[workflowName].Stages {
+		if s.Loop != nil && s.Loop.Via == stageName {
+			return StageDef{Name: stageName, Worker: s.Loop.Worker}, true
+		}
 	}
 	return StageDef{}, false
 }
 
-// IsRepairStage returns true if the named stage is a repair stage.
-func (c *Config) IsRepairStage(name string) bool {
-	_, ok := c.RepairStages[name]
-	return ok
+// LoopConfig returns the LoopDef for a stage, if it has one.
+func (c *Config) LoopConfig(workflowName, stageName string) (*LoopDef, bool) {
+	for _, s := range c.Workflows[workflowName].Stages {
+		if s.Name == stageName && s.Loop != nil {
+			return s.Loop, true
+		}
+	}
+	return nil, false
 }
 
-// RepairStage returns the RepairStageDef for the given name, if it exists.
-func (c *Config) RepairStage(name string) (RepairStageDef, bool) {
-	rs, ok := c.RepairStages[name]
-	return rs, ok
+// IsLoopStage returns true if stageName is a loop stage (referenced via Loop.Via) in the workflow.
+func (c *Config) IsLoopStage(workflowName, stageName string) bool {
+	for _, s := range c.Workflows[workflowName].Stages {
+		if s.Loop != nil && s.Loop.Via == stageName {
+			return true
+		}
+	}
+	return false
+}
+
+// OwnerStage returns the pipeline stage that owns the given loop stage.
+func (c *Config) OwnerStage(workflowName, loopStageName string) (string, bool) {
+	for _, s := range c.Workflows[workflowName].Stages {
+		if s.Loop != nil && s.Loop.Via == loopStageName {
+			return s.Name, true
+		}
+	}
+	return "", false
 }
 
 // Load reads orc.yaml from the workspace root.
@@ -137,8 +160,7 @@ func Load(root string) (*Config, error) {
 	data, err := os.ReadFile(filepath.Join(root, Filename))
 	if os.IsNotExist(err) {
 		return &Config{
-			Workflows:    map[string]WorkflowDef{},
-			RepairStages: map[string]RepairStageDef{},
+			Workflows: map[string]WorkflowDef{},
 		}, nil
 	}
 	if err != nil {
@@ -150,9 +172,6 @@ func Load(root string) (*Config, error) {
 	}
 	if cfg.Workflows == nil {
 		cfg.Workflows = map[string]WorkflowDef{}
-	}
-	if cfg.RepairStages == nil {
-		cfg.RepairStages = map[string]RepairStageDef{}
 	}
 	return &cfg, nil
 }

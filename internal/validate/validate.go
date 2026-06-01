@@ -112,9 +112,9 @@ func Run(root, featureDir string) *Report {
 			break
 		}
 	}
-	// Also check repair stages.
+	// Also check loop stages.
 	if !stageInWorkflow {
-		if _, ok := cfg.RepairStages[stageName]; ok {
+		if cfg.IsLoopStage(workflow, stageName) {
 			stageInWorkflow = true
 		}
 	}

@@ -271,13 +271,18 @@ func checkWorkflowRefs(root string) Result {
 			}
 		}
 	}
-	// check repair stage refs too
-	for rsName, rs := range wfCfg.RepairStages {
-		if _, err := os.Stat(filepath.Join(stagesDir, rsName+".md")); err != nil {
-			errs = append(errs, fmt.Sprintf("missing stage file: %s.md", rsName))
-		}
-		if rs.Worker != "" && !knownWorkers[rs.Worker] {
-			errs = append(errs, fmt.Sprintf("unknown worker: %s (repair stage: %s)", rs.Worker, rsName))
+	// check loop stage refs too
+	for _, wfName := range wfCfg.Names() {
+		for _, sc := range wfCfg.Stages(wfName) {
+			if sc.Loop == nil {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(stagesDir, sc.Loop.Via+".md")); err != nil {
+				errs = append(errs, fmt.Sprintf("missing stage file: %s.md", sc.Loop.Via))
+			}
+			if sc.Loop.Worker != "" && !knownWorkers[sc.Loop.Worker] {
+				errs = append(errs, fmt.Sprintf("unknown worker: %s (loop stage: %s)", sc.Loop.Worker, sc.Loop.Via))
+			}
 		}
 	}
 
