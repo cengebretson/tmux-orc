@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -42,6 +41,8 @@ const banner = `
 orc · workspace orchestrator
 `
 
+var version = "dev"
+
 var globalWorkspace string
 
 var rootCmd = &cobra.Command{
@@ -56,11 +57,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print the orc version",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-			fmt.Println(info.Main.Version)
-		} else {
-			fmt.Println("dev")
-		}
+		fmt.Println(version)
 	},
 }
 

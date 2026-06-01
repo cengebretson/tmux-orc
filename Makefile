@@ -1,10 +1,13 @@
 .PHONY: build install clean test lint tidy fmt check
 
+VERSION ?= dev
+LDFLAGS = -ldflags "-X main.version=$(VERSION)"
+
 build:
-	go build -o orc ./cmd/orc/...
+	go build $(LDFLAGS) -o orc ./cmd/orc/...
 
 install:
-	go install ./cmd/orc/...
+	go install $(LDFLAGS) ./cmd/orc/...
 
 clean:
 	rm -f orc
