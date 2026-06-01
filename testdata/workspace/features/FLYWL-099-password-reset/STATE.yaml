@@ -1,0 +1,26 @@
+schema_version: 1
+ticket: FLYWL-099
+slug: FLYWL-099-password-reset
+status: active
+workflow: default
+stage:
+  worker: bob-developer
+  name: develop
+runtime:
+  jit:
+    worker: zach-the-reviewer
+    task: "make sure fred did a good job on the SPEC.md before we go further"
+    started_at: "2026-06-01T13:45:00-05:00"
+next_action:
+  worker: bob-developer
+  prompt: Implement password reset flow per SPEC.md — email token generation and expiry logic are the priority
+  cwd: .
+history:
+  - at: "2026-06-01T09:00:00-05:00"
+    stage: intake
+    worker: fred-documentor
+    result: ticket context loaded, SPEC.md written
+  - at: "2026-06-01T11:30:00-05:00"
+    stage: develop
+    worker: bob-developer
+    result: started
