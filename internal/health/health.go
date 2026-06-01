@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
+	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
 )
 
@@ -68,6 +69,9 @@ func Run(root string) *Report {
 	// workers/
 	report.Results = append(report.Results, checkDirWithCount(root, "workers", "*.md", "worker"))
 
+	// optional dirs
+	report.Results = append(report.Results, checkOptionalDir(root, "worktrees"))
+
 	// orc.yaml (repos + workflows) — grouped under their own section
 	for _, r := range []Result{
 		checkOrcConfig(root),
@@ -79,8 +83,11 @@ func Run(root string) *Report {
 		report.Results = append(report.Results, r)
 	}
 
-	// optional dirs — note presence but don't fail if missing
-	report.Results = append(report.Results, checkOptionalDir(root, "worktrees"))
+	// loop counts — warn when a ticket is approaching its loop max
+	if r := checkLoopCounts(root); r.Name != "" {
+		r.Group = "orc.yaml"
+		report.Results = append(report.Results, r)
+	}
 
 	return report
 }
@@ -307,4 +314,54 @@ func checkWorkflowRefs(root string) Result {
 		return Result{Name: "workflow refs", Status: Missing, Detail: strings.Join(errs, "  ·  ")}
 	}
 	return Result{Name: "workflow refs", Status: OK, Detail: "all workers and stages exist"}
+}
+
+// checkLoopCounts warns when any active ticket is at or near its loop stage max.
+// Returns an empty Result (Name == "") when there is nothing to report.
+func checkLoopCounts(root string) Result {
+	cfg, err := config.Load(root)
+	if err != nil {
+		return Result{}
+	}
+	featuresDir := filepath.Join(root, "features")
+	entries, err := os.ReadDir(featuresDir)
+	if err != nil {
+		return Result{}
+	}
+
+	var warnings []string
+	for _, e := range entries {
+		if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
+			continue
+		}
+		s, err := state.Load(filepath.Join(featuresDir, e.Name()))
+		if err != nil || s.Status != "active" {
+			continue
+		}
+		workflow := s.Workflow
+		if workflow == "" {
+			workflow = cfg.DefaultWorkflow()
+		}
+		stageName := s.Stage.Name
+		if !cfg.IsLoopStage(workflow, stageName) {
+			continue
+		}
+		owner, ok := cfg.OwnerStage(workflow, stageName)
+		if !ok {
+			continue
+		}
+		loopDef, ok := cfg.LoopConfig(workflow, owner)
+		if !ok || loopDef.Max <= 0 {
+			continue
+		}
+		count := s.StageCounts[stageName]
+		if count >= loopDef.Max-1 {
+			warnings = append(warnings, fmt.Sprintf("%s: %s %d/%d", s.Ticket, stageName, count, loopDef.Max))
+		}
+	}
+
+	if len(warnings) == 0 {
+		return Result{}
+	}
+	return Result{Name: "loop counts", Status: Empty, Detail: "approaching limit: " + strings.Join(warnings, "  ·  ")}
 }

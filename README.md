@@ -293,7 +293,7 @@ my-workspace/
     qa-automation.md implement and run automated tests
     # plain markdown — no frontmatter; flow control lives in orc.yaml
 
-  orc.yaml           workspace config — repos, workflows, repair stages, settings
+  orc.yaml           workspace config — repos, workflows, loop stages, settings
   ORC.md             agent state contract — read at session start
 
   worktrees/         git worktrees for ticket branches (gitignored)
@@ -301,7 +301,7 @@ my-workspace/
 
 ## orc.yaml
 
-`orc.yaml` is the workspace config. It declares repos, named workflows, repair
+`orc.yaml` is the workspace config. It declares repos, named workflows, loop
 stages, and optional settings.
 
 ```yaml
@@ -327,22 +327,22 @@ workflows:
       - name: develop
         worker: bob-developer
         advance: manual
-      - name: code-review
-        worker: bob-developer
-        advance: auto
+        loop:
+          via: code-review
+          worker: zach-reviewer
+          max: 3
+          on_max: pause
       - name: pr-open
         worker: bob-developer
         advance: manual
+        loop:
+          via: pr-repair
+          worker: bob-developer
+          max: 3
+          on_max: pause
       - name: qa-automation
         worker: brian-qa
         advance: auto
-
-repair_stages:
-  pr-repair:
-    repairs: pr-open
-    worker: bob-developer
-    advance: auto
-    max_retries: 3
 ```
 
 `default_workflow` is used by `orc work <ticket>` when `--workflow` is omitted.

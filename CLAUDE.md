@@ -17,7 +17,7 @@ Policy lives in files (`RULES.md`, `AGENTS.md`, worker definitions), not in code
 orc/
   cmd/orc/main.go                 CLI entry point (Cobra)
   internal/
-    config/                       orc.yaml parsing — repos, workflows, repair stages, settings
+    config/                       orc.yaml parsing — repos, workflows, loop stages, settings
     health/                       workspace filesystem health checks
     runner/                       next-action resolution — worker, prompt, launch args
     state/                        STATE.yaml parsing and mutations

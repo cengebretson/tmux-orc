@@ -580,6 +580,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	statusCfg, _ := config.Load(root)
+
 	collectRows := func(dir string) []row {
 		entries, _ := os.ReadDir(dir)
 		var rows []row
@@ -609,7 +611,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			rows = append(rows, row{
 				ticket:   s.Ticket,
 				status:   s.Status,
-				workflow: rowPname + " · " + s.Stage.Name,
+				workflow: rowPname + " · " + s.Stage.Name + loopCountSuffix(statusCfg, rowPname, s.Stage.Name, s),
 				worker:   s.Stage.Worker,
 				next:     next,
 				session:  session,
@@ -681,6 +683,26 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// loopCountSuffix returns " (N/M)" when stageName is an active loop stage with a max defined.
+func loopCountSuffix(cfg *config.Config, workflow, stageName string, s *state.State) string {
+	if cfg == nil || !cfg.IsLoopStage(workflow, stageName) {
+		return ""
+	}
+	owner, ok := cfg.OwnerStage(workflow, stageName)
+	if !ok {
+		return ""
+	}
+	loopDef, ok := cfg.LoopConfig(workflow, owner)
+	if !ok || loopDef.Max <= 0 {
+		return ""
+	}
+	count := s.StageCounts[stageName]
+	if count == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (%d/%d)", count, loopDef.Max)
+}
+
 func printShow(root, featureDir string, s *state.State) error {
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Slug:     %s\n", s.Slug)
@@ -697,9 +719,11 @@ func printShow(root, featureDir string, s *state.State) error {
 	fmt.Println()
 	fmt.Println("Stage")
 	workflow := resolveWorkflow(root, s.Workflow)
-	fmt.Printf("  Stage:     %s · %s\n", workflow, s.Stage.Name)
+	wfCfg, _ := config.Load(root)
+	stageSuffix := loopCountSuffix(wfCfg, workflow, s.Stage.Name, s)
+	fmt.Printf("  Stage:     %s · %s%s\n", workflow, s.Stage.Name, stageSuffix)
 	fmt.Printf("  Worker:    %s\n", s.Stage.Worker)
-	if wfCfg, err := config.Load(root); err == nil {
+	if wfCfg != nil {
 		if next := wfCfg.NextStage(workflow, s.Stage.Name); next != "" {
 			sc, _ := wfCfg.StageConfig(workflow, next)
 			advance := sc.Advance

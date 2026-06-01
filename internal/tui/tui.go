@@ -928,9 +928,26 @@ func padRight(s string, width int) string {
 	return s + strings.Repeat(" ", width-w)
 }
 
-// renderHealthLines wraps health items into rows fitting within maxW.
+// renderHealthLines renders health items grouped by their Group field.
+// Items with no group flow together on wrapped rows. Each new group gets a
+// header line and its items indented on their own wrapped rows below it.
 func (m Model) renderHealthLines(maxW int) []string {
-	var parts []string
+	sep := styleDivider.Render("  ·  ")
+	sepW := lipgloss.Width(sep)
+	indent := "  "
+	indentW := 2
+
+	flushRow := func(rows *[]string, row string) {
+		if row != "" {
+			*rows = append(*rows, row)
+		}
+	}
+
+	var rows []string
+	row := ""
+	rowW := 0
+	currentGroup := ""
+
 	for _, item := range m.healthItems {
 		var s lipgloss.Style
 		switch item.Status {
@@ -945,31 +962,43 @@ func (m Model) renderHealthLines(maxW int) []string {
 		if item.Status != health.OK {
 			icon = "✗"
 		}
-		parts = append(parts, s.Render(icon+" "+strings.TrimSpace(item.Name)))
-	}
-	sep := styleDivider.Render("  ·  ")
-	sepW := lipgloss.Width(sep)
+		part := s.Render(icon + " " + strings.TrimSpace(item.Name))
 
-	var rows []string
-	row := ""
-	rowW := 0
-	for _, p := range parts {
-		pW := lipgloss.Width(p)
-		if rowW > 0 && rowW+sepW+pW > maxW {
-			rows = append(rows, row)
+		// group boundary — flush current row and emit header
+		if item.Group != currentGroup {
+			flushRow(&rows, row)
 			row = ""
 			rowW = 0
+			currentGroup = item.Group
+			if currentGroup != "" {
+				rows = append(rows, styleDim.Render(currentGroup))
+			}
 		}
-		if rowW > 0 {
+
+		prefix := ""
+		prefixW := 0
+		if currentGroup != "" {
+			prefix = indent
+			prefixW = indentW
+		}
+
+		pW := lipgloss.Width(part)
+		if rowW > 0 && rowW+sepW+pW > maxW {
+			flushRow(&rows, row)
+			row = prefix
+			rowW = prefixW
+		}
+		if rowW > prefixW {
 			row += sep
 			rowW += sepW
+		} else if rowW == 0 {
+			row = prefix
+			rowW = prefixW
 		}
-		row += p
+		row += part
 		rowW += pW
 	}
-	if row != "" {
-		rows = append(rows, row)
-	}
+	flushRow(&rows, row)
 	return rows
 }
 
@@ -1071,7 +1100,7 @@ func renderRepoList(repos []config.Repo, maxW int) []string {
 	return lines
 }
 
-// renderRouteChain renders the workflow stage sequence with colored arrows and repair loop annotations.
+// renderRouteChain renders the workflow stage sequence with colored arrows and loop stage annotations.
 func renderRouteChain(chain []routeStep, loops []repairLoop, maxW int) []string {
 	if len(chain) == 0 {
 		return nil
@@ -1118,7 +1147,7 @@ func renderRouteChain(chain []routeStep, loops []repairLoop, maxW int) []string 
 		rows = append(rows, row)
 	}
 
-	// repair loop annotations: ↺ name positioned under target chip
+	// loop stage annotations: ↺ name positioned under target chip
 	if len(loops) > 0 {
 		// group loops by target for layout
 		type loopAnnotation struct {
@@ -1198,7 +1227,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 		if wf == "" {
 			wf = "default"
 		}
-		stageCell := wf + "/" + s.Stage.Name
+		stageCell := wf + "/" + s.Stage.Name + chainLoopCountSuffix(m.workflows, wf, s.Stage.Name, s)
 
 		plainWorker := row.workerName
 		if plainWorker == "" {
@@ -1274,7 +1303,7 @@ func (m Model) viewDetail() string {
 		{" Ticket  ", s.Ticket},
 		{" Status  ", statusStyle(s.Status).Render(statusIcon(s.Status) + " " + s.Status)},
 		{" Workflow", resolvedWF},
-		{" Stage   ", s.Stage.Name},
+		{" Stage   ", s.Stage.Name + chainLoopCountSuffix(m.workflows, resolvedWF, s.Stage.Name, s)},
 		{" Worker  ", s.Stage.Worker},
 	}
 	for _, f := range fields {
@@ -1495,6 +1524,25 @@ func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
+}
+
+// chainLoopCountSuffix returns " (N/M)" when stageName is a loop stage with a tracked count.
+func chainLoopCountSuffix(chains []workflowChain, workflowName, stageName string, s *state.State) string {
+	for _, c := range chains {
+		if c.name != workflowName && workflowName != "" && workflowName != "default" {
+			continue
+		}
+		for _, rs := range c.repairSteps {
+			if rs.name == stageName && rs.maxRetries > 0 {
+				count := s.StageCounts[stageName]
+				if count == 0 {
+					return ""
+				}
+				return fmt.Sprintf(" (%d/%d)", count, rs.maxRetries)
+			}
+		}
+	}
+	return ""
 }
 
 // nextStageFor returns the name and advance mode of the stage after stageName
@@ -1995,21 +2043,25 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 	sb.WriteString(drawBox(styleSection.Render(" Stages "), stageRows(chain.steps, 0), width) + "\n")
 
 	if len(chain.repairSteps) > 0 {
-		// convert repairSteps to routeStep slice for reuse
 		repairAsSteps := make([]routeStep, len(chain.repairSteps))
 		for i, rs := range chain.repairSteps {
 			repairAsSteps[i] = routeStep{name: rs.name, advance: rs.advance, workerID: rs.workerID}
 		}
-		repairLines := stageRows(repairAsSteps, len(chain.steps))
-		// append repairs/max-retries annotation under each repair row
-		for _, rs := range chain.repairSteps {
+		rawRows := stageRows(repairAsSteps, len(chain.steps))
+		// rawRows is [header, divider, row0, row1, ...]
+		// Interleave each annotation directly under its row.
+		annotationIndent := "  " + strings.Repeat(" ", wCheck+wStageName+4)
+		var repairLines []string
+		repairLines = append(repairLines, rawRows[:2]...) // header + divider
+		for i, rs := range chain.repairSteps {
+			repairLines = append(repairLines, rawRows[2+i])
 			detail := fmt.Sprintf("repairs %s", rs.repairs)
 			if rs.maxRetries > 0 {
 				detail = fmt.Sprintf("repairs %s · max %d", rs.repairs, rs.maxRetries)
 			}
-			repairLines = append(repairLines, "  "+strings.Repeat(" ", wCheck+wStageName+4)+styleDim.Render(detail))
+			repairLines = append(repairLines, annotationIndent+styleDim.Render(detail))
 		}
-		sb.WriteString(drawBox(styleSection.Render(" Repair Stages "), repairLines, width) + "\n")
+		sb.WriteString(drawBox(styleSection.Render(" Loop Stages "), repairLines, width) + "\n")
 	}
 
 	return sb.String()

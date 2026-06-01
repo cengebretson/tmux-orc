@@ -33,7 +33,7 @@ type WorkflowDef struct {
 	Stages []StageDef `yaml:"stages"`
 }
 
-// LoopDef configures a repair/review loop attached to a stage.
+// LoopDef configures a loop stage attached to a pipeline stage.
 // The loop stage (Via) runs when the owning stage needs to cycle back.
 // It is not part of the linear pipeline — only reachable via the loop or orc jit.
 type LoopDef struct {

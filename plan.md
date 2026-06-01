@@ -14,6 +14,7 @@
 ## Agent TODO
 
 - [x] `orc delete <ticket>` — permanently remove a feature folder; only allowed when status is `done` or `archived`
+- [x] Pipeline loop stages — inline `loop:` on stages, routing, count tracking, status/TUI display, health warnings
 
 ---
 
