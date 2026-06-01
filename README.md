@@ -59,7 +59,7 @@ file. Use `--worker` to override for a single run.
 
 **Human-in-the-loop where it counts.** `orc mark <ticket> pause` creates explicit review gates.
 Agents call it when they need a human decision — not at every step, and not never.
-`orc mark <ticket> next` continues when you're ready.
+`orc next <ticket>` continues when you're ready.
 
 **Agent-agnostic by design.** Works with Claude, Codex, or anything that can read
 a file and run a shell command. No SDK dependency, no lock-in.
@@ -129,7 +129,7 @@ orc work STORY-123
 
 This creates `features/STORY-123/` and immediately prints the intake agent
 launch command. Run it — the agent fetches the ticket, populates `TICKET.md`,
-`SPEC.md`, and `PLAN.md`, and updates `STATE.yaml` to `status: ready`.
+`SPEC.md`, and `PLAN.md`, and updates `STATE.yaml` to `status: pending`.
 
 ### 5. Continue work
 
@@ -160,7 +160,7 @@ flowchart TD
     intake -->|auto| develop["develop\nbob-the-developer"]
     develop -->|manual| CR["code-review\nzach-the-reviewer"]
     CR -->|auto| PO["pr-open\nbob-the-developer"]
-    PO -->|manual| QA["qa-automation\nbob-the-developer"]
+    PO -->|manual| QA["qa-automation\nbrian-qa"]
     PO -.->|CI failures| PR["pr-repair\nbob-the-developer"]
     PR -.-> PO
     QA -->|auto| A(["orc archive"])
@@ -388,9 +388,8 @@ history:
 
 | Status | Meaning | Set by |
 |--------|---------|--------|
-| `pending` | Feature created, intake not yet run | `orc work` |
-| `ready` | Stage complete, queued for next agent | `orc mark <ticket> next` |
-| `active` | Agent is actively working | `orc mark <ticket> start` |
+| `pending` | Feature created or stage complete, waiting for next `orc next` | `orc work`, `orc mark <ticket> next` |
+| `active` | Agent is actively working | `orc next` |
 | `paused` | Human needed — input, approval, or external blocker | `orc mark <ticket> pause` |
 | `done` | All stages complete, or explicitly closed | `orc mark <ticket> next` (final stage) or `orc mark <ticket> done` |
 | `archived` | Feature folder moved to `_archive/` | `orc archive` |

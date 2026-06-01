@@ -96,7 +96,7 @@ To add a new template file, drop it under `internal/workspace/templates/` and re
 - **Human-in-the-loop first.** Background execution comes last, after logging and recovery
   are solid.
 - **Stage-assigned workers by default.** Override with `--worker` for a single run or
-  set `stage.owner` via `orc mark <ticket> advance --owner` to persist across sessions.
+  set `stage.worker` via `orc mark <ticket> next --worker` to persist across sessions.
 - **Product-agnostic by default.** Every decision that could couple `orc` to a single
   agent product should be reconsidered.
 
