@@ -49,7 +49,7 @@ workflows:
         advance: manual
         loop:
           via: code-review
-          worker: bob-developer
+          worker: zach-reviewer
           max: 3
           on_max: pause
       - name: pr-open

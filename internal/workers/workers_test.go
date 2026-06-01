@@ -18,8 +18,8 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(all) != 3 {
-		t.Errorf("loaded %d workers, want 3", len(all))
+	if len(all) != 4 {
+		t.Errorf("loaded %d workers, want 4", len(all))
 	}
 }
 
