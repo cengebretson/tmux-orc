@@ -2,20 +2,6 @@
 
 ---
 
-## Human TODO
-
-- [ ] Rename GitHub repo from `tmux-orc` → `orc` (GitHub Settings → Rename)
-- [ ] After rename: update `go.mod` module path from `github.com/cengebretson/orc` to match (should already be correct if repo is renamed to `orc`)
-- [ ] Update git remote locally: `git remote set-url origin git@github.com:cengebretson/orc.git`
-- [ ] Verify `go install github.com/cengebretson/orc/cmd/orc@latest` works after rename
-
----
-
-## Agent TODO
-
-- [x] `orc delete <ticket>` — permanently remove a feature folder; only allowed when status is `done` or `archived`
-- [x] Pipeline loop stages — inline `loop:` on stages, routing, count tracking, status/TUI display, health warnings
-
 ---
 
 ## Up next
