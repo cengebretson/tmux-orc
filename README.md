@@ -219,7 +219,7 @@ flowchart TD
     style R fill:#313244,stroke:#89b4fa,color:#cdd6f4
     style AD fill:#313244,stroke:#a6e3a1,color:#cdd6f4
     style WT fill:#313244,stroke:#f9e2af,color:#cdd6f4
-    style BL fill:#313244,stroke:#f38ba8,color:#cdd6f4
+    style DN fill:#313244,stroke:#a6e3a1,color:#cdd6f4
 ```
 
 State is always written to `STATE.yaml` before the session ends — the next agent
