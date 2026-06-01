@@ -174,6 +174,7 @@ type Model struct {
 
 	// easter egg: press "!" on a focused worker to open Bard's Tale character sheet
 	charSheetWorker *workers.Worker
+	charSheetReturn viewState
 }
 
 type detailFile struct {
@@ -454,6 +455,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				items := m.sectionItems["workers"]
 				if m.sectionCursor < len(items) {
 					m.charSheetWorker = workerForPath(items[m.sectionCursor].path, m.allWorkers)
+					m.charSheetReturn = viewDashboard
 					m.view = viewCharacterSheet
 				}
 			}
@@ -471,6 +473,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						if err != nil {
 							content = styleHealthErr.Render("could not read: " + err.Error())
 						}
+						m.charSheetWorker = workerForPath(f.path, m.allWorkers)
 						m.viewport = viewport.New(m.width-4, m.height-6)
 						m.viewport.SetContent(content)
 						m.viewerTitle = f.label
@@ -593,6 +596,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.reRenderWorkflowDetail()
 			}
 			m.view = m.viewerReturn
+		case "!":
+			if m.charSheetWorker != nil {
+				m.charSheetReturn = viewFile
+				m.view = viewCharacterSheet
+			}
 		default:
 			var cmd tea.Cmd
 			m.viewport, cmd = m.viewport.Update(msg)
@@ -604,7 +612,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "!", "esc", "b":
-			m.view = viewDashboard
+			m.view = m.charSheetReturn
 		}
 	}
 
