@@ -32,21 +32,11 @@ with the ticket. Every stage reads what the previous one wrote, then writes its
 own outputs into a named subfolder. Any agent — or human — can pick up mid-flight
 and know exactly where things stand without asking anyone.
 
-```mermaid
-flowchart LR
-    IN([intake])       -->|"TICKET.md · SPEC.md · PLAN.md"| DE
-    DE([develop])      -->|"develop/HANDOFF.md"| CR
-    CR([code-review])  -->|"code-review/REVIEW.md"| PO
-    PO([pr-open])      -->|"pr-open/PR.md"| QA
-    QA([qa-automation])--> AR([archived])
+Further reading on the context loss problem and file-based approaches to solving it:
 
-    style IN  fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style DE  fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style CR  fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style PO  fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style QA  fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style AR  fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-```
+- [Context Loss: Why Your AI Coding Agent Forgets](https://cleanaim.com/silent-wiring/problems/context-loss/) — CleanAim
+- [Agent Memory vs. Context Engineering: What Persists Between Sessions](https://www.augmentcode.com/guides/agent-memory-vs-context-engineering) — Augment Code
+- [Codified Context: Infrastructure for AI Agents in a Complex Codebase](https://arxiv.org/abs/2602.20478) — arXiv 2026
 
 ## Why orc?
 
