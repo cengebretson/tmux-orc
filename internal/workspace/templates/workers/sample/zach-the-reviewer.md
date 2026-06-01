@@ -6,6 +6,7 @@ kind: agent
 model: claude-sonnet-4-6
 args:
   effort: medium
+bards_tale_class: ROGUE
 ---
 
 # Zach (Ninja)
