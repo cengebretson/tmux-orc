@@ -1228,6 +1228,9 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 			wf = "default"
 		}
 		stageCell := wf + "/" + s.Stage.Name + chainLoopCountSuffix(m.workflows, wf, s.Stage.Name, s)
+		if s.Runtime.JIT != nil {
+			stageCell += " + jit"
+		}
 
 		plainWorker := row.workerName
 		if plainWorker == "" {
@@ -1319,6 +1322,13 @@ func (m Model) viewDetail() string {
 				styleDetailLabel.Render(" Session "),
 				styleTmuxDead.Render("not running — run orc next "+s.Ticket+" to restart")))
 		}
+	}
+	if s.Runtime.JIT != nil {
+		jit := s.Runtime.JIT
+		stateLines = append(stateLines,
+			fmt.Sprintf("%s  %s", styleDetailLabel.Render(" JIT     "), styleStatusWaiting.Render(jit.Worker+" · "+truncate(jit.Task, innerW-20))),
+			fmt.Sprintf("%s  %s", styleDetailLabel.Render("         "), styleDim.Render("started "+jit.StartedAt)),
+		)
 	}
 	if nextName, nextAdvance := nextStageFor(m.workflows, s.Workflow, s.Stage.Name); nextName != "" {
 		var nextVal string

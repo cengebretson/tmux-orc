@@ -626,10 +626,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				}
 			}
 			rowPname := resolveWorkflow(root, s.Workflow)
+			stageLabel := rowPname + " · " + s.Stage.Name + loopCountSuffix(statusCfg, rowPname, s.Stage.Name, s)
+			if s.Runtime.JIT != nil {
+				stageLabel += " + jit"
+			}
 			rows = append(rows, row{
 				ticket:   s.Ticket,
 				status:   s.Status,
-				workflow: rowPname + " · " + s.Stage.Name + loopCountSuffix(statusCfg, rowPname, s.Stage.Name, s),
+				workflow: stageLabel,
 				worker:   s.Stage.Worker,
 				next:     next,
 				session:  session,
@@ -732,6 +736,13 @@ func printShow(root, featureDir string, s *state.State) error {
 		} else {
 			fmt.Printf("Session:  %s  (not running — run `orc next %s` to restart)\n", session, s.Ticket)
 		}
+	}
+	if s.Runtime.JIT != nil {
+		fmt.Println()
+		fmt.Println("JIT")
+		fmt.Printf("  Worker:   %s\n", s.Runtime.JIT.Worker)
+		fmt.Printf("  Task:     %s\n", s.Runtime.JIT.Task)
+		fmt.Printf("  Started:  %s\n", s.Runtime.JIT.StartedAt)
 	}
 
 	fmt.Println()
