@@ -7,7 +7,8 @@ model: claude-sonnet-4-6
 args:
   effort: medium
 default_tmux_window: claude
-bards_tale_class: ADVENTURER  # WARRIOR | RANGER | BARD | ROGUE | ADVENTURER
+bards_tale:
+  class: ADVENTURER  # WARRIOR | RANGER | BARD | ROGUE | ADVENTURER
 ---
 
 # Worker Display Name

@@ -7,7 +7,8 @@ model: claude-sonnet-4-6
 args:
   effort: medium
 default_tmux_window: claude
-bards_tale_class: BARD
+bards_tale:
+  class: BARD
 ---
 
 # Fred (Document)

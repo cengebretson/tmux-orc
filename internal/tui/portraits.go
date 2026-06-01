@@ -14,7 +14,7 @@ import (
 // If bards_tale_class is set in the worker's frontmatter, that wins.
 // Otherwise it falls back to a heuristic based on the worker's id/name.
 func bardClass(w *workers.Worker) string {
-	if c := strings.ToUpper(strings.TrimSpace(w.BardsTaleClass)); c != "" {
+	if c := strings.ToUpper(strings.TrimSpace(w.BardsTale.Class)); c != "" {
 		return c
 	}
 	combined := strings.ToLower(w.ID + " " + w.Name)
