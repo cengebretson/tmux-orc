@@ -4,7 +4,7 @@ slug: STORY-123-add-user-auth
 status: active
 workflow: default
 stage:
-  owner: bob-developer
+  worker: bob-developer
   name: develop
 repos:
   app:

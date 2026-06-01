@@ -376,7 +376,7 @@ status: active
 workflow: default
 
 stage:
-  owner: bob-developer
+  worker: bob-developer
   name: develop
 
 next_action:
@@ -409,7 +409,7 @@ stage entry. `orc next` looks up that worker, builds the prompt, and launches it
 
 Worker resolution order:
 1. `--worker <id>` flag on `orc next` — one-off override (e.g. to use a more expensive model for a specific review)
-2. `stage.owner` in STATE.yaml — set by a previous `orc mark <ticket> next --worker`
+2. `stage.worker` in STATE.yaml — set by a previous `orc mark <ticket> next --worker`
 3. `worker:` for the current stage in `orc.yaml`
 
 If no worker is found at any step, `orc next` exits with a clear error pointing to `orc.yaml`.

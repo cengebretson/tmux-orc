@@ -49,7 +49,7 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 	stageCfg, _ := cfg.StageConfig(workflow, s.Stage.Name)
 	nextStage := cfg.NextStage(workflow, s.Stage.Name)
 
-	worker, reason, err := resolveWorker(allWorkers, workerOverride, s.Stage.Owner, stageCfg.Worker, s.Stage.Name)
+	worker, reason, err := resolveWorker(allWorkers, workerOverride, s.Stage.Worker, stageCfg.Worker, s.Stage.Name)
 	if err != nil {
 		return nil, err
 	}

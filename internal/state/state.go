@@ -50,8 +50,8 @@ type TmuxRuntime struct {
 }
 
 type Stage struct {
-	Owner string `yaml:"owner"`
-	Name  string `yaml:"name"`
+	Worker string `yaml:"worker"`
+	Name   string `yaml:"name"`
 }
 
 type Repo struct {
@@ -75,7 +75,7 @@ type NextAction struct {
 type HistoryEntry struct {
 	At     string `yaml:"at"`
 	Stage  string `yaml:"stage"`
-	Owner  string `yaml:"owner"`
+	Worker string `yaml:"worker"`
 	Result string `yaml:"result"`
 }
 
@@ -111,7 +111,7 @@ func Start(featureDir string) error {
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
 		Stage:  s.Stage.Name,
-		Owner:  s.Stage.Owner,
+		Worker: s.Stage.Worker,
 		Result: "started",
 	})
 	s.Status = "active"
@@ -140,7 +140,7 @@ func Pause(featureDir, reason string) error {
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
 		Stage:  s.Stage.Name,
-		Owner:  s.Stage.Owner,
+		Worker: s.Stage.Worker,
 		Result: "paused — " + reason,
 	})
 
@@ -173,7 +173,7 @@ func Next(featureDir, stageName, worker, result string) error {
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
 		Stage:  s.Stage.Name,
-		Owner:  s.Stage.Owner,
+		Worker: s.Stage.Worker,
 		Result: result,
 	})
 
@@ -188,7 +188,7 @@ func Next(featureDir, stageName, worker, result string) error {
 		s.Status = "done"
 	}
 	if worker != "" {
-		s.Stage.Owner = worker
+		s.Stage.Worker = worker
 	}
 	s.NextAction = NextAction{}
 
@@ -216,7 +216,7 @@ func Done(featureDir, result string) error {
 	s.History = append(s.History, HistoryEntry{
 		At:     timeNow(),
 		Stage:  s.Stage.Name,
-		Owner:  s.Stage.Owner,
+		Worker: s.Stage.Worker,
 		Result: result,
 	})
 	s.Status = "done"

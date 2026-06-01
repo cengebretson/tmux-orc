@@ -5,7 +5,7 @@ status: ready
 workflow: default
 
 stage:
-  owner: human
+  worker: human
   name: intake
 
 repos: {}

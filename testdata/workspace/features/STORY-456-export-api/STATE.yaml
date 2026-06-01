@@ -4,7 +4,7 @@ slug: STORY-456-export-api
 status: ready
 workflow: default
 stage:
-  owner: fred-documentor
+  worker: fred-documentor
   name: qa-automation
 repos:
   app:

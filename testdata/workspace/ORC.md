@@ -71,7 +71,7 @@ Write a history entry for every stage transition, block, or wait:
 ```yaml
 - at: <RFC3339>
   stage: <stage name>
-  owner: <worker id or "human">
+  worker: <worker id or "human">
   result: <one line>
 ```
 

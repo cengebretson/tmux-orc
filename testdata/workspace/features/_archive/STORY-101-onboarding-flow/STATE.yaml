@@ -4,7 +4,7 @@ slug: STORY-101-onboarding-flow
 status: archived
 workflow: default
 stage:
-  owner: fred-documentor
+  worker: fred-documentor
   name: qa-automation
 next_action:
   worker: ""

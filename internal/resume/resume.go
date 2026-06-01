@@ -66,7 +66,7 @@ func buildPrompt(root, featureDir string, s *state.State, ctx *Context) string {
 		entries = entries[len(entries)-5:]
 	}
 	for _, h := range entries {
-		fmt.Fprintf(&b, "- **%s** (%s, %s): %s\n", h.Stage, h.Owner, h.At, h.Result)
+		fmt.Fprintf(&b, "- **%s** (%s, %s): %s\n", h.Stage, h.Worker, h.At, h.Result)
 	}
 	b.WriteString("\n")
 

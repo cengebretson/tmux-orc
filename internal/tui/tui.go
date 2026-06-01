@@ -1275,7 +1275,7 @@ func (m Model) viewDetail() string {
 		{" Status  ", statusStyle(s.Status).Render(statusIcon(s.Status) + " " + s.Status)},
 		{" Workflow", resolvedWF},
 		{" Stage   ", s.Stage.Name},
-		{" Owner   ", s.Stage.Owner},
+		{" Worker  ", s.Stage.Worker},
 	}
 	for _, f := range fields {
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
@@ -1350,7 +1350,7 @@ func (m Model) viewDetail() string {
 			histLines = append(histLines, fmt.Sprintf(" %s  %-20s  %-18s  %s",
 				styleDim.Render(ts),
 				styleSubtext.Render(truncate(h.Stage, 20)),
-				styleDim.Render(truncate(h.Owner, 18)),
+				styleDim.Render(truncate(h.Worker, 18)),
 				styleSubtext.Render(truncate(h.Result, innerW-72)),
 			))
 		}
@@ -1698,7 +1698,7 @@ func collectFeatures(root string) []*featureRow {
 				continue
 			}
 			workerName := ""
-			workerID := s.Stage.Owner
+			workerID := s.Stage.Worker
 			if workerID == "" {
 				if wfCfg, _ := config.Load(root); wfCfg != nil {
 					if sc, ok := wfCfg.StageConfig(s.Workflow, s.Stage.Name); ok {
@@ -1850,7 +1850,7 @@ func renderWorkerFile(path string, features []*featureRow, width int) (string, e
 		// Active stories for this worker
 		var activeRows []string
 		for _, row := range features {
-			if row.s.Stage.Owner == w.ID && row.s.Status != "archived" {
+			if row.s.Stage.Worker == w.ID && row.s.Status != "archived" {
 				ticket := styleSubtext.Render(padRight(row.s.Ticket, 14))
 				wf := row.s.Workflow
 				if wf == "" {

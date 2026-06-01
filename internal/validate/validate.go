@@ -134,7 +134,7 @@ func Run(root, featureDir string) *Report {
 
 	// Worker exists.
 	sc, _ := cfg.StageConfig(workflow, stageName)
-	workerID := s.Stage.Owner
+	workerID := s.Stage.Worker
 	if workerID == "" {
 		workerID = sc.Worker
 	}

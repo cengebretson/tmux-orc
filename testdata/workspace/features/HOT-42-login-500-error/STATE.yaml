@@ -4,7 +4,7 @@ slug: HOT-42-login-500-error
 status: active
 workflow: hotfix
 stage:
-  owner: bob-developer
+  worker: bob-developer
   name: patch
 next_action:
   worker: bob-developer

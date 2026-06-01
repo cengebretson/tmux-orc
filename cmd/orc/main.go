@@ -330,17 +330,17 @@ func runNext(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		return printJSON(map[string]any{
-			"ticket":   plan.Ticket,
-			"status":   s.Status,
-			"workflow": plan.Workflow,
-			"stage":    plan.Stage,
-			"owner":    s.Stage.Owner,
-			"cwd":      plan.CWD,
-			"prompt":   plan.Prompt,
-			"worker":   plan.Worker.ID,
-			"product":  plan.Worker.Engine,
-			"model":    plan.Worker.Model,
-			"launch":   plan.LaunchCommand,
+			"ticket":       plan.Ticket,
+			"status":       s.Status,
+			"workflow":     plan.Workflow,
+			"stage":        plan.Stage,
+			"stage_worker": s.Stage.Worker,
+			"cwd":          plan.CWD,
+			"prompt":       plan.Prompt,
+			"worker":       plan.Worker.ID,
+			"product":      plan.Worker.Engine,
+			"model":        plan.Worker.Model,
+			"launch":       plan.LaunchCommand,
 		})
 	}
 
@@ -348,7 +348,7 @@ func runNext(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Status:   %s\n", s.Status)
 	fmt.Printf("Workflow: %s\n", resolveWorkflow(root, s.Workflow))
 	fmt.Printf("Stage:    %s\n", s.Stage.Name)
-	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
+	fmt.Printf("Worker:   %s\n", s.Stage.Worker)
 
 	interactive := isTTY()
 	useResume := false
@@ -557,7 +557,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		ticket   string
 		status   string
 		workflow string
-		owner    string
+		worker   string
 		next     string
 		session  string
 	}
@@ -601,7 +601,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				ticket:   s.Ticket,
 				status:   s.Status,
 				workflow: rowPname + " · " + s.Stage.Name,
-				owner:    s.Stage.Owner,
+				worker:   s.Stage.Worker,
 				next:     next,
 				session:  session,
 			})
@@ -611,16 +611,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	printTable := func(rows []row) {
 		if showTmux {
-			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "Ticket", "Status", "Workflow", "Owner", "Tmux", "Next")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "Ticket", "Status", "Workflow", "Worker", "Tmux", "Next")
 			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", "------", "------", "--------", "-----", "----", "----")
 			for _, r := range rows {
-				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", r.ticket, r.status, r.workflow, r.owner, r.session, r.next)
+				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %-6s  %s\n", r.ticket, r.status, r.workflow, r.worker, r.session, r.next)
 			}
 		} else {
-			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "Ticket", "Status", "Workflow", "Owner", "Next")
+			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "Ticket", "Status", "Workflow", "Worker", "Next")
 			fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", "------", "------", "--------", "-----", "----")
 			for _, r := range rows {
-				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", r.ticket, r.status, r.workflow, r.owner, r.next)
+				fmt.Printf("%-16s  %-16s  %-28s  %-20s  %s\n", r.ticket, r.status, r.workflow, r.worker, r.next)
 			}
 		}
 	}
@@ -689,7 +689,7 @@ func printShow(root, featureDir string, s *state.State) error {
 	fmt.Println("Stage")
 	workflow := resolveWorkflow(root, s.Workflow)
 	fmt.Printf("  Stage:     %s · %s\n", workflow, s.Stage.Name)
-	fmt.Printf("  Owner:     %s\n", s.Stage.Owner)
+	fmt.Printf("  Worker:    %s\n", s.Stage.Worker)
 	if wfCfg, err := config.Load(root); err == nil {
 		if next := wfCfg.NextStage(workflow, s.Stage.Name); next != "" {
 			sc, _ := wfCfg.StageConfig(workflow, next)
@@ -761,7 +761,7 @@ func printShow(root, featureDir string, s *state.State) error {
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
 		wfCfg, _ := config.Load(root)
 		sc, _ := wfCfg.StageConfig(workflow, s.Stage.Name)
-		workerID := s.Stage.Owner
+		workerID := s.Stage.Worker
 		if workerID == "" {
 			workerID = sc.Worker
 		}
@@ -789,7 +789,7 @@ func printShow(root, featureDir string, s *state.State) error {
 			if t, err := time.Parse(time.RFC3339, h.At); err == nil {
 				ts = t.Format("2006-01-02 15:04")
 			}
-			fmt.Printf("  %-16s  %-20s  %-20s  %s\n", ts, h.Stage, h.Owner, h.Result)
+			fmt.Printf("  %-16s  %-20s  %-20s  %s\n", ts, h.Stage, h.Worker, h.Result)
 		}
 	}
 
@@ -834,7 +834,7 @@ func runMark(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Ticket:   %s\n", s.Ticket)
 		fmt.Printf("Status:   active\n")
 		fmt.Printf("Stage:    %s · %s\n", workflow, s.Stage.Name)
-		fmt.Printf("Owner:    %s\n", s.Stage.Owner)
+		fmt.Printf("Worker:   %s\n", s.Stage.Worker)
 		return nil
 
 	case "pause":

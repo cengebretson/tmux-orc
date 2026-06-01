@@ -32,8 +32,8 @@ func TestLoad(t *testing.T) {
 	if s.Stage.Name != "develop" {
 		t.Errorf("stage.name = %q, want develop", s.Stage.Name)
 	}
-	if s.Stage.Owner != "bob-developer" {
-		t.Errorf("stage.owner = %q, want bob-developer", s.Stage.Owner)
+	if s.Stage.Worker != "bob-developer" {
+		t.Errorf("stage.worker = %q, want bob-developer", s.Stage.Worker)
 	}
 	if s.NextAction.Worker != "bob-developer" {
 		t.Errorf("next_action.worker = %q, want bob-developer", s.NextAction.Worker)
@@ -130,7 +130,7 @@ ticket: OLD-001
 slug: OLD-001
 status: active
 stage:
-  owner: bob-developer
+  worker: bob-developer
   name: develop
 `)
 
@@ -268,7 +268,7 @@ slug: DONE-001
 status: active
 workflow: default
 stage:
-  owner: bob-developer
+  worker: bob-developer
   name: qa-automation
 `)
 
