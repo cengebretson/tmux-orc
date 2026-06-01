@@ -253,6 +253,30 @@ func SetStatus(featureDir, status string) error {
 	return os.WriteFile(path, out, 0644)
 }
 
+// AppendHistory loads STATE.yaml, appends a history entry, and saves — no other fields touched.
+func AppendHistory(featureDir, stage, workerID, result string) error {
+	path := filepath.Join(featureDir, Filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	var s State
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	s.History = append(s.History, HistoryEntry{
+		At:     timeNow(),
+		Stage:  stage,
+		Worker: workerID,
+		Result: result,
+	})
+	out, err := yaml.Marshal(&s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0644)
+}
+
 // FindFeatureDir locates the feature directory for the given slug or ticket ID.
 // Supports full slug match or prefix match on ticket ID (e.g. "FLYWL-123").
 func FindFeatureDir(workspaceRoot, query string) (string, error) {
@@ -280,6 +304,43 @@ func FindFeatureDir(workspaceRoot, query string) (string, error) {
 	switch len(matches) {
 	case 0:
 		return "", fmt.Errorf("no feature found matching %q — create one with `orc work %s`", query, query)
+	case 1:
+		return matches[0], nil
+	default:
+		names := make([]string, len(matches))
+		for i, m := range matches {
+			names[i] = filepath.Base(m)
+		}
+		return "", fmt.Errorf("ambiguous slug %q matches multiple features:\n  %s\nUse the full slug", query, strings.Join(names, "\n  "))
+	}
+}
+
+// FindFeatureDirWithArchive searches both features/ and features/_archive/ for a ticket match.
+func FindFeatureDirWithArchive(workspaceRoot, query string) (string, error) {
+	query = strings.ToUpper(strings.TrimSpace(query))
+	featuresDir := filepath.Join(workspaceRoot, "features")
+
+	var matches []string
+	searchDirs := []string{featuresDir, filepath.Join(featuresDir, "_archive")}
+	for _, dir := range searchDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
+				continue
+			}
+			upper := strings.ToUpper(e.Name())
+			if upper == query || strings.HasPrefix(upper, query) {
+				matches = append(matches, filepath.Join(dir, e.Name()))
+			}
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no feature found matching %q", query)
 	case 1:
 		return matches[0], nil
 	default:

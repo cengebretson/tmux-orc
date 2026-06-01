@@ -1098,7 +1098,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	featureDir, err := findFeatureDirWithArchive(root, args[0])
+	featureDir, err := state.FindFeatureDirWithArchive(root, args[0])
 	if err != nil {
 		return err
 	}
@@ -1128,43 +1128,6 @@ func runDelete(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Deleted: %s/\n", rel)
 	return nil
-}
-
-// findFeatureDirWithArchive searches both features/ and features/_archive/ for a ticket match.
-func findFeatureDirWithArchive(workspaceRoot, query string) (string, error) {
-	query = strings.ToUpper(strings.TrimSpace(query))
-	featuresDir := filepath.Join(workspaceRoot, "features")
-
-	var matches []string
-	searchDirs := []string{featuresDir, filepath.Join(featuresDir, "_archive")}
-	for _, dir := range searchDirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
-				continue
-			}
-			upper := strings.ToUpper(e.Name())
-			if upper == query || strings.HasPrefix(upper, query) {
-				matches = append(matches, filepath.Join(dir, e.Name()))
-			}
-		}
-	}
-
-	switch len(matches) {
-	case 0:
-		return "", fmt.Errorf("no feature found matching %q", query)
-	case 1:
-		return matches[0], nil
-	default:
-		names := make([]string, len(matches))
-		for i, m := range matches {
-			names[i] = filepath.Base(m)
-		}
-		return "", fmt.Errorf("ambiguous slug %q matches multiple features:\n  %s\nUse the full slug", query, strings.Join(names, "\n  "))
-	}
 }
 
 func runTui(cmd *cobra.Command, args []string) error {
