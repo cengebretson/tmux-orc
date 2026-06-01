@@ -317,6 +317,114 @@ Lower priority — worth revisiting once the core is solid.
 | Workspace packs — share workers/workflows across a team | `orc pack push/pull` — see spec below. |
 | Bard's Tale character sheet easter egg | Press `!` on the worker detail page to reveal a retro RPG character sheet. See spec below. |
 
+### Bard's Tale mode (spec)
+
+Workers gain an optional `bardstale:` block in their frontmatter. When populated,
+the TUI unlocks a character sheet view — a retro RPG party screen overlaid on the
+worker detail panel.
+
+#### Worker frontmatter shape
+
+```yaml
+---
+id: bob-developer
+name: Bob (Barbarian)
+engine: codex
+model: o3
+args:
+  service_tier: medium
+  reasoning_effort: high
+
+bardstale:
+  class: Warrior
+  level: 12
+  portrait: bob.txt        # relative to workspace portraits/ dir
+  quote: "I write first, test later."
+---
+```
+
+All `bardstale:` fields are optional. Workers without the block parse and behave identically.
+
+#### Portrait rendering
+
+Two tiers, detected at runtime:
+
+1. **ASCII art** (default) — a `.txt` file in `portraits/` next to `workers/`.
+   Universally compatible, committed to the workspace repo, renders anywhere.
+
+2. **Inline images** (when supported) — detect terminal image capability at startup
+   and render a real image (PNG/JPEG) instead of the ASCII fallback. Candidate
+   protocols in priority order:
+   - **Kitty graphics protocol** — `$TERM == xterm-kitty` or `$KITTY_WINDOW_ID` set.
+     Ghostty also supports it. Best quality, true pixel rendering.
+   - **iTerm2 inline images** — `$TERM_PROGRAM == iTerm.app` or WezTerm.
+   - **Sixel** — broad compatibility but lower quality; skip unless easy to add.
+
+   tmux complicates passthrough — check `$TMUX` and use tmux's DCS passthrough
+   (`\ePtmux;...\e\\`) when inside a session. If passthrough detection is messy,
+   fall back to ASCII inside tmux.
+
+   Portrait files: `portraits/<id>.txt` (ASCII) and `portraits/<id>.png` (image).
+   `orc health` warns (`⚠`) if a portrait path is referenced but the file is missing.
+
+#### TUI surface
+
+- Press `!` on any focused worker row to toggle the character sheet overlay
+- Overlay replaces the right-hand detail panel — same box, different content:
+
+```
+┌─ Bob (Barbarian) ───────────────────────────┐
+│                                             │
+│   [portrait here]    Class    Warrior       │
+│                      Level    12            │
+│                      Engine   codex / o3    │
+│                                             │
+│   "I write first, test later."              │
+│                                             │
+│                          press ! to dismiss │
+└─────────────────────────────────────────────┘
+```
+
+- Press `!` again (or any navigation key) to dismiss
+
+#### Data model
+
+Add `BardsTale` struct to `internal/workers`:
+
+```go
+type BardsTale struct {
+    Class   string `yaml:"class"`
+    Level   int    `yaml:"level"`
+    Portrait string `yaml:"portrait"`
+    Quote   string `yaml:"quote"`
+}
+```
+
+Add `BardsTale *BardsTale yaml:"bardstale,omitempty"` to `Worker`.
+
+Add `internal/portrait` package:
+- `Render(workspace, workerID string, w *workers.Worker, width, height int) string`
+  — resolves portrait path, detects terminal capability, returns rendered string
+
+#### Implementation notes
+
+- `Workers.Load` already parses arbitrary YAML via frontmatter — adding the struct
+  field is the only config change needed
+- Terminal capability detection should happen once at TUI startup and be stored on
+  the model (`portraitMode: ascii | kitty | iterm2`)
+- The Kitty protocol requires writing raw escape sequences; use a small inline
+  helper rather than pulling in a full image library
+- Decode PNG to raw RGBA bytes, encode as base64, write the Kitty APC sequence —
+  no heavy dependency needed for basic support
+- ASCII art width should be capped at ~30 cols so it fits alongside the stat block
+
+**Effort:** Medium–Large. Portrait rendering is the meatiest part; the data model
+and TUI overlay are straightforward. Kitty protocol is well-documented and
+implementable without external deps. Defer inline images if tmux passthrough turns
+out to be fragile — ASCII-only is a complete feature on its own.
+
+---
+
 ### Workspace packs — share workers, workflows, and policy across a team (spec)
 
 A **pack** is a git repo (or subdirectory of one) that contains the shareable parts
