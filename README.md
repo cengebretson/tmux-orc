@@ -383,7 +383,32 @@ next_action:
   worker: bob-developer
   prompt: Implement the login feature per SPEC.md and PLAN.md.
   cwd: worktrees/my-app/STORY-123-add-login
+
+history:
+  - at: "2026-05-28 09:00"
+    stage: intake
+    worker: fred-documentor
+    result: ticket context loaded, SPEC.md and PLAN.md written
+  - at: "2026-05-29 14:22"
+    stage: develop
+    worker: bob-developer
+    result: paused — need product decision on refresh token TTL
+  - at: "2026-05-30 09:10"
+    stage: develop
+    worker: bob-developer
+    result: resumed after human clarified TTL should be 7 days
 ```
+
+### Status values
+
+| Status | Meaning | Set by |
+|--------|---------|--------|
+| `pending` | Feature created, intake not yet run | `orc work` |
+| `ready` | Stage complete, queued for next agent | `orc mark <ticket> next` |
+| `active` | Agent is actively working | `orc mark <ticket> start` |
+| `paused` | Human needed — input, approval, or external blocker | `orc mark <ticket> pause` |
+| `done` | All stages complete, or explicitly closed | `orc mark <ticket> next` (final stage) or `orc mark <ticket> done` |
+| `archived` | Feature folder moved to `_archive/` | `orc archive` |
 
 ## Workers
 
