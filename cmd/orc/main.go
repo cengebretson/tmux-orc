@@ -400,16 +400,12 @@ func runNext(cmd *cobra.Command, args []string) error {
 		}
 
 	case "waiting_for_human", "blocked":
-		label := "waiting for human input"
-		if s.Status == "blocked" {
-			label = "blocked by an external issue"
-		}
 		reason := s.NextAction.Prompt
 		if len(s.History) > 0 {
 			reason = s.History[len(s.History)-1].Result
 		}
 		fmt.Println()
-		fmt.Printf("⚠ Ticket is %s:\n  %s\n", label, reason)
+		fmt.Printf("⚠ Ticket is waiting:\n  %s\n", reason)
 		if interactive {
 			ans := promptLine("  Launch with recovery context? [Y/n]: ")
 			ans = strings.ToLower(strings.TrimSpace(ans))
@@ -764,10 +760,6 @@ func printShow(root, featureDir string, s *state.State) error {
 	fmt.Println("Next")
 	switch s.Status {
 	case "waiting_for_human", "blocked":
-		label := "Waiting"
-		if s.Status == "blocked" {
-			label = "Blocked"
-		}
 		reason := ""
 		if len(s.History) > 0 {
 			reason = s.History[len(s.History)-1].Result
@@ -775,7 +767,7 @@ func printShow(root, featureDir string, s *state.State) error {
 		if reason == "" {
 			reason = s.NextAction.Prompt
 		}
-		fmt.Printf("  %s: %s\n", label, reason)
+		fmt.Printf("  Waiting: %s\n", reason)
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	default:
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))

@@ -50,11 +50,10 @@ Use `block` when an external condition (service down, access missing, dependency
 | `pending` | Feature created, intake not yet run |
 | `ready` | Ready for the next stage |
 | `in_progress` | Agent is actively working |
-| `waiting_for_human` | Needs input, approval, or a decision only a human can make |
-| `blocked` | External condition prevents progress (service down, access missing, etc.) |
+| `waiting_for_human` | A human needs to act — decision, approval, input, or external blocker |
 | `archived` | Complete |
 
-Use `waiting_for_human` when *you* cannot proceed. Use `blocked` when *nothing* can proceed until an external condition changes.
+Use `orc mark <ticket> wait` or `orc mark <ticket> block` — both set `waiting_for_human`. The reason captures the details.
 
 ---
 

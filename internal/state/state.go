@@ -156,7 +156,8 @@ func WaitForHuman(featureDir, reason string) error {
 	return os.WriteFile(path, out, 0644)
 }
 
-// Block marks the feature as blocked with a reason and records a history entry.
+// Block marks the feature as waiting_for_human with a blocked reason.
+// Both wait and block produce the same status — the reason captures the distinction.
 func Block(featureDir, reason string) error {
 	path := filepath.Join(featureDir, Filename)
 	data, err := os.ReadFile(path)
@@ -176,7 +177,7 @@ func Block(featureDir, reason string) error {
 		Result: "blocked — " + reason,
 	})
 
-	s.Status = "blocked"
+	s.Status = "waiting_for_human"
 	s.NextAction.Worker = "human"
 	s.NextAction.Prompt = reason
 

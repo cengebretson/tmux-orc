@@ -269,7 +269,7 @@ These are called by agents at the end of each session. They are hidden from `orc
 | `orc mark <ticket> advance --owner <id>` | Persist a worker as stage owner for future sessions |
 | `orc mark <ticket> advance --result "<summary>"` | Record what was done in history |
 | `orc mark <ticket> wait "<reason>"` | Pause for human review — used when `advance: manual` or input is needed |
-| `orc mark <ticket> block "<reason>"` | Mark a ticket blocked by an external issue |
+| `orc mark <ticket> block "<reason>"` | Same as wait — both set waiting_for_human; use whichever reads better |
 
 ## Workspace layout
 
