@@ -165,20 +165,15 @@ orc tui
 
 ```mermaid
 flowchart TD
-    W(["orc work"]) --> intake
-    intake -->|auto| develop
-    develop -->|manual| CR["code-review"]
-    CR -->|auto| PO["pr-open"]
-    PO -->|manual| QA["qa-automation"]
-    PO -.->|CI failures| PR["pr-repair"]
-    PR -->|auto| PO
-    QA -->|auto| A(["orc archive"])
+    subgraph pipeline[" "]
+        direction LR
+        W(["orc work"]) --> intake --> develop --> CR["code-review"] --> PO["pr-open"] --> QA["qa-automation"] --> A(["orc archive"])
+    end
 
     ia["intake-agent\nhaiku"] -.-> intake
     bob["bob-the-developer\nsonnet"] -.-> develop
     zach["zach-the-reviewer\nopus"] -.-> CR
     bob -.-> PO
-    bob -.-> PR
     brian["brian-qa\nsonnet"] -.-> QA
 
     style W fill:#313244,stroke:#a6e3a1,color:#cdd6f4
@@ -187,13 +182,14 @@ flowchart TD
     style develop fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style CR fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style PO fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style PR fill:#313244,stroke:#f38ba8,color:#cdd6f4
     style QA fill:#313244,stroke:#cba6f7,color:#cdd6f4
     style ia fill:#313244,stroke:#89b4fa,color:#cdd6f4
     style bob fill:#313244,stroke:#89b4fa,color:#cdd6f4
     style zach fill:#313244,stroke:#89b4fa,color:#cdd6f4
     style brian fill:#313244,stroke:#89b4fa,color:#cdd6f4
 ```
+
+CI failures loop back through a `pr-repair` stage (also `bob-the-developer`) before returning to `pr-open`.
 
 Workers are markdown files in `workers/`. Each stage in `orc.yaml` names a worker — mix models and agents freely. Use `--worker` to override for a single run.
 
