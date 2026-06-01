@@ -362,32 +362,85 @@ func runNext(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Stage:    %s\n", s.Stage.Name)
 	fmt.Printf("Owner:    %s\n", s.Stage.Owner)
 
+	interactive := isTTY()
+	useResume := false
+
 	switch s.Status {
 	case "pending":
 		fmt.Println()
 		fmt.Println("Intake has not run yet. Launching intake agent:")
+
 	case "in_progress":
+		sessionActive := s.Runtime.Tmux != nil && tmux.Available() && tmux.SessionExists(s.Runtime.Tmux.Session)
+		if sessionActive {
+			fmt.Println()
+			fmt.Printf("⚠ tmux session %q is already running.\n", s.Runtime.Tmux.Session)
+			if interactive {
+				ans := promptLine("  Attach to existing session, or launch a new agent? [attach/new/cancel]: ")
+				ans = strings.ToLower(strings.TrimSpace(ans))
+				switch ans {
+				case "new", "n":
+					useResume = true
+				case "attach", "a":
+					return tmux.Attach(s.Runtime.Tmux.Session)
+				default:
+					fmt.Println("Cancelled.")
+					return nil
+				}
+			} else {
+				fmt.Println("  Non-interactive — attaching to existing session.")
+				return tmux.Attach(s.Runtime.Tmux.Session)
+			}
+		} else {
+			fmt.Println()
+			fmt.Println("⚠ Ticket is in_progress but no active session found — likely interrupted.")
+			if interactive {
+				ans := promptLine("  Launch with recovery context? [Y/n]: ")
+				ans = strings.ToLower(strings.TrimSpace(ans))
+				if ans == "" || ans == "y" || ans == "yes" {
+					useResume = true
+				}
+			} else {
+				useResume = true
+			}
+		}
+
+	case "waiting_for_human", "blocked":
+		label := "waiting for human input"
+		if s.Status == "blocked" {
+			label = "blocked by an external issue"
+		}
+		reason := s.NextAction.Prompt
+		if len(s.History) > 0 {
+			reason = s.History[len(s.History)-1].Result
+		}
 		fmt.Println()
-		fmt.Println("⚠ This ticket is already in_progress — an agent session may be active.")
-		fmt.Println("  Check for partial work before launching a new session.")
-	case "waiting_for_human":
-		fmt.Println()
-		fmt.Printf("Needs your input: %s\n", s.NextAction.Prompt)
-		fmt.Println()
-		fmt.Println("Resolve then run `orc next` again to continue:")
-		return nil
-	case "blocked":
-		fmt.Println()
-		fmt.Printf("Blocked: %s\n", s.NextAction.Prompt)
-		fmt.Println()
-		fmt.Println("Resolve the external issue then run `orc next` to continue:")
-		return nil
+		fmt.Printf("⚠ Ticket is %s:\n  %s\n", label, reason)
+		if interactive {
+			ans := promptLine("  Launch with recovery context? [Y/n]: ")
+			ans = strings.ToLower(strings.TrimSpace(ans))
+			if ans != "" && ans != "y" && ans != "yes" {
+				fmt.Println("Cancelled.")
+				return nil
+			}
+		}
+		useResume = true
 	}
 	fmt.Println()
 
 	plan, err := runner.Compute(root, featureDir, nextWorker)
 	if err != nil {
 		return err
+	}
+
+	if useResume {
+		ctx, err := resume.Build(root, featureDir)
+		if err != nil {
+			return fmt.Errorf("building resume prompt: %w", err)
+		}
+		plan.Prompt = ctx.Prompt
+		fmt.Println("Using recovery context.")
+		fmt.Println()
 	}
 
 	if nextDry {
