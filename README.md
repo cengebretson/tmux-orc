@@ -159,24 +159,43 @@ orc tui
 
 ## Example workflow
 
-### Feature folder as handoff point
+### Stages and workers
 
-`features/STORY-123/` is the durable handoff between agents. Each agent reads what the last one wrote, does its job, and updates state. No shared memory, no live coordination — just files.
+`features/STORY-123/` is the durable handoff between agents — each writes state when done, the next picks up from the same folder. Different stages can use different workers and models.
 
 ```mermaid
-flowchart LR
-    bob["bob-the-developer\ndevelop"] -->|"orc mark next"| F["features/STORY-123/\nSTATE.yaml"]
-    F -->|"orc next"| zach["zach-the-reviewer\ncode-review"]
-    zach -->|"orc mark next"| F
-    F -->|"orc next"| brian["brian-qa\nqa-automation"]
+flowchart TD
+    W(["orc work"]) --> intake
+    intake -->|auto| develop
+    develop -->|manual| CR["code-review"]
+    CR -->|auto| PO["pr-open"]
+    PO -->|manual| QA["qa-automation"]
+    PO -.->|CI failures| PR["pr-repair"]
+    PR -->|auto| PO
+    QA -->|auto| A(["orc archive"])
 
+    ia["intake-agent\nhaiku"] -.-> intake
+    bob["bob-the-developer\nsonnet"] -.-> develop
+    zach["zach-the-reviewer\nopus"] -.-> CR
+    bob -.-> PO
+    bob -.-> PR
+    brian["brian-qa\nsonnet"] -.-> QA
+
+    style W fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style A fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style intake fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style develop fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style CR fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style PO fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style PR fill:#313244,stroke:#f38ba8,color:#cdd6f4
+    style QA fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style ia fill:#313244,stroke:#89b4fa,color:#cdd6f4
     style bob fill:#313244,stroke:#89b4fa,color:#cdd6f4
     style zach fill:#313244,stroke:#89b4fa,color:#cdd6f4
     style brian fill:#313244,stroke:#89b4fa,color:#cdd6f4
-    style F fill:#313244,stroke:#a6e3a1,color:#cdd6f4
 ```
 
-Workers are markdown files in `workers/`. Each stage in `orc.yaml` names a worker — different models and agents per stage. Use `--worker` to override for a single run.
+Workers are markdown files in `workers/`. Each stage in `orc.yaml` names a worker — mix models and agents freely. Use `--worker` to override for a single run.
 
 `auto` — agent calls `orc mark <ticket> next`, next stage picks up immediately  
 `manual` — agent calls `orc mark <ticket> pause`; a human approves before continuing
