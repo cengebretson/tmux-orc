@@ -19,6 +19,10 @@
 
 ## Up next
 
+### Helpful plugins
+
+Add a list of mcp/plugins that help this workflow work. For example context-mode will save on tokens. I am sure there are others.
+
 ### Agent completion notification
 
 Fire a user-defined shell command when a ticket transitions state. Most useful
