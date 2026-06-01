@@ -24,6 +24,8 @@ type Worker struct {
 	BardsTale struct {
 		Class string `yaml:"class"` // WARRIOR | RANGER | BARD | ROGUE | ADVENTURER
 	} `yaml:"bards_tale"`
+
+	FilePath string `yaml:"-"` // set at load time, not in frontmatter
 }
 
 // Load parses all worker markdown files in the given directory.
@@ -124,6 +126,7 @@ func parseWorkerFile(path string) (*Worker, error) {
 		w.ID = strings.TrimSuffix(base, filepath.Ext(base))
 	}
 
+	w.FilePath = path
 	return &w, nil
 }
 

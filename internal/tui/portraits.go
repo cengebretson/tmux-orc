@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"hash/fnv"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -118,15 +119,49 @@ var portraits = map[string][]string{
 	},
 }
 
-// workerForPath resolves the *workers.Worker for a sectionItem path.
-// Falls back to a stub with ID derived from the filename.
+// workerDescription extracts the first non-heading paragraph from a worker .md file.
+func workerDescription(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	body := string(data)
+	// strip frontmatter
+	if strings.HasPrefix(strings.TrimSpace(body), "---") {
+		content := strings.TrimSpace(body)[3:]
+		if end := strings.Index(content, "\n---"); end != -1 {
+			body = strings.TrimSpace(content[end+4:])
+		}
+	}
+	var para []string
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") || strings.HasPrefix(line, "*") {
+			if len(para) > 0 {
+				break
+			}
+			continue
+		}
+		if line == "" {
+			if len(para) > 0 {
+				break
+			}
+			continue
+		}
+		para = append(para, line)
+	}
+	return strings.Join(para, " ")
+}
+
+// workerForPath resolves the *workers.Worker for a sectionItem path by matching
+// the file path stored on each worker at load time. Falls back to a stub.
 func workerForPath(path string, allWorkers []*workers.Worker) *workers.Worker {
-	id := strings.TrimSuffix(filepath.Base(path), ".md")
 	for _, w := range allWorkers {
-		if w.ID == id {
+		if w.FilePath == path {
 			return w
 		}
 	}
+	id := strings.TrimSuffix(filepath.Base(path), ".md")
 	return &workers.Worker{ID: id, Name: id}
 }
 
@@ -152,13 +187,17 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		displayName = w.ID
 	}
 
-	// ── right column: class name, stats ─────────────────────────────
+	// ── right column: class name, description, stats ────────────────
+	desc := workerDescription(w.FilePath)
 	const barW = 14
 	rightLines := []string{
 		yellow.Render(class),
 		mauve.Render(displayName),
-		"",
 	}
+	if desc != "" {
+		rightLines = append(rightLines, styleDim.Render(truncate(desc, 42)))
+	}
+	rightLines = append(rightLines, "")
 	for i, v := range stats {
 		filled := v * barW / 18
 		bar := green.Render(strings.Repeat("█", filled)) + styleDim.Render(strings.Repeat("░", barW-filled))
