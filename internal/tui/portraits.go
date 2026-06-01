@@ -155,7 +155,7 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		displayName = w.ID
 	}
 
-	// ── first pass: tally quest counts for derived stats ────────────
+	// ── quest tally for derived stats ────────────────────────────────
 	var activeQ, pausedQ, doneQ int
 	type questEntry struct{ f *featureRow }
 	var quests []questEntry
@@ -180,14 +180,13 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	if level > 20 {
 		level = 20
 	}
-	maxHP := stats[4] * 5 // VIT × 5 → 15–90
+	maxHP := stats[4] * 5
 	currentHP := maxHP - pausedQ*8
 	if currentHP < 1 {
 		currentHP = 1
 	}
-	ac := max(0, 10-(stats[1]-10)/2) // DEX-derived, lower = better
+	ac := max(0, 10-(stats[1]-10)/2)
 
-	// HP colour: green=full, yellow=≥50%, red=<50%
 	hpStyle := green
 	switch {
 	case currentHP < maxHP/2:
@@ -196,16 +195,26 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		hpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
 	}
 
-	dot := styleDim.Render("  ·  ")
-	rpgLine := yellow.Render(fmt.Sprintf("LVL %d", level)) +
-		dot +
-		hpStyle.Render(fmt.Sprintf("HP %d/%d", currentHP, maxHP)) +
-		dot +
-		peach.Render(fmt.Sprintf("XP %d", xp)) +
-		dot +
-		styleSubtext.Render(fmt.Sprintf("AC %d", ac))
+	// ── panel style shared across all three panels ───────────────────
+	// outer box: Padding(1,3)=6 + border=2 → 8 overhead
+	// panel:     Padding(0,2)=4 + border=2 → 6 overhead
+	panelW := m.width - 14 // content width inside each panel
+	if panelW < 40 {
+		panelW = 40
+	}
+	panel := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(p.Surface2)).
+		Padding(0, 2).
+		Width(panelW)
 
-	// ── right column: class, name, description, RPG line, attributes ─
+	// ── panel 1: portrait + stats ────────────────────────────────────
+	dot := styleDim.Render("  ·  ")
+	rpgLine := yellow.Render(fmt.Sprintf("LVL %2d", level)) +
+		dot + hpStyle.Render(fmt.Sprintf("HP %d/%d", currentHP, maxHP)) +
+		dot + peach.Render(fmt.Sprintf("XP %d", xp)) +
+		dot + styleSubtext.Render(fmt.Sprintf("AC %d", ac))
+
 	desc := workerDescription(w.FilePath)
 	const barW = 14
 	rightLines := []string{
@@ -213,7 +222,7 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		mauve.Render(displayName),
 	}
 	if desc != "" {
-		rightLines = append(rightLines, styleDim.Render(truncate(desc, 42)))
+		rightLines = append(rightLines, styleDim.Render(truncate(desc, panelW-16)))
 	}
 	rightLines = append(rightLines, rpgLine, "")
 	for i, v := range stats {
@@ -222,30 +231,30 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		rightLines = append(rightLines, fmt.Sprintf("%s  %s  %2d", peach.Render(statNames[i]), bar, v))
 	}
 
-	// ── portrait + right column side by side ─────────────────────────
-	var bodyLines []string
-	rows := max(len(art), len(rightLines))
-	for i := range rows {
-		left := ""
+	var statsRows []string
+	for i := range max(len(art), len(rightLines)) {
+		left, right := "", ""
 		if i < len(art) {
 			left = art[i]
 		}
-		right := ""
 		if i < len(rightLines) {
 			right = rightLines[i]
 		}
-		bodyLines = append(bodyLines, styleDim.Render(fmt.Sprintf("%-10s", left))+"   "+right)
+		statsRows = append(statsRows, styleDim.Render(fmt.Sprintf("%-10s", left))+"   "+right)
 	}
+	statsPanel := panel.Render(strings.Join(statsRows, "\n"))
 
-	// ── equipment ────────────────────────────────────────────────────
-	bodyLines = append(bodyLines, "")
-	bodyLines = append(bodyLines, styleDetailLabel.Render("EQUIPMENT"))
+	// ── panel 2: equipment ───────────────────────────────────────────
 	weapon := engineWeapon(w.Engine)
-	bodyLines = append(bodyLines, fmt.Sprintf("  %s  %-22s  %s",
-		peach.Render("⚔"),
-		styleDetailValue.Render(weapon),
-		styleDim.Render(w.Model),
-	))
+	equipLines := []string{
+		styleSection.Render("Equipment"),
+		"",
+		fmt.Sprintf("  %s  %-20s  %s",
+			peach.Render("⚔"),
+			styleDetailValue.Render(weapon),
+			styleDim.Render(w.Model),
+		),
+	}
 	if len(w.Args) > 0 {
 		keys := make([]string, 0, len(w.Args))
 		for k := range w.Args {
@@ -253,25 +262,25 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			bodyLines = append(bodyLines, fmt.Sprintf("  %s  %s: %s",
+			equipLines = append(equipLines, fmt.Sprintf("  %s  %s  %s",
 				styleDim.Render("✦"),
-				styleDim.Render(k),
+				styleDetailLabel.Render(k),
 				styleSubtext.Render(w.Args[k]),
 			))
 		}
 	}
+	equipPanel := panel.Render(strings.Join(equipLines, "\n"))
 
-	// ── quest log ────────────────────────────────────────────────────
-	bodyLines = append(bodyLines, "")
-	bodyLines = append(bodyLines, styleDetailLabel.Render("QUEST LOG"))
+	// ── panel 3: quest log ───────────────────────────────────────────
+	questLines := []string{styleSection.Render("Quest Log"), ""}
 	if len(quests) == 0 {
-		bodyLines = append(bodyLines, styleDim.Render("  (no quests)"))
+		questLines = append(questLines, styleDim.Render("  (no quests)"))
 	}
 	for _, q := range quests {
 		f := q.f
 		st := statusStyle(f.s.Status)
 		slug := strings.TrimPrefix(f.s.Slug, f.s.Ticket+"-")
-		bodyLines = append(bodyLines, fmt.Sprintf(
+		questLines = append(questLines, fmt.Sprintf(
 			"  %s  %-12s  %s  %s",
 			st.Render(statusIcon(f.s.Status)),
 			f.s.Ticket,
@@ -279,19 +288,18 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 			st.Render(f.s.Status),
 		))
 	}
+	questPanel := panel.Render(strings.Join(questLines, "\n"))
 
-	bodyLines = append(bodyLines, "")
-	bodyLines = append(bodyLines, styleDim.Render("[!] or [esc] to dismiss"))
-
-	// ── assemble box ─────────────────────────────────────────────────
+	// ── outer box ────────────────────────────────────────────────────
 	title := yellow.Render("★") + "  " + yellow.Render("BARD'S TALE") + "  " + yellow.Render("★")
-	inner := title + "\n\n" + strings.Join(bodyLines, "\n")
+	dismiss := styleDim.Render("[!] or [esc] to dismiss")
+	body := strings.Join([]string{statsPanel, equipPanel, questPanel}, "\n\n")
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(p.Yellow)).
 		Padding(1, 3).
-		Render(inner)
+		Render(title + "\n\n" + body + "\n\n" + dismiss)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
