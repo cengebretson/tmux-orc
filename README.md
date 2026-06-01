@@ -242,6 +242,7 @@ When a session is paused (`orc mark <ticket> pause`), the reason is recorded in 
   - `--worker <id>` — override the selected worker for one launch
 - `orc attach <ticket>` — attach to the tmux session for a ticket
 - `orc archive <ticket>` — archive a completed feature, remove worktrees
+- `orc delete <ticket>` — permanently delete a feature folder (only allowed when status is `done` or `archived`)
 - `orc tui` — open the interactive dashboard
 
 ### Agent commands
