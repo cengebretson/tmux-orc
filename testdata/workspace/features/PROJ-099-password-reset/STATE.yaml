@@ -1,6 +1,6 @@
 schema_version: 1
-ticket: FLYWL-099
-slug: FLYWL-099-password-reset
+ticket: PROJ-099
+slug: PROJ-099-password-reset
 status: active
 workflow: default
 stage:
