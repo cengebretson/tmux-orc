@@ -203,6 +203,11 @@ var helpAllCmd = &cobra.Command{
 		fmt.Println()
 		printSection("Agent commands  (called by agents, hidden from orc --help):", agent)
 		fmt.Println()
+		fmt.Println("Read commands  (human commands agents also use):")
+		fmt.Println()
+		fmt.Println("  orc status <ticket> --json    read current state as JSON")
+		fmt.Println("  orc resume <ticket>           generate a recovery prompt")
+		fmt.Println()
 	},
 }
 
