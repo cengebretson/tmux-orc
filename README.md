@@ -210,6 +210,14 @@ When a session is paused (`orc mark <ticket> pause`), the reason is recorded in 
 
 ---
 
+## Gallery
+
+### Dashboard (`orc tui`)
+
+![orc tui — workspace dashboard showing features, workflows, workers, and routes](docs/tui.png)
+
+---
+
 ## Commands
 
 ### Human commands
