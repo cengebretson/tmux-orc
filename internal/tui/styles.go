@@ -95,7 +95,6 @@ var (
 	styleTableHeader lipgloss.Style
 	styleRowSelected lipgloss.Style
 
-	styleStatusReady      lipgloss.Style
 	styleStatusInProgress lipgloss.Style
 	styleStatusWaiting    lipgloss.Style
 	styleStatusArchived   lipgloss.Style
@@ -135,7 +134,6 @@ func initStyles() {
 	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Subtext0)).Bold(true)
 	styleRowSelected = lipgloss.NewStyle().Background(lipgloss.Color(p.Surface0)).Foreground(lipgloss.Color(p.Text))
 
-	styleStatusReady = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Blue))
 	styleStatusInProgress = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Mauve))
 	styleStatusWaiting = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
 	styleStatusArchived = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Overlay0))
@@ -165,8 +163,6 @@ func initStyles() {
 
 func statusStyle(status string) lipgloss.Style {
 	switch status {
-	case "ready":
-		return styleStatusReady
 	case "active":
 		return styleStatusInProgress
 	case "paused":
@@ -184,8 +180,6 @@ func statusStyle(status string) lipgloss.Style {
 
 func statusIcon(status string) string {
 	switch status {
-	case "ready":
-		return "●"
 	case "active":
 		return "▶"
 	case "paused":

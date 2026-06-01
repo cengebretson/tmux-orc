@@ -117,8 +117,8 @@ var (
 )
 
 var markCmd = &cobra.Command{
-	Use:   "mark <ticket> <start|next|pause|done> [reason]",
-	Short: "Update ticket state — start | next [--result] [--stage] [--worker] | pause <reason> | done [--result]",
+	Use:   "mark <ticket> <next|pause|done> [reason]",
+	Short: "Update ticket state — next [--result] [--stage] [--worker] | pause <reason> | done [--result]",
 	Args:  cobra.MinimumNArgs(2),
 	RunE:  runMark,
 
@@ -355,8 +355,9 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	switch s.Status {
 	case "pending":
-		fmt.Println()
-		fmt.Println("Intake has not run yet. Launching intake agent:")
+		if err := state.Start(featureDir); err != nil {
+			return err
+		}
 
 	case "active":
 		sessionActive := s.Runtime.Tmux != nil && tmux.Available() && tmux.SessionExists(s.Runtime.Tmux.Session)
@@ -822,21 +823,6 @@ func runMark(cmd *cobra.Command, args []string) error {
 	}
 
 	switch action {
-	case "start":
-		s, err := state.Load(featureDir)
-		if err != nil {
-			return err
-		}
-		if err := state.Start(featureDir); err != nil {
-			return err
-		}
-		workflow := resolveWorkflow(root, s.Workflow)
-		fmt.Printf("Ticket:   %s\n", s.Ticket)
-		fmt.Printf("Status:   active\n")
-		fmt.Printf("Stage:    %s · %s\n", workflow, s.Stage.Name)
-		fmt.Printf("Worker:   %s\n", s.Stage.Worker)
-		return nil
-
 	case "pause":
 		s, err := state.Load(featureDir)
 		if err != nil {
@@ -875,7 +861,7 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return nil
 
 	default:
-		return fmt.Errorf("unknown action %q — use: start | next [--result] [--stage] [--worker] | pause <reason> | done [--result]", action)
+		return fmt.Errorf("unknown action %q — use: next [--result] [--stage] [--worker] | pause <reason> | done [--result]", action)
 	}
 }
 

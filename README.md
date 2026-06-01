@@ -165,23 +165,23 @@ orc tui
 flowchart TD
     W([orc work]) --> intake
 
-    intake       -->|auto|        develop
-    develop      -->|manual ●|    code-review
-    code-review  -->|auto|        pr-open
-    pr-open      -->|manual ●|    qa-automation
-    pr-open      -.->|CI failures| pr-repair
-    pr-repair    -->|auto|        pr-open
+    intake      -->|auto|         develop
+    develop     -->|manual|       codeReview[code-review]
+    codeReview  -->|auto|         prOpen[pr-open]
+    prOpen      -->|manual|       qaAuto[qa-automation]
+    prOpen      -.->|CI failures| prRepair[pr-repair]
+    prRepair    -->|auto|         prOpen
 
-    qa-automation -->|auto| A([orc archive])
+    qaAuto -->|auto| A([orc archive])
 
-    style W           fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style A           fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style intake      fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style develop     fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style code-review fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style pr-open     fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style pr-repair   fill:#313244,stroke:#f38ba8,color:#cdd6f4
-    style qa-automation fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style W          fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style A          fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style intake     fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style develop    fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style codeReview fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style prOpen     fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    style prRepair   fill:#313244,stroke:#f38ba8,color:#cdd6f4
+    style qaAuto     fill:#313244,stroke:#cba6f7,color:#cdd6f4
 
     linkStyle 0 stroke:#a6e3a1
     linkStyle 1 stroke:#a6e3a1
@@ -193,7 +193,7 @@ flowchart TD
     linkStyle 7 stroke:#a6e3a1
 ```
 
-`auto` ��� agent calls `orc mark ... next`, next stage picks up immediately  
+`auto` — agent calls `orc mark ... next`, next stage picks up immediately  
 `manual ●` — agent calls `orc mark ... pause`; a human approves before continuing
 
 Most teams start with a manual gate after `develop` and flip everything else to `auto`
@@ -212,7 +212,7 @@ flowchart TD
     R --> DN[orc mark done\nfinal stage]
 
     AD -->|status: ready| N
-    WT -->|human resolves\norc mark next| N
+    WT -->|human resolves\norc next| N
     DN -->|status: done| END([done])
 
     style N fill:#313244,stroke:#a6e3a1,color:#cdd6f4
@@ -262,7 +262,6 @@ These are called by agents at the end of each session. They are hidden from `orc
 
 | Command | Description |
 |---------|-------------|
-| `orc mark <ticket> start` | Mark a ticket as `active` — run at the start of every session |
 | `orc mark <ticket> next` | Mark the current stage complete and move to the next (`done` if no stages remain) |
 | `orc mark <ticket> next --stage <name>` | Jump to a specific stage (e.g. send back to develop after review) |
 | `orc mark <ticket> next --worker <id>` | Override the worker for the next stage |

@@ -653,7 +653,7 @@ func (m Model) viewDashboard() string {
 	active, paused := 0, 0
 	for _, f := range m.features {
 		switch f.s.Status {
-		case "active", "ready":
+		case "active":
 			active++
 		case "paused":
 			paused++

@@ -145,8 +145,8 @@ stage:
 	if s.Stage.Name != "pr-open" {
 		t.Errorf("stage.name = %q, want pr-open", s.Stage.Name)
 	}
-	if s.Status != "ready" {
-		t.Errorf("status = %q, want ready", s.Status)
+	if s.Status != "pending" {
+		t.Errorf("status = %q, want pending", s.Status)
 	}
 	// workflow field should remain empty — it was never set on this legacy ticket
 	if s.Workflow != "" {

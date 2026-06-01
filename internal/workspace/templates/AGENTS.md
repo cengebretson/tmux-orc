@@ -22,10 +22,9 @@ Never put product-specific instructions here — those belong in worker definiti
 At the start of every ticket session, before doing any work:
 
 1. Identify the ticket from your prompt or context
-2. Run `orc mark <ticket> start` to mark the ticket in_progress
-3. Run `orc status <ticket> --json` to read current state — note `stage.name`
-4. Read `features/<ticket-slug>/STATE.yaml` for full feature context
-5. Read `stages/<stage>.md` for the current stage instructions
+2. Run `orc status <ticket> --json` to read current state — note `stage.name`
+3. Read `features/<ticket-slug>/STATE.yaml` for full feature context
+4. Read `stages/<stage>.md` for the current stage instructions
 
 At the end of every session, run exactly one of:
 - `orc mark <ticket> next --worker <who> --result "<what was done>"` — stage complete

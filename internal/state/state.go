@@ -183,7 +183,7 @@ func Next(featureDir, stageName, worker, result string) error {
 			s.StageCounts = map[string]int{}
 		}
 		s.StageCounts[stageName]++
-		s.Status = "ready"
+		s.Status = "pending"
 	} else {
 		s.Status = "done"
 	}

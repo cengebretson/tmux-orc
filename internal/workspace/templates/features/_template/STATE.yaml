@@ -1,7 +1,7 @@
 schema_version: 1
 ticket: TICKET-0000
 slug: TICKET-0000-short-description
-status: ready
+status: pending
 workflow: default
 
 stage:
