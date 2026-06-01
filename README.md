@@ -210,6 +210,34 @@ When a session is paused (`orc mark <ticket> pause`), the reason is recorded in 
 
 ---
 
+### JIT tasks
+
+Sometimes you need to run a one-off agent task that doesn't belong in the pipeline — a spot check, a secondary review, an exploratory investigation. `orc jit` handles this without touching the pipeline stage or status.
+
+```bash
+orc jit STORY-123 --worker zach-the-reviewer "make sure the auth middleware handles token expiry correctly"
+```
+
+The agent is launched with the same orientation prompt used by `orc next` — it reads `STATE.yaml`, `TICKET.md`, and `SPEC.md` to understand the ticket, then does the requested task. Output goes to `features/<slug>/jit/<timestamp>/`. The pipeline stage and status are unchanged throughout.
+
+`runtime.jit` is written to `STATE.yaml` before launch so the task is visible in `orc status` and the TUI:
+
+```
+STORY-123   active   default/develop + jit   bob-developer
+```
+
+When the agent finishes, it runs:
+
+```bash
+orc mark STORY-123 jit "confirmed token expiry is handled — no issues found"
+```
+
+This appends a history entry and clears `runtime.jit`. A second `orc jit` call is blocked while one is already running — clear it first with `orc mark <ticket> jit`.
+
+Use `--dry` to preview the full prompt and launch command without executing, and `--tmux` to send the task to the ticket's existing tmux session.
+
+---
+
 ## Gallery
 
 ### Dashboard (`orc tui`)
@@ -240,6 +268,9 @@ When a session is paused (`orc mark <ticket> pause`), the reason is recorded in 
   - `--dry` — preview the launch command without running it
   - `--json` — next action as JSON for CI or scripting
   - `--worker <id>` — override the selected worker for one launch
+- `orc jit <ticket> --worker <id> "<instruction>"` — run a one-off agent task outside the pipeline
+  - `--dry` — preview the resolved worker and prompt without launching
+  - `--tmux` — send to the ticket's existing tmux session instead of foreground
 - `orc attach <ticket>` — attach to the tmux session for a ticket
 - `orc archive <ticket>` — archive a completed feature, remove worktrees
 - `orc delete <ticket>` — permanently delete a feature folder (only allowed when status is `done` or `archived`)
@@ -255,6 +286,7 @@ These are called by agents at the end of each session. They are hidden from `orc
   - `--result "<summary>"` — record what was accomplished in history
 - `orc mark <ticket> pause "<reason>"` — pause for human input, approval, or an external blocker
 - `orc mark <ticket> done` — mark a ticket as done — force-close at any point
+- `orc mark <ticket> jit "<summary>"` — record a jit task as complete and clear `runtime.jit`
 
 ## Workspace layout
 
@@ -369,6 +401,12 @@ next_action:
   worker: bob-developer
   prompt: Implement the login feature per SPEC.md and PLAN.md.
   cwd: worktrees/my-app/STORY-123-add-login
+
+runtime:
+  jit:                          # present while a jit task is running, absent otherwise
+    worker: zach-the-reviewer
+    task: "check the auth middleware handles token expiry"
+    started_at: "2026-06-01T13:45:00-05:00"
 
 history:
   - at: "2026-05-28 09:00"
