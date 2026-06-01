@@ -376,21 +376,15 @@ func runNext(cmd *cobra.Command, args []string) error {
 			fmt.Println()
 			fmt.Printf("⚠ tmux session %q is already running.\n", s.Runtime.Tmux.Session)
 			if interactive {
-				ans := promptLine("  Attach to existing session, or launch a new agent? [attach/new/cancel]: ")
+				ans := promptLine("  Attach to existing session? [Y/n]: ")
 				ans = strings.ToLower(strings.TrimSpace(ans))
-				switch ans {
-				case "new", "n":
-					useResume = true
-				case "attach", "a":
+				if ans == "" || ans == "y" || ans == "yes" {
 					return tmux.Attach(s.Runtime.Tmux.Session)
-				default:
-					fmt.Println("Cancelled.")
-					return nil
 				}
-			} else {
-				fmt.Println("  Non-interactive — attaching to existing session.")
-				return tmux.Attach(s.Runtime.Tmux.Session)
+				fmt.Println("Cancelled.")
+				return nil
 			}
+			return tmux.Attach(s.Runtime.Tmux.Session)
 		} else {
 			fmt.Println()
 			fmt.Println("⚠ Ticket is in_progress but no active session found — likely interrupted.")
