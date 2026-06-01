@@ -181,13 +181,64 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	mauve := lipgloss.NewStyle().Foreground(lipgloss.Color(p.Mauve)).Bold(true)
 	green := lipgloss.NewStyle().Foreground(lipgloss.Color(p.Green))
 	peach := lipgloss.NewStyle().Foreground(lipgloss.Color(p.Peach))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color(p.Red))
 
 	displayName := w.Name
 	if displayName == "" {
 		displayName = w.ID
 	}
 
-	// ── right column: class name, description, stats ────────────────
+	// ── first pass: tally quest counts for derived stats ────────────
+	var activeQ, pausedQ, doneQ int
+	type questEntry struct{ f *featureRow }
+	var quests []questEntry
+	for _, f := range m.features {
+		if f.workerName != displayName && f.workerName != w.ID {
+			continue
+		}
+		quests = append(quests, questEntry{f})
+		switch f.s.Status {
+		case "active":
+			activeQ++
+		case "paused":
+			pausedQ++
+		case "done", "archived":
+			doneQ++
+		}
+	}
+
+	// ── derived RPG stats ────────────────────────────────────────────
+	xp := doneQ*500 + activeQ*100
+	level := xp/300 + 1
+	if level > 20 {
+		level = 20
+	}
+	maxHP := stats[4] * 5 // VIT × 5 → 15–90
+	currentHP := maxHP - pausedQ*8
+	if currentHP < 1 {
+		currentHP = 1
+	}
+	ac := max(0, 10-(stats[1]-10)/2) // DEX-derived, lower = better
+
+	// HP colour: green=full, yellow=≥50%, red=<50%
+	hpStyle := green
+	switch {
+	case currentHP < maxHP/2:
+		hpStyle = red
+	case currentHP < maxHP:
+		hpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
+	}
+
+	dot := styleDim.Render("  ·  ")
+	rpgLine := yellow.Render(fmt.Sprintf("LVL %d", level)) +
+		dot +
+		hpStyle.Render(fmt.Sprintf("HP %d/%d", currentHP, maxHP)) +
+		dot +
+		peach.Render(fmt.Sprintf("XP %d", xp)) +
+		dot +
+		styleSubtext.Render(fmt.Sprintf("AC %d", ac))
+
+	// ── right column: class, name, description, RPG line, attributes ─
 	desc := workerDescription(w.FilePath)
 	const barW = 14
 	rightLines := []string{
@@ -197,14 +248,14 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	if desc != "" {
 		rightLines = append(rightLines, styleDim.Render(truncate(desc, 42)))
 	}
-	rightLines = append(rightLines, "")
+	rightLines = append(rightLines, rpgLine, "")
 	for i, v := range stats {
 		filled := v * barW / 18
 		bar := green.Render(strings.Repeat("█", filled)) + styleDim.Render(strings.Repeat("░", barW-filled))
 		rightLines = append(rightLines, fmt.Sprintf("%s  %s  %2d", peach.Render(statNames[i]), bar, v))
 	}
 
-	// ── portrait + stats side by side ───────────────────────────────
+	// ── portrait + right column side by side ─────────────────────────
 	var bodyLines []string
 	rows := max(len(art), len(rightLines))
 	for i := range rows {
@@ -219,28 +270,23 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		bodyLines = append(bodyLines, styleDim.Render(fmt.Sprintf("%-10s", left))+"   "+right)
 	}
 
-	// ── active quests ────────────────────────────────────────────────
+	// ── quest log ────────────────────────────────────────────────────
 	bodyLines = append(bodyLines, "")
-	bodyLines = append(bodyLines, styleDetailLabel.Render("ACTIVE QUESTS"))
-
-	questCount := 0
-	for _, f := range m.features {
-		if f.workerName != displayName && f.workerName != w.ID {
-			continue
-		}
-		questCount++
+	bodyLines = append(bodyLines, styleDetailLabel.Render("QUEST LOG"))
+	if len(quests) == 0 {
+		bodyLines = append(bodyLines, styleDim.Render("  (no quests)"))
+	}
+	for _, q := range quests {
+		f := q.f
 		st := statusStyle(f.s.Status)
-		desc := strings.TrimPrefix(f.s.Slug, f.s.Ticket+"-")
+		slug := strings.TrimPrefix(f.s.Slug, f.s.Ticket+"-")
 		bodyLines = append(bodyLines, fmt.Sprintf(
 			"  %s  %-12s  %s  %s",
 			st.Render(statusIcon(f.s.Status)),
 			f.s.Ticket,
-			styleDim.Render(truncate(desc, 24)),
+			styleDim.Render(truncate(slug, 24)),
 			st.Render(f.s.Status),
 		))
-	}
-	if questCount == 0 {
-		bodyLines = append(bodyLines, styleDim.Render("  (no active quests)"))
 	}
 
 	bodyLines = append(bodyLines, "")
