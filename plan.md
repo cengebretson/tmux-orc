@@ -56,4 +56,3 @@ Lower priority — worth revisiting once the core is solid.
 | Idea | Notes |
 |------|-------|
 | Workspace packs — share workers/workflows across a team | `orc pack push/pull/diff` — copy workers, stages, RULES.md to/from a git repo; two-layer model with `overrides/` for local customization |
-| Bard's Tale character sheet easter egg | Press `!` on the worker detail page to reveal a retro RPG character sheet with deterministic stats, ASCII portraits, and live quest list |
