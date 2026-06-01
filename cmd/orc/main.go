@@ -155,13 +155,6 @@ var tuiCmd = &cobra.Command{
 	RunE:  runTui,
 }
 
-var resumeCmd = &cobra.Command{
-	Use:   "resume <ticket>",
-	Short: "Generate a recovery prompt for a stuck or interrupted ticket",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runResume,
-}
-
 var helpAllCmd = &cobra.Command{
 	Use:   "help-all",
 	Short: "List all commands with human and agent commands separated",
@@ -206,7 +199,6 @@ var helpAllCmd = &cobra.Command{
 		fmt.Println("Read commands  (human commands agents also use):")
 		fmt.Println()
 		fmt.Println("  orc status <ticket> --json    read current state as JSON")
-		fmt.Println("  orc resume <ticket>           generate a recovery prompt")
 		fmt.Println()
 	},
 }
@@ -239,7 +231,6 @@ func init() {
 	rootCmd.AddCommand(archiveCmd)
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(tuiCmd)
-	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(helpAllCmd)
 	rootCmd.AddCommand(versionCmd)
 }
@@ -1064,26 +1055,6 @@ func archiveFeature(root, featureDir string, s *state.State) error {
 	}
 
 	fmt.Printf("Archived: features/_archive/%s/\n", slug)
-	return nil
-}
-
-func runResume(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(globalWorkspace)
-	if err != nil {
-		return err
-	}
-
-	featureDir, err := state.FindFeatureDir(root, args[0])
-	if err != nil {
-		return err
-	}
-
-	ctx, err := resume.Build(root, featureDir)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(ctx.Prompt)
 	return nil
 }
 

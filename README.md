@@ -253,7 +253,6 @@ or human picks up exactly where the last one left off.
 | `orc next <ticket> --json` | Next action as JSON for CI or scripting |
 | `orc next <ticket> --worker <id>` | Override the selected worker for one launch |
 | `orc attach <ticket>` | Attach to the tmux session for a ticket |
-| `orc resume <ticket>` | Generate a recovery prompt for a stuck or interrupted ticket |
 | `orc archive <ticket>` | Archive a completed feature, remove worktrees |
 | `orc tui` | Open the interactive dashboard |
 
