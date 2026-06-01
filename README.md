@@ -166,12 +166,12 @@ orc tui
 ```mermaid
 flowchart TD
     W(["orc work"])
-    W --> intake["intake\nintake-agent · haiku"]
-    intake -->|auto| develop["develop\nbob-the-developer · sonnet"]
-    develop -->|manual| CR["code-review\nzach-the-reviewer · opus"]
-    CR -->|auto| PO["pr-open\nbob-the-developer · sonnet"]
-    PO -->|manual| QA["qa-automation\nbob-the-developer · sonnet"]
-    PO -.->|CI failures| PR["pr-repair\nbob-the-developer · sonnet"]
+    W --> intake["intake\nintake-agent"]
+    intake -->|auto| develop["develop\nbob-the-developer"]
+    develop -->|manual| CR["code-review\nzach-the-reviewer"]
+    CR -->|auto| PO["pr-open\nbob-the-developer"]
+    PO -->|manual| QA["qa-automation\nbob-the-developer"]
+    PO -.->|CI failures| PR["pr-repair\nbob-the-developer"]
     PR -.-> PO
     QA -->|auto| A(["orc archive"])
 
