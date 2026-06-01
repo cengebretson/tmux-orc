@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -41,11 +42,26 @@ const banner = `
 orc · workspace orchestrator
 `
 
+var globalWorkspace string
+
 var rootCmd = &cobra.Command{
 	Use:               "orc",
 	Short:             "orc — agentic workspace orchestrator",
 	Long:              banner,
 	CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true},
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the orc version",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			fmt.Println(info.Main.Version)
+		} else {
+			fmt.Println("dev")
+		}
+	},
 }
 
 var initCmd = &cobra.Command{
@@ -55,7 +71,6 @@ var initCmd = &cobra.Command{
 }
 
 var (
-	initWorkspace         string
 	initWithSampleWorkers bool
 	initDryRun            bool
 	initForce             bool
@@ -68,8 +83,6 @@ var healthCmd = &cobra.Command{
 	RunE:  runHealth,
 }
 
-var healthWorkspace string
-
 var nextCmd = &cobra.Command{
 	Use:   "next <ticket>",
 	Short: "Launch the next agent for a ticket — use --dry to preview without running",
@@ -78,10 +91,9 @@ var nextCmd = &cobra.Command{
 }
 
 var (
-	nextWorkspace string
-	nextJSON      bool
-	nextDry       bool
-	nextWorker    string
+	nextJSON   bool
+	nextDry    bool
+	nextWorker string
 )
 
 var statusCmd = &cobra.Command{
@@ -91,10 +103,7 @@ var statusCmd = &cobra.Command{
 	RunE:  runStatus,
 }
 
-var (
-	statusWorkspace string
-	statusJSON      bool
-)
+var statusJSON bool
 
 var workCmd = &cobra.Command{
 	Use:   "work <ticket>",
@@ -104,11 +113,10 @@ var workCmd = &cobra.Command{
 }
 
 var (
-	workWorkspace string
-	workSlug      string
-	workTmux      bool
-	workNext      bool
-	workWorkflow  string
+	workSlug     string
+	workTmux     bool
+	workNext     bool
+	workWorkflow string
 )
 
 var markCmd = &cobra.Command{
@@ -121,10 +129,9 @@ var markCmd = &cobra.Command{
 }
 
 var (
-	markWorkspace string
-	markOwner     string
-	markResult    string
-	markStage     string
+	markOwner  string
+	markResult string
+	markStage  string
 )
 
 var archiveCmd = &cobra.Command{
@@ -134,16 +141,12 @@ var archiveCmd = &cobra.Command{
 	RunE:  runArchive,
 }
 
-var archiveWorkspace string
-
 var attachCmd = &cobra.Command{
 	Use:   "attach <ticket>",
 	Short: "Attach to the tmux session for a ticket",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runAttach,
 }
-
-var attachWorkspace string
 
 var tuiCmd = &cobra.Command{
 	Use:   "tui",
@@ -152,16 +155,12 @@ var tuiCmd = &cobra.Command{
 	RunE:  runTui,
 }
 
-var tuiWorkspace string
-
 var resumeCmd = &cobra.Command{
 	Use:   "resume <ticket>",
 	Short: "Generate a recovery prompt for a stuck or interrupted ticket",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runResume,
 }
-
-var resumeWorkspace string
 
 var helpAllCmd = &cobra.Command{
 	Use:   "help-all",
@@ -208,31 +207,23 @@ var helpAllCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initWorkspace, "workspace", ".", "Workspace root directory (skips the interactive path prompt)")
+	rootCmd.PersistentFlags().StringVar(&globalWorkspace, "workspace", ".", "Workspace root (default: current directory)")
+
 	initCmd.Flags().BoolVar(&initWithSampleWorkers, "with-sample-workers", false, "Include sample worker files (skips the interactive prompt)")
 	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Print what would be created without writing files")
 	initCmd.Flags().BoolVar(&initForce, "force", false, "Overwrite existing generated files")
 
-	healthCmd.Flags().StringVar(&healthWorkspace, "workspace", ".", "Workspace root to check (default: current directory)")
-	nextCmd.Flags().StringVar(&nextWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	nextCmd.Flags().BoolVar(&nextJSON, "json", false, "Output as JSON")
 	nextCmd.Flags().BoolVar(&nextDry, "dry", false, "Print the launch command without executing it")
 	nextCmd.Flags().StringVar(&nextWorker, "worker", "", "Override the workflow's default worker (worker ID)")
-	statusCmd.Flags().StringVar(&statusWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Output as JSON")
-	workCmd.Flags().StringVar(&workWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	workCmd.Flags().StringVar(&workSlug, "slug", "", "Optional slug suffix (e.g. add-user-export → TICKET-123-add-user-export)")
 	workCmd.Flags().BoolVar(&workTmux, "tmux", false, "Enable tmux session for this ticket — session created automatically on first orc next")
 	workCmd.Flags().BoolVar(&workNext, "next", false, "Immediately launch the first stage after creating the feature")
 	workCmd.Flags().StringVar(&workWorkflow, "workflow", "", "Workflow to use (default: settings.default_workflow in orc.yaml)")
-	markCmd.Flags().StringVar(&markWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 	markCmd.Flags().StringVar(&markOwner, "owner", "", "Worker or role that owns the new stage (advance only)")
 	markCmd.Flags().StringVar(&markResult, "result", "", "Summary of what was accomplished (advance only)")
 	markCmd.Flags().StringVar(&markStage, "stage", "", "New stage name (advance only — required when crossing workflow boundaries)")
-	archiveCmd.Flags().StringVar(&archiveWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	attachCmd.Flags().StringVar(&attachWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	tuiCmd.Flags().StringVar(&tuiWorkspace, "workspace", ".", "Workspace root (default: current directory)")
-	resumeCmd.Flags().StringVar(&resumeWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
@@ -245,6 +236,7 @@ func init() {
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(helpAllCmd)
+	rootCmd.AddCommand(versionCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -253,13 +245,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	interactive := isTTY()
 
 	// Workspace path — prompt if not explicitly set and running interactively.
-	if !cmd.Flags().Changed("workspace") && interactive {
+	if !cmd.Root().PersistentFlags().Changed("workspace") && interactive {
 		cwd, _ := os.Getwd()
 		ans := promptLine(fmt.Sprintf("Workspace path [%s]: ", cwd))
 		if ans == "" {
-			initWorkspace = cwd
+			globalWorkspace = cwd
 		} else {
-			initWorkspace = ans
+			globalWorkspace = ans
 		}
 	}
 
@@ -271,7 +263,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	opts := workspace.InitOptions{
-		Root:              initWorkspace,
+		Root:              globalWorkspace,
 		WithSampleWorkers: initWithSampleWorkers,
 		DryRun:            initDryRun,
 		Force:             initForce,
@@ -300,7 +292,7 @@ func promptLine(prompt string) string {
 }
 
 func runHealth(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(healthWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -324,7 +316,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 }
 
 func runNext(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(nextWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -457,7 +449,7 @@ runForeground:
 }
 
 func runWork(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(workWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -505,7 +497,7 @@ func runWork(cmd *cobra.Command, args []string) error {
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(statusWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -780,7 +772,7 @@ func fileCheck(featureDir, relPath string) string {
 }
 
 func runMark(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(markWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -957,7 +949,7 @@ func runAdvance(root, featureDir string) error {
 }
 
 func runArchive(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(archiveWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -1027,7 +1019,7 @@ func archiveFeature(root, featureDir string, s *state.State) error {
 }
 
 func runResume(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(resumeWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -1047,7 +1039,7 @@ func runResume(cmd *cobra.Command, args []string) error {
 }
 
 func runTui(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(tuiWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}
@@ -1055,7 +1047,7 @@ func runTui(cmd *cobra.Command, args []string) error {
 }
 
 func runAttach(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(attachWorkspace)
+	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
 	}

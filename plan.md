@@ -2,6 +2,15 @@
 
 ---
 
+## Human TODO
+
+- [ ] Rename GitHub repo from `tmux-orc` → `orc` (GitHub Settings → Rename)
+- [ ] After rename: update `go.mod` module path from `github.com/cengebretson/orc` to match (should already be correct if repo is renamed to `orc`)
+- [ ] Update git remote locally: `git remote set-url origin git@github.com:cengebretson/orc.git`
+- [ ] Verify `go install github.com/cengebretson/orc/cmd/orc@latest` works after rename
+
+---
+
 ## Up next
 
 ### Agent completion notification
