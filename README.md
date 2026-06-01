@@ -159,54 +159,27 @@ orc tui
 
 ## Example workflow
 
-### Ticket lifecycle
+### Feature folder as handoff point
+
+`features/STORY-123/` is the durable handoff between agents. Each agent reads what the last one wrote, does its job, and updates state. No shared memory, no live coordination — just files.
 
 ```mermaid
-flowchart TD
-    W(["orc work"]) --> intake
-    intake -->|auto| develop
-    develop -->|manual| codeReview["code-review"]
-    codeReview -->|auto| prOpen["pr-open"]
-    prOpen -->|manual| qaAuto["qa-automation"]
-    prOpen -.->|CI failures| prRepair["pr-repair"]
-    prRepair -->|auto| prOpen
-    qaAuto -->|auto| A(["orc archive"])
+flowchart LR
+    bob["bob-the-developer\ndevelop"] -->|"orc mark next"| F["features/STORY-123/\nSTATE.yaml"]
+    F -->|"orc next"| zach["zach-the-reviewer\ncode-review"]
+    zach -->|"orc mark next"| F
+    F -->|"orc next"| brian["brian-qa\nqa-automation"]
 
-    style W fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style A fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style intake fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style develop fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style codeReview fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style prOpen fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style prRepair fill:#313244,stroke:#f38ba8,color:#cdd6f4
-    style qaAuto fill:#313244,stroke:#cba6f7,color:#cdd6f4
-
-    linkStyle 0 stroke:#a6e3a1
-    linkStyle 1 stroke:#a6e3a1
-    linkStyle 2 stroke:#f9e2af
-    linkStyle 3 stroke:#a6e3a1
-    linkStyle 4 stroke:#f9e2af
-    linkStyle 5 stroke:#f38ba8,stroke-dasharray:5
-    linkStyle 6 stroke:#a6e3a1
-    linkStyle 7 stroke:#a6e3a1
+    style bob fill:#313244,stroke:#89b4fa,color:#cdd6f4
+    style zach fill:#313244,stroke:#89b4fa,color:#cdd6f4
+    style brian fill:#313244,stroke:#89b4fa,color:#cdd6f4
+    style F fill:#313244,stroke:#a6e3a1,color:#cdd6f4
 ```
 
-| Stage | Worker | Model |
-|-------|--------|-------|
-| intake | `intake-agent` | haiku |
-| develop | `bob-the-developer` | sonnet |
-| code-review | `zach-the-reviewer` | opus |
-| pr-open | `bob-the-developer` | sonnet |
-| pr-repair | `bob-the-developer` | sonnet |
-| qa-automation | `brian-qa` | sonnet |
-
-Workers are defined in `workers/` as markdown files. Each stage in `orc.yaml` names a worker; use `--worker` to override for a single run.
+Workers are markdown files in `workers/`. Each stage in `orc.yaml` names a worker — different models and agents per stage. Use `--worker` to override for a single run.
 
 `auto` — agent calls `orc mark <ticket> next`, next stage picks up immediately  
 `manual` — agent calls `orc mark <ticket> pause`; a human approves before continuing
-
-Most teams start with a manual gate after `develop` and flip everything else to `auto`
-as confidence grows. Advance mode is set per-stage in `orc.yaml`.
 
 ---
 
