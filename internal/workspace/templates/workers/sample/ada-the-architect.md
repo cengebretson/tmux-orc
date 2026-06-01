@@ -7,8 +7,6 @@ model: claude-opus-4-7
 args:
   effort: high
 default_tmux_window: claude
-bards_tale:
-  class: BARD
 ---
 
 # Ada the Architect

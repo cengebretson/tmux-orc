@@ -15,13 +15,8 @@ import (
 //go:embed assets/portraits/*.txt
 var portraitsFS embed.FS
 
-// bardClass returns the Bard's Tale character class for a worker.
-// If bards_tale_class is set in the worker's frontmatter, that wins.
-// Otherwise it falls back to a heuristic based on the worker's id/name.
+// bardClass maps a worker to a Bard's Tale character class based on its id/name.
 func bardClass(w *workers.Worker) string {
-	if c := strings.ToUpper(strings.TrimSpace(w.BardsTale.Class)); c != "" {
-		return c
-	}
 	combined := strings.ToLower(w.ID + " " + w.Name)
 	switch {
 	case containsAny(combined, "review", "ninja", "rogue", "shadow", "spy", "audit"):

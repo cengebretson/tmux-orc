@@ -8,8 +8,6 @@ args:
   reasoning_effort: high
   service_tier: medium
 default_tmux_window: app-codex
-bards_tale:
-  class: WARRIOR
 ---
 
 # Bob (Developer)

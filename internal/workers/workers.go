@@ -21,10 +21,6 @@ type Worker struct {
 
 	DefaultTmuxWindow string `yaml:"default_tmux_window"`
 
-	BardsTale struct {
-		Class string `yaml:"class"` // WARRIOR | RANGER | BARD | ROGUE | ADVENTURER
-	} `yaml:"bards_tale"`
-
 	FilePath string `yaml:"-"` // set at load time, not in frontmatter
 }
 
