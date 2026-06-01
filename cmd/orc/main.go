@@ -1195,6 +1195,11 @@ func runJIT(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if s.Runtime.JIT != nil && !jitDry {
+		return fmt.Errorf("jit task already running for %s (worker: %s, started: %s)\nRun `orc mark %s jit \"<summary>\"` to close it first",
+			s.Ticket, s.Runtime.JIT.Worker, s.Runtime.JIT.StartedAt, s.Ticket)
+	}
+
 	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
 	if err != nil {
 		return fmt.Errorf("loading workers: %w", err)
