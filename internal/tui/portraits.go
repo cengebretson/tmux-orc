@@ -327,7 +327,7 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		for _, k := range keys {
 			equipLines = append(equipLines, fmt.Sprintf("  %s  %s %s",
 				peach.Render("✦"),
-				styleDetailValue.Render(fmt.Sprintf("%s of %s", strings.ToUpper(k[:1])+k[1:], w.Args[k])),
+				styleDetailValue.Render(fmt.Sprintf("%s of %s", strings.ToUpper(k[:1])+strings.ReplaceAll(strings.ReplaceAll(k[1:], "-", " "), "_", " "), w.Args[k])),
 				styleDim.Render("("+k+"="+w.Args[k]+")"),
 			))
 		}
