@@ -16,18 +16,29 @@ import (
 //go:embed assets/portraits/*.txt
 var portraitsFS embed.FS
 
+//go:embed assets/portraits/png
+var portraitImagesFS embed.FS
+
 // bardClass maps a worker to a Bard's Tale character class based on its id/name.
 func bardClass(w *workers.Worker) string {
 	combined := strings.ToLower(w.ID + " " + w.Name)
 	switch {
-	case containsAny(combined, "review", "ninja", "rogue", "shadow", "spy", "audit"):
+	case containsAny(combined, "review", "ninja", "rogue", "shadow", "spy", "audit", "sec", "pentest"):
 		return "ROGUE"
-	case containsAny(combined, "qa", "test", "quality", "ranger", "hunter"):
+	case containsAny(combined, "qa", "test", "quality", "ranger", "hunter", "scout"):
 		return "RANGER"
-	case containsAny(combined, "doc", "write", "spec", "bard", "scribe", "analyst"):
+	case containsAny(combined, "doc", "write", "spec", "bard", "scribe", "analyst", "content"):
 		return "BARD"
 	case containsAny(combined, "dev", "implement", "build", "engineer", "warrior", "code", "fix"):
 		return "WARRIOR"
+	case containsAny(combined, "refactor", "clean", "lint", "tidy", "monk", "meditat"):
+		return "MONK"
+	case containsAny(combined, "arch", "design", "wizard", "ml", "ai", "research", "data", "model"):
+		return "WIZARD"
+	case containsAny(combined, "ops", "devops", "sre", "infra", "heal", "support", "priest"):
+		return "PRIEST"
+	case containsAny(combined, "perf", "load", "stress", "chaos", "brute", "barbarian"):
+		return "BARBARIAN"
 	default:
 		return "ADVENTURER"
 	}
@@ -57,7 +68,7 @@ func workerStats(id string) [5]int {
 
 // portraits holds retro ASCII art for each class, loaded from assets/portraits/.
 var portraits = func() map[string][]string {
-	classes := []string{"WARRIOR", "RANGER", "BARD", "ROGUE", "ADVENTURER"}
+	classes := []string{"WARRIOR", "RANGER", "BARD", "ROGUE", "MONK", "WIZARD", "PRIEST", "BARBARIAN", "ADVENTURER"}
 	m := make(map[string][]string, len(classes))
 	for _, class := range classes {
 		data, err := portraitsFS.ReadFile("assets/portraits/" + strings.ToLower(class) + ".txt")
@@ -66,6 +77,20 @@ var portraits = func() map[string][]string {
 		}
 		lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 		m[class] = lines
+	}
+	return m
+}()
+
+// portraitImages holds PNG data for each class, loaded from assets/portraits/png/.
+var portraitImages = func() map[string][]byte {
+	classes := []string{"WARRIOR", "RANGER", "BARD", "ROGUE", "MONK", "WIZARD", "PRIEST", "BARBARIAN", "ADVENTURER"}
+	m := make(map[string][]byte, len(classes))
+	for _, class := range classes {
+		data, err := portraitImagesFS.ReadFile("assets/portraits/png/" + strings.ToLower(class) + ".png")
+		if err != nil {
+			continue
+		}
+		m[class] = data
 	}
 	return m
 }()
@@ -83,6 +108,32 @@ func engineWeapon(engine string) string {
 		return "Gemini Orb"
 	default:
 		return "Unknown Relic"
+	}
+}
+
+// modelArmor maps a model name to a fantasy armor type.
+// Heavier models = heavier armor.
+func modelArmor(model string) string {
+	m := strings.ToLower(model)
+	switch {
+	case strings.Contains(m, "opus"):
+		return "Plate Armor"
+	case strings.Contains(m, "sonnet"):
+		return "Chain Mail"
+	case strings.Contains(m, "haiku"):
+		return "Leather Armor"
+	case strings.Contains(m, "gpt-4"):
+		return "Battle Plate"
+	case strings.Contains(m, "gpt-3"):
+		return "Ring Mail"
+	case strings.Contains(m, "gemini-pro") || strings.Contains(m, "ultra"):
+		return "Scale Mail"
+	case strings.Contains(m, "gemini"):
+		return "Studded Leather"
+	case model == "":
+		return ""
+	default:
+		return "Traveler's Cloak"
 	}
 }
 
@@ -138,11 +189,7 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	class := bardClass(w)
 	stats := workerStats(w.ID)
 	statNames := [5]string{"STR", "DEX", "INT", "WIS", "VIT"}
-
-	art := portraits[class]
-	if art == nil {
-		art = portraits["ADVENTURER"]
-	}
+	statIcons := [5]string{"", "", "", "", "♥"}
 
 	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow)).Bold(true)
 	mauve := lipgloss.NewStyle().Foreground(lipgloss.Color(p.Mauve)).Bold(true)
@@ -195,20 +242,31 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		hpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(p.Yellow))
 	}
 
-	// ── panel style shared across all three panels ───────────────────
-	// outer box: Padding(1,3)=6 + border=2 → 8 overhead
-	// panel:     Padding(0,2)=4 + border=2 → 6 overhead
-	panelW := m.width - 14 // content width inside each panel
-	if panelW < 40 {
-		panelW = 40
-	}
-	panel := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(p.Surface2)).
-		Padding(0, 2).
-		Width(panelW)
+	// ── panel widths ─────────────────────────────────────────────────
+	// outer box: Padding(1,3)=6h + border=2 → 8 total overhead
+	// panel:     Padding(0,2)=4h + border=2 → 6 total overhead
+	const panelOverhead = 6
+	availW := m.width - 8 // total outer width for a row of panels
 
-	// ── panel 1: portrait + stats ────────────────────────────────────
+	// portrait panel takes ~1/3; info panel gets the rest
+	portraitPanelW := availW/3 - panelOverhead
+	if portraitPanelW < 12 {
+		portraitPanelW = 12
+	}
+	infoPanelW := availW - (portraitPanelW + panelOverhead) - panelOverhead
+	if infoPanelW < 30 {
+		infoPanelW = 30
+	}
+	fullPanelW := availW - panelOverhead // full-width panel (quest log)
+
+	mkPanel := func(w int) lipgloss.Style {
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(p.Surface2)).
+			Padding(0, 2).
+			Width(w)
+	}
+
 	dot := styleDim.Render("  ·  ")
 	rpgLine := yellow.Render(fmt.Sprintf("LVL %2d", level)) +
 		dot + hpStyle.Render(fmt.Sprintf("HP %d/%d", currentHP, maxHP)) +
@@ -217,43 +275,52 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 
 	desc := workerDescription(w.FilePath)
 	const barW = 14
-	rightLines := []string{
+
+	// ── portrait panel (right) ───────────────────────────────────────
+	portraitH := portraitPanelW / 8
+	if portraitH < 2 {
+		portraitH = 2
+	}
+	var artBlock string
+	if imgData, ok := portraitImages[class]; ok {
+		artBlock = pngToHalfBlocks(imgData, portraitPanelW, portraitH)
+	}
+	if artBlock == "" {
+		art := portraits[class]
+		if art == nil {
+			art = portraits["ADVENTURER"]
+		}
+		artBlock = styleDim.Render(strings.Join(art, "\n"))
+	}
+	portraitPanel := mkPanel(portraitPanelW).Render(artBlock)
+
+	// ── info panel (left): stats + equipment ─────────────────────────
+	infoLines := []string{
 		yellow.Render(class),
 		mauve.Render(displayName),
 	}
 	if desc != "" {
-		rightLines = append(rightLines, styleDim.Render(truncate(desc, panelW-16)))
+		infoLines = append(infoLines, styleDim.Render(truncate(desc, infoPanelW)))
 	}
-	rightLines = append(rightLines, rpgLine, "")
+	infoLines = append(infoLines, rpgLine, "")
 	for i, v := range stats {
 		filled := v * barW / 18
-		bar := green.Render(strings.Repeat("█", filled)) + styleDim.Render(strings.Repeat("░", barW-filled))
-		rightLines = append(rightLines, fmt.Sprintf("%s  %s  %2d", peach.Render(statNames[i]), bar, v))
+		bar := green.Render(strings.Repeat("▰", filled)) + styleDim.Render(strings.Repeat("▱", barW-filled))
+		infoLines = append(infoLines, fmt.Sprintf("%s  %s  %s  %2d",
+			peach.Render(statIcons[i]),
+			peach.Render(statNames[i]),
+			bar, v))
 	}
 
-	var statsRows []string
-	for i := range max(len(art), len(rightLines)) {
-		left, right := "", ""
-		if i < len(art) {
-			left = art[i]
-		}
-		if i < len(rightLines) {
-			right = rightLines[i]
-		}
-		statsRows = append(statsRows, styleDim.Render(fmt.Sprintf("%-10s", left))+"   "+right)
-	}
-	statsPanel := panel.Render(strings.Join(statsRows, "\n"))
-
-	// ── panel 2: equipment ───────────────────────────────────────────
 	weapon := engineWeapon(w.Engine)
+	armor := modelArmor(w.Model)
 	equipLines := []string{
-		styleSection.Render("Equipment"),
 		"",
-		fmt.Sprintf("  %s  %-20s  %s",
-			peach.Render("⚔"),
-			styleDetailValue.Render(weapon),
-			styleDim.Render(w.Model),
-		),
+		styleSection.Render("Equipment"),
+		fmt.Sprintf("  %s  %s", peach.Render("⚔"), styleDetailValue.Render(weapon)),
+	}
+	if armor != "" {
+		equipLines = append(equipLines, fmt.Sprintf("  %s  %s", peach.Render(""), styleDetailValue.Render(armor)))
 	}
 	if len(w.Args) > 0 {
 		keys := make([]string, 0, len(w.Args))
@@ -262,16 +329,19 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			equipLines = append(equipLines, fmt.Sprintf("  %s  %s  %s",
-				styleDim.Render("✦"),
-				styleDetailLabel.Render(k),
-				styleSubtext.Render(w.Args[k]),
+			equipLines = append(equipLines, fmt.Sprintf("  %s  %s",
+				peach.Render("✦"),
+				styleDetailValue.Render(fmt.Sprintf("%s of %s", strings.ToUpper(k[:1])+k[1:], w.Args[k])),
 			))
 		}
 	}
-	equipPanel := panel.Render(strings.Join(equipLines, "\n"))
 
-	// ── panel 3: quest log ───────────────────────────────────────────
+	infoContent := strings.Join(infoLines, "\n") + "\n" + strings.Join(equipLines, "\n")
+	infoPanel := mkPanel(infoPanelW).Render(infoContent)
+
+	topRow := lipgloss.JoinHorizontal(lipgloss.Top, infoPanel, portraitPanel)
+
+	// ── quest log panel — full width ─────────────────────────────────
 	questLines := []string{styleSection.Render("Quest Log"), ""}
 	if len(quests) == 0 {
 		questLines = append(questLines, styleDim.Render("  (no quests)"))
@@ -280,26 +350,20 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		f := q.f
 		st := statusStyle(f.s.Status)
 		slug := strings.TrimPrefix(f.s.Slug, f.s.Ticket+"-")
-		questLines = append(questLines, fmt.Sprintf(
-			"  %s  %-12s  %s  %s",
-			st.Render(statusIcon(f.s.Status)),
-			f.s.Ticket,
-			styleDim.Render(truncate(slug, 24)),
-			st.Render(f.s.Status),
-		))
+		questLines = append(questLines,
+			fmt.Sprintf("  %s  %s  %s",
+				st.Render(statusIcon(f.s.Status)),
+				styleDetailLabel.Render(f.s.Ticket),
+				st.Render(f.s.Status),
+			),
+			fmt.Sprintf("     %s", styleDim.Render(truncate(slug, fullPanelW-6))),
+		)
 	}
-	questPanel := panel.Render(strings.Join(questLines, "\n"))
+	questPanel := mkPanel(fullPanelW).Render(strings.Join(questLines, "\n"))
 
-	// ── outer box ────────────────────────────────────────────────────
-	title := yellow.Render("★") + "  " + yellow.Render("BARD'S TALE") + "  " + yellow.Render("★")
+	// ── assemble ─────────────────────────────────────────────────────
 	dismiss := styleDim.Render("[!] or [esc] to dismiss")
-	body := strings.Join([]string{statsPanel, equipPanel, questPanel}, "\n\n")
+	content := topRow + "\n" + questPanel + "\n" + dismiss
 
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(p.Yellow)).
-		Padding(1, 3).
-		Render(title + "\n\n" + body + "\n\n" + dismiss)
-
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
