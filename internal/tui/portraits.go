@@ -248,23 +248,18 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	const panelOverhead = 6
 	availW := m.width - 8 // total outer width for a row of panels
 
-	// portrait panel takes ~1/3; info panel gets the rest
+	// portrait panel takes ~1/3; info panel gets the rest (no border, just padding)
 	portraitPanelW := availW/3 - panelOverhead
 	if portraitPanelW < 12 {
 		portraitPanelW = 12
 	}
-	infoPanelW := availW - (portraitPanelW + panelOverhead) - panelOverhead
+	// info has no border: overhead is just padding (0,2) = 4
+	infoPanelW := availW - (portraitPanelW + panelOverhead) - 4
 	if infoPanelW < 30 {
 		infoPanelW = 30
 	}
-	fullPanelW := availW - panelOverhead // full-width panel (quest log)
-
-	mkPanel := func(w int) lipgloss.Style {
-		return lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(p.Surface2)).
-			Padding(0, 2).
-			Width(w)
+	mkPlain := func(w int) lipgloss.Style {
+		return lipgloss.NewStyle().Padding(0, 2).Width(w)
 	}
 
 	dot := styleDim.Render("  ·  ")
@@ -277,13 +272,13 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	const barW = 14
 
 	// ── portrait panel (right) ───────────────────────────────────────
-	portraitH := portraitPanelW / 8
-	if portraitH < 2 {
-		portraitH = 2
-	}
 	var artBlock string
 	if imgData, ok := portraitImages[class]; ok {
-		artBlock = pngToHalfBlocks(imgData, portraitPanelW, portraitH)
+		portraitH := pngAspectHeight(imgData, portraitPanelW) / 2
+		if portraitH < 4 {
+			portraitH = 4
+		}
+		artBlock = renderPortrait(class, imgData, portraitPanelW, portraitH)
 	}
 	if artBlock == "" {
 		art := portraits[class]
@@ -292,17 +287,18 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		}
 		artBlock = styleDim.Render(strings.Join(art, "\n"))
 	}
-	portraitPanel := mkPanel(portraitPanelW).Render(artBlock)
+	portraitPanel := mkPlain(portraitPanelW).Render(artBlock)
 
 	// ── info panel (left): stats + equipment ─────────────────────────
 	infoLines := []string{
 		yellow.Render(class),
 		mauve.Render(displayName),
+		rpgLine,
 	}
 	if desc != "" {
 		infoLines = append(infoLines, styleDim.Render(truncate(desc, infoPanelW)))
 	}
-	infoLines = append(infoLines, rpgLine, "")
+	infoLines = append(infoLines, "")
 	for i, v := range stats {
 		filled := v * barW / 18
 		bar := green.Render(strings.Repeat("▰", filled)) + styleDim.Render(strings.Repeat("▱", barW-filled))
@@ -317,7 +313,7 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	equipLines := []string{
 		"",
 		styleSection.Render("Equipment"),
-		fmt.Sprintf("  %s  %s", peach.Render("⚔"), styleDetailValue.Render(weapon)),
+		fmt.Sprintf("  %s  %s %s", peach.Render("⚔"), styleDetailValue.Render(weapon), styleDim.Render("("+w.Engine+")")),
 	}
 	if armor != "" {
 		equipLines = append(equipLines, fmt.Sprintf("  %s  %s", peach.Render(""), styleDetailValue.Render(armor)))
@@ -329,20 +325,19 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			equipLines = append(equipLines, fmt.Sprintf("  %s  %s",
+			equipLines = append(equipLines, fmt.Sprintf("  %s  %s %s",
 				peach.Render("✦"),
 				styleDetailValue.Render(fmt.Sprintf("%s of %s", strings.ToUpper(k[:1])+k[1:], w.Args[k])),
+				styleDim.Render("("+k+"="+w.Args[k]+")"),
 			))
 		}
 	}
 
 	infoContent := strings.Join(infoLines, "\n") + "\n" + strings.Join(equipLines, "\n")
-	infoPanel := mkPanel(infoPanelW).Render(infoContent)
+	infoPanel := mkPlain(infoPanelW).Render(infoContent)
 
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, infoPanel, portraitPanel)
-
-	// ── quest log panel — full width ─────────────────────────────────
-	questLines := []string{styleSection.Render("Quest Log"), ""}
+	// ── quest log — borderless, below info ───────────────────────────
+	questLines := []string{"", styleSection.Render("Quest Log")}
 	if len(quests) == 0 {
 		questLines = append(questLines, styleDim.Render("  (no quests)"))
 	}
@@ -356,14 +351,15 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 				styleDetailLabel.Render(f.s.Ticket),
 				st.Render(f.s.Status),
 			),
-			fmt.Sprintf("     %s", styleDim.Render(truncate(slug, fullPanelW-6))),
+			fmt.Sprintf("     %s", styleDim.Render(truncate(slug, infoPanelW-6))),
 		)
 	}
-	questPanel := mkPanel(fullPanelW).Render(strings.Join(questLines, "\n"))
+	questPanel := mkPlain(infoPanelW).Render(strings.Join(questLines, "\n"))
+	leftColumn := lipgloss.JoinVertical(lipgloss.Left, infoPanel, questPanel)
 
 	// ── assemble ─────────────────────────────────────────────────────
 	dismiss := styleDim.Render("[!] or [esc] to dismiss")
-	content := topRow + "\n" + questPanel + "\n" + dismiss
+	content := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, portraitPanel) + "\n" + dismiss
 
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, content)
 }

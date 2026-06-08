@@ -233,6 +233,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.viewport.Width = msg.Width - 4
 		m.viewport.Height = msg.Height - 6
+		if m.view == viewCharacterSheet {
+			return m, tea.ClearScreen
+		}
 		return m, nil
 
 	case tickMsg:
@@ -457,6 +460,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.charSheetWorker = workerForPath(items[m.sectionCursor].path, m.allWorkers)
 					m.charSheetReturn = viewDashboard
 					m.view = viewCharacterSheet
+					return m, tea.ClearScreen
 				}
 			}
 
@@ -600,6 +604,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.charSheetWorker != nil {
 				m.charSheetReturn = viewFile
 				m.view = viewCharacterSheet
+				return m, tea.ClearScreen
 			}
 		default:
 			var cmd tea.Cmd
@@ -613,6 +618,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "!", "esc", "b":
 			m.view = m.charSheetReturn
+			return m, tea.ClearScreen
 		}
 	}
 
