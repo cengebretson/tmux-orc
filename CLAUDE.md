@@ -18,9 +18,14 @@ orc/
   cmd/orc/main.go                 CLI entry point (Cobra)
   internal/
     config/                       orc.yaml parsing — repos, workflows, loop stages, settings
+    doctor/                       workspace + local tool readiness checks
+    featurelist/                  shared feature collection for CLI status and TUI rows
     health/                       workspace filesystem health checks
+    orchestrator/                 launch, transition, and archive services
     runner/                       next-action resolution — worker, prompt, launch args
     state/                        STATE.yaml parsing and mutations
+    ticket/                       ticket lookup and load helpers
+    ticketview/                   single-ticket display/runtime summary
     workers/                      worker definition parsing
     stage/                        stage markdown file reading
     resume/                       recovery prompt builder
@@ -64,10 +69,18 @@ Quick reference for dev/test use:
 ./orc init --dry-run
 ./orc init --workspace /tmp/test-ws --with-sample-workers
 ./orc health --workspace /tmp/test-ws
+./orc doctor --workspace /tmp/test-ws
 ./orc work STORY-123 --workspace /tmp/test-ws
 ./orc next STORY-123 --dry --workspace /tmp/test-ws
 ./orc next STORY-123 --json --workspace /tmp/test-ws
+./orc status STORY-123 --workspace /tmp/test-ws
+./orc jit STORY-123 --worker bob-developer "check the handoff" --dry --workspace /tmp/test-ws
 ```
+
+Keep command-level behavior covered in `cmd/orc/main_test.go` when changing user-facing
+output, JSON shape, validation behavior, or dry-run prompts. Use package tests for shared
+services (`internal/orchestrator`, `internal/ticket`, `internal/ticketview`,
+`internal/featurelist`, `internal/state`) so command handlers stay thin.
 
 ## Template System
 
@@ -93,12 +106,20 @@ To add a new template file, drop it under `internal/workspace/templates/` and re
 - **Policy in files, not code.** Worker behavior, model choice, and cost tier live in
   markdown files. `orc` parses, matches, renders, and updates state.
 - **Durable state.** `STATE.yaml` survives restarts, session changes, and agent switches.
-- **Human-in-the-loop first.** Background execution comes last, after logging and recovery
-  are solid.
+- **Atomic state writes.** All state mutations go through `state.Update`, which locks,
+  writes a temp file, and atomically replaces `STATE.yaml`. Stale dead-PID locks are
+  recoverable; `orc doctor` reports lock files.
+- **Runtime identity lives in state.** Use `runtime.tmux.session` when present; fall back
+  to slug only for older tickets. Do not assume tmux session name always equals `slug`.
+- **Human-in-the-loop first.** Background execution comes after logging and recovery are
+  solid.
 - **Stage-assigned workers by default.** Override with `--worker` for a single run or
   set `stage.worker` via `orc mark <ticket> next --worker` to persist across sessions.
 - **Product-agnostic by default.** Every decision that could couple `orc` to a single
   agent product should be reconsidered.
+- **CLI as the boundary, services as the source of behavior.** Keep prompts, flags, and
+  printing in `cmd/orc`; put orchestration, ticket lookup, runtime summaries, state
+  transitions, and archive behavior in internal packages with tests.
 
 ## Deliberate Divergences from Original Design
 

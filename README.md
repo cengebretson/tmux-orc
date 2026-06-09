@@ -119,7 +119,12 @@ updates `ROUTER.md` with the right ticket system retrieval instructions.
 
 ```bash
 orc health
+orc doctor
 ```
+
+`orc health` checks workspace files. `orc doctor` also checks local readiness:
+configured worker engines on your `PATH`, tmux availability, and any
+`STATE.yaml.lock` files that could affect ticket updates.
 
 ### 4. Start working on a ticket
 
@@ -301,6 +306,7 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
   - `--force` — overwrite existing files
 - `orc health` — check workspace filesystem health
   - `orc health <ticket>` — validate a ticket's state: workflow, stage, worker, worktrees
+- `orc doctor` — check workspace health plus local tools, worker engines, tmux, and state locks
 - `orc status` — show all features and their current workflow/stage
   - `orc status <ticket>` — show full details for a specific ticket
   - `--json` — output as JSON for scripting
@@ -447,6 +453,9 @@ next_action:
   cwd: worktrees/my-app/STORY-123-add-login
 
 runtime:
+  tmux:                         # present when a tmux session is configured
+    session: STORY-123-add-login
+
   jit:                          # present while a jit task is running, absent otherwise
     worker: zach-the-reviewer
     task: "check the auth middleware handles token expiry"
@@ -476,6 +485,21 @@ history:
 | `paused` | Human needed — input, approval, or external blocker | `orc mark <ticket> pause` |
 | `done` | All stages complete, or explicitly closed | `orc mark <ticket> next` (final stage) or `orc mark <ticket> done` |
 | `archived` | Feature folder moved to `_archive/` | `orc archive` |
+
+`runtime.tmux.session` is the source of truth for tmux operations once present.
+Older tickets without that field fall back to the feature slug. `orc attach`,
+`orc status`, `orc tui`, and archive cleanup all use the recorded runtime session
+so custom or restored session names continue to work.
+
+`runtime.jit` is present only while a one-off JIT task is open. Finish the task
+with `orc mark <ticket> jit "<summary>"`; that records a history entry and clears
+the JIT runtime block.
+
+State writes use `STATE.yaml.lock` with atomic temp-file replacement. If an orc
+process dies mid-write, the next state write can recover dead-PID locks and old
+malformed locks automatically. `orc doctor` reports any lock files it finds so
+you can tell whether a live process is holding state or a stale lock will be
+recovered on the next write.
 
 ## Workers
 
