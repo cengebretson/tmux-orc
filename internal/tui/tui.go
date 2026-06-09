@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/cengebretson/orc/internal/config"
+	"github.com/cengebretson/orc/internal/featurelist"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
-	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -1767,56 +1767,19 @@ func (m Model) visibleFeatures() []*featureRow {
 }
 
 func collectFeatures(root string) []*featureRow {
-	featuresDir := filepath.Join(root, "features")
-	allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
-	activeSessions := make(map[string]bool)
-	if tmux.Available() {
-		for _, name := range tmux.ListSessions() {
-			activeSessions[name] = true
+	features, _ := featurelist.Collect(root, featurelist.Options{IncludeArchived: true})
+	rows := make([]*featureRow, 0, len(features))
+	for _, f := range features {
+		if f.LoadError != nil {
+			continue
 		}
+		rows = append(rows, &featureRow{
+			s:          f.State,
+			featureDir: f.FeatureDir,
+			workerName: f.WorkerName,
+			tmuxLive:   f.TmuxLive,
+		})
 	}
-
-	var rows []*featureRow
-
-	collect := func(dir string) {
-		entries, _ := os.ReadDir(dir)
-		for _, e := range entries {
-			if !e.IsDir() || e.Name() == "_template" {
-				continue
-			}
-			featureDir := filepath.Join(dir, e.Name())
-			s, err := state.Load(featureDir)
-			if err != nil {
-				continue
-			}
-			workerName := ""
-			workerID := s.Stage.Worker
-			if workerID == "" {
-				if wfCfg, _ := config.Load(root); wfCfg != nil {
-					if sc, ok := wfCfg.StageConfig(s.Workflow, s.Stage.Name); ok {
-						workerID = sc.Worker
-					}
-				}
-			}
-			if workerID != "" {
-				if w := workers.FindByID(allWorkers, workerID); w != nil {
-					workerName = w.Name
-				} else {
-					workerName = workerID
-				}
-			}
-			live := s.Runtime.Tmux != nil && activeSessions[s.Runtime.Tmux.Session]
-			rows = append(rows, &featureRow{
-				s:          s,
-				featureDir: featureDir,
-				workerName: workerName,
-				tmuxLive:   live,
-			})
-		}
-	}
-
-	collect(featuresDir)
-	collect(filepath.Join(featuresDir, "_archive"))
 	return rows
 }
 

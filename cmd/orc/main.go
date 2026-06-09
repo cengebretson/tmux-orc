@@ -11,6 +11,7 @@ import (
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/doctor"
+	"github.com/cengebretson/orc/internal/featurelist"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/orchestrator"
 	"github.com/cengebretson/orc/internal/resume"
@@ -671,37 +672,44 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		session  string
 	}
 
-	// Fetch active tmux sessions once for cross-referencing.
-	activeSessions := make(map[string]bool)
 	showTmux := tmux.Available()
+	sessionNames := []string{}
 	if showTmux {
-		for _, name := range tmux.ListSessions() {
-			activeSessions[name] = true
-		}
+		sessionNames = tmux.ListSessions()
 	}
 
 	statusCfg, _ := config.Load(root)
+	features, err := featurelist.Collect(root, featurelist.Options{
+		IncludeArchived: true,
+		TmuxAvailable: func() bool {
+			return showTmux
+		},
+		ListSessions: func() []string {
+			return sessionNames
+		},
+	})
+	if err != nil {
+		return err
+	}
 
-	collectRows := func(dir string) []row {
-		entries, _ := os.ReadDir(dir)
+	collectRows := func(archived bool) []row {
 		var rows []row
-		for _, e := range entries {
-			if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
+		for _, f := range features {
+			if f.Archived != archived {
 				continue
 			}
-			featureDir := filepath.Join(dir, e.Name())
-			s, err := state.Load(featureDir)
-			if err != nil {
-				rows = append(rows, row{ticket: e.Name(), status: "error", next: err.Error()})
+			if f.LoadError != nil {
+				rows = append(rows, row{ticket: filepath.Base(f.FeatureDir), status: "error", next: f.LoadError.Error()})
 				continue
 			}
+			s := f.State
 			next := s.NextAction.Prompt
 			if len(next) > 40 {
 				next = next[:40] + "…"
 			}
 			session := "-"
 			if s.Runtime.Tmux != nil {
-				if activeSessions[s.Runtime.Tmux.Session] {
+				if f.TmuxLive {
 					session = "✓"
 				} else {
 					session = "✗" // configured but not running
@@ -716,7 +724,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				ticket:   s.Ticket,
 				status:   s.Status,
 				workflow: stageLabel,
-				worker:   s.Stage.Worker,
+				worker:   f.WorkerID,
 				next:     next,
 				session:  session,
 			})
@@ -740,31 +748,25 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	featuresDir := filepath.Join(root, "features")
-
 	if statusJSON {
-		collectStates := func(dir string) []*state.State {
-			entries, _ := os.ReadDir(dir)
+		collectStates := func(archived bool) []*state.State {
 			var out []*state.State
-			for _, e := range entries {
-				if !e.IsDir() || e.Name() == "_template" || e.Name() == "_archive" {
+			for _, f := range features {
+				if f.Archived != archived || f.LoadError != nil {
 					continue
 				}
-				s, err := state.Load(filepath.Join(dir, e.Name()))
-				if err == nil {
-					out = append(out, s)
-				}
+				out = append(out, f.State)
 			}
 			return out
 		}
 		return printJSON(map[string]any{
-			"active":   collectStates(featuresDir),
-			"archived": collectStates(filepath.Join(featuresDir, "_archive")),
+			"active":   collectStates(false),
+			"archived": collectStates(true),
 		})
 	}
 
-	active := collectRows(featuresDir)
-	archived := collectRows(filepath.Join(featuresDir, "_archive"))
+	active := collectRows(false)
+	archived := collectRows(true)
 
 	if len(active) == 0 && len(archived) == 0 {
 		fmt.Println("No features found. Start one with `orc work <ticket>`.")
