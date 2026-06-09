@@ -2,9 +2,11 @@ package doctor_test
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/cengebretson/orc/internal/doctor"
 )
@@ -71,6 +73,58 @@ func TestRunWithOptionsMissingTmuxWarns(t *testing.T) {
 	}
 	if !report.OK() {
 		t.Fatal("report should remain OK when only tmux is missing")
+	}
+}
+
+func TestRunWithOptionsReportsNoStateLocks(t *testing.T) {
+	report := doctor.RunWithOptions(fixtureWorkspace(), doctor.Options{
+		LookPath: func(name string) (string, error) {
+			return "/bin/" + name, nil
+		},
+	})
+
+	check := findCheck(report, "state locks", "STATE.yaml.lock")
+	if check == nil {
+		t.Fatal("state lock check not found")
+	}
+	if check.Status != doctor.OK {
+		t.Fatalf("state lock status = %v, want OK", check.Status)
+	}
+	if check.Detail != "none found" {
+		t.Fatalf("state lock detail = %q, want none found", check.Detail)
+	}
+}
+
+func TestRunWithOptionsReportsStaleStateLock(t *testing.T) {
+	root := t.TempDir()
+	featureDir := filepath.Join(root, "features", "TICKET-1")
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte("not-a-pid\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Minute)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	report := doctor.RunWithOptions(root, doctor.Options{
+		LookPath: func(name string) (string, error) {
+			return "/bin/" + name, nil
+		},
+	})
+
+	check := findCheck(report, "state locks", "TICKET-1")
+	if check == nil {
+		t.Fatal("stale state lock check not found")
+	}
+	if check.Status != doctor.Warning {
+		t.Fatalf("state lock status = %v, want Warning", check.Status)
+	}
+	if check.Detail != "old lock without a valid PID — will be recovered on next state write" {
+		t.Fatalf("state lock detail = %q", check.Detail)
 	}
 }
 

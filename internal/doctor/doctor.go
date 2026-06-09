@@ -2,12 +2,15 @@ package doctor
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/cengebretson/orc/internal/health"
+	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
 )
 
@@ -66,6 +69,7 @@ func RunWithOptions(root string, opts Options) *Report {
 
 	report := &Report{Root: root}
 	appendHealth(report, health.Run(root))
+	appendStateLockChecks(report, root)
 	appendToolChecks(report, root, opts.LookPath)
 	return report
 }
@@ -130,6 +134,86 @@ func appendToolChecks(report *Report, root string, lookPath func(string) (string
 	for _, engine := range engineNames {
 		required := engine != "cursor"
 		report.Checks = append(report.Checks, executableCheck("tools", engine, engine, lookPath, !required))
+	}
+}
+
+func appendStateLockChecks(report *Report, root string) {
+	featuresDir := filepath.Join(root, "features")
+	if _, err := os.Stat(featuresDir); err != nil {
+		return
+	}
+
+	found := false
+	err := filepath.WalkDir(featuresDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			report.Checks = append(report.Checks, Check{
+				Group:  "state locks",
+				Name:   filepath.Base(path),
+				Status: Fail,
+				Detail: err.Error(),
+			})
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == "_template" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() != state.Filename+".lock" {
+			return nil
+		}
+
+		found = true
+		featureDir := filepath.Dir(path)
+		rel, relErr := filepath.Rel(featuresDir, featureDir)
+		if relErr != nil {
+			rel = filepath.Base(featureDir)
+		}
+		lock, err := state.InspectLock(featureDir)
+		if err != nil {
+			report.Checks = append(report.Checks, Check{
+				Group:  "state locks",
+				Name:   rel,
+				Status: Fail,
+				Detail: err.Error(),
+			})
+			return nil
+		}
+		status := Warning
+		detail := lock.Detail
+		switch lock.Status {
+		case state.LockActive:
+			detail += " — another orc process may be running"
+		case state.LockStale:
+			detail += " — will be recovered on next state write"
+		default:
+			status = OK
+		}
+		report.Checks = append(report.Checks, Check{
+			Group:  "state locks",
+			Name:   rel,
+			Status: status,
+			Detail: detail,
+		})
+		return nil
+	})
+	if err != nil {
+		report.Checks = append(report.Checks, Check{
+			Group:  "state locks",
+			Name:   "scan",
+			Status: Fail,
+			Detail: err.Error(),
+		})
+		return
+	}
+	if !found {
+		report.Checks = append(report.Checks, Check{
+			Group:  "state locks",
+			Name:   state.Filename + ".lock",
+			Status: OK,
+			Detail: "none found",
+		})
 	}
 }
 

@@ -25,6 +25,22 @@ const lockTimeout = 5 * time.Second
 
 const staleLockAge = 30 * time.Second
 
+type LockStatus int
+
+const (
+	LockMissing LockStatus = iota
+	LockActive
+	LockStale
+)
+
+type LockInfo struct {
+	Path   string
+	Status LockStatus
+	PID    int
+	Age    time.Duration
+	Detail string
+}
+
 type State struct {
 	SchemaVersion int    `yaml:"schema_version,omitempty"`
 	Ticket        string `yaml:"ticket"`
@@ -194,31 +210,19 @@ func lockPath(path string) (func(), error) {
 	}
 }
 
+func InspectLock(featureDir string) (LockInfo, error) {
+	return inspectLockPath(filepath.Join(featureDir, Filename+".lock"))
+}
+
 func removeStaleLock(lockName string) (bool, error) {
-	info, err := os.Stat(lockName)
+	lock, err := inspectLockPath(lockName)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return true, nil
-		}
-		return false, fmt.Errorf("checking state lock: %w", err)
+		return false, err
 	}
-
-	staleByAge := time.Since(info.ModTime()) > staleLockAge
-	staleByPID := false
-	hasLivePID := false
-	data, err := os.ReadFile(lockName)
-	if err == nil {
-		pidText := strings.TrimSpace(string(data))
-		if pid, err := strconv.Atoi(pidText); err == nil && pid > 0 {
-			if processExists(pid) {
-				hasLivePID = true
-			} else {
-				staleByPID = true
-			}
-		}
+	if lock.Status == LockMissing {
+		return true, nil
 	}
-
-	if hasLivePID || (!staleByAge && !staleByPID) {
+	if lock.Status != LockStale {
 		return false, nil
 	}
 	if err := os.Remove(lockName); err != nil {
@@ -228,6 +232,49 @@ func removeStaleLock(lockName string) (bool, error) {
 		return false, fmt.Errorf("removing stale state lock %s: %w", lockName, err)
 	}
 	return true, nil
+}
+
+func inspectLockPath(lockName string) (LockInfo, error) {
+	lock := LockInfo{Path: lockName, Status: LockActive}
+	info, err := os.Stat(lockName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			lock.Status = LockMissing
+			lock.Detail = "not present"
+			return lock, nil
+		}
+		return lock, fmt.Errorf("checking state lock: %w", err)
+	}
+
+	lock.Age = time.Since(info.ModTime())
+	data, err := os.ReadFile(lockName)
+	if err != nil {
+		lock.Detail = "cannot read PID"
+		if lock.Age > staleLockAge {
+			lock.Status = LockStale
+			lock.Detail = "old lock with unreadable PID"
+		}
+		return lock, nil
+	}
+
+	pidText := strings.TrimSpace(string(data))
+	pid, err := strconv.Atoi(pidText)
+	if err != nil || pid <= 0 {
+		lock.Detail = "lock exists without a valid PID"
+		if lock.Age > staleLockAge {
+			lock.Status = LockStale
+			lock.Detail = "old lock without a valid PID"
+		}
+		return lock, nil
+	}
+	lock.PID = pid
+	if processExists(pid) {
+		lock.Detail = fmt.Sprintf("held by pid %d", pid)
+		return lock, nil
+	}
+	lock.Status = LockStale
+	lock.Detail = fmt.Sprintf("pid %d is not running", pid)
+	return lock, nil
 }
 
 func processExists(pid int) bool {
