@@ -449,7 +449,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.cursor < len(rows) {
 					row := rows[m.cursor]
 					if row.s.Runtime.Tmux != nil && row.tmuxLive {
-						return m, attachTmux(row.s.Slug, row.s.Stage.Name)
+						return m, attachTmux(row.s.Runtime.Tmux.Session, row.s.Stage.Name)
 					}
 				}
 			}

@@ -97,7 +97,7 @@ func (a Archiver) Archive(opts ArchiveOptions) (*ArchiveResult, error) {
 
 	result := &ArchiveResult{
 		Slug:        filepath.Base(opts.FeatureDir),
-		TmuxSession: opts.State.Slug,
+		TmuxSession: tmuxSessionName(opts.State),
 	}
 
 	for name, repo := range opts.State.Repos {
@@ -133,11 +133,13 @@ func (a Archiver) Archive(opts ArchiveOptions) (*ArchiveResult, error) {
 	}
 	result.Destination = dest
 
-	if a.TmuxAvailable() && a.SessionExists(opts.State.Slug) {
-		if err := a.KillSession(opts.State.Slug); err != nil {
-			result.TmuxKillWarn = fmt.Sprintf("could not kill tmux session %s: %v", opts.State.Slug, err)
+	session := tmuxSessionName(opts.State)
+	if a.TmuxAvailable() && a.SessionExists(session) {
+		if err := a.KillSession(session); err != nil {
+			result.TmuxKillWarn = fmt.Sprintf("could not kill tmux session %s: %v", session, err)
 		} else {
 			result.KilledTmux = true
+			result.TmuxSession = session
 		}
 	}
 
@@ -156,4 +158,11 @@ func removeWorktree(repoMain, worktreePath string) error {
 		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+func tmuxSessionName(s *state.State) string {
+	if s.Runtime.Tmux != nil && s.Runtime.Tmux.Session != "" {
+		return s.Runtime.Tmux.Session
+	}
+	return s.Slug
 }

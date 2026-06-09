@@ -1285,11 +1285,16 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	}
 	s := t.State
 
-	if !tmux.SessionExists(s.Slug) {
+	session := s.Slug
+	if s.Runtime.Tmux != nil && s.Runtime.Tmux.Session != "" {
+		session = s.Runtime.Tmux.Session
+	}
+
+	if !tmux.SessionExists(session) {
 		return fmt.Errorf("no tmux session for %s — run `orc next %s` to start one", s.Ticket, s.Ticket)
 	}
 
-	return tmux.Attach(s.Slug + ":" + s.Stage.Name)
+	return tmux.Attach(session + ":" + s.Stage.Name)
 }
 
 // resolveWorkflow returns the ticket's workflow name for display purposes.

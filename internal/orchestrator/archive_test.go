@@ -18,6 +18,9 @@ func TestArchiverArchivesFeatureAndCleansRuntime(t *testing.T) {
 	}
 	s := &state.State{
 		Slug: "TICKET-1",
+		Runtime: state.Runtime{
+			Tmux: &state.TmuxRuntime{Session: "custom-session"},
+		},
 		Repos: map[string]state.Repo{
 			"app": {
 				Main:     filepath.Join(root, "app"),
@@ -29,6 +32,7 @@ func TestArchiverArchivesFeatureAndCleansRuntime(t *testing.T) {
 
 	var removed []string
 	var renamed []string
+	var killedSession string
 	archiver := Archiver{
 		RemoveWorktree: func(repoMain, worktreePath string) error {
 			removed = []string{repoMain, worktreePath}
@@ -48,9 +52,12 @@ func TestArchiverArchivesFeatureAndCleansRuntime(t *testing.T) {
 			return nil
 		},
 		TmuxAvailable: func() bool { return true },
-		SessionExists: func(session string) bool { return session == "TICKET-1" },
-		KillSession:   func(session string) error { return nil },
-		ClearRuntime:  func(featureDir string) error { return nil },
+		SessionExists: func(session string) bool { return session == "custom-session" },
+		KillSession: func(session string) error {
+			killedSession = session
+			return nil
+		},
+		ClearRuntime: func(featureDir string) error { return nil },
 	}
 
 	result, err := archiver.Archive(ArchiveOptions{
@@ -74,6 +81,12 @@ func TestArchiverArchivesFeatureAndCleansRuntime(t *testing.T) {
 	}
 	if !result.KilledTmux {
 		t.Error("KilledTmux = false, want true")
+	}
+	if killedSession != "custom-session" {
+		t.Fatalf("killedSession = %q, want custom-session", killedSession)
+	}
+	if result.TmuxSession != "custom-session" {
+		t.Fatalf("TmuxSession = %q, want custom-session", result.TmuxSession)
 	}
 	if !result.RuntimeCleared {
 		t.Error("RuntimeCleared = false, want true")
