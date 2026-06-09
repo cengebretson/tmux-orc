@@ -1,0 +1,159 @@
+package orchestrator
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/tmux"
+)
+
+type ArchiveOptions struct {
+	Root       string
+	FeatureDir string
+	State      *state.State
+}
+
+type WorktreeRemoval struct {
+	Name         string
+	Main         string
+	WorktreePath string
+	WorktreeRel  string
+	Branch       string
+	Warning      string
+}
+
+type ArchiveResult struct {
+	Slug             string
+	Destination      string
+	Worktrees        []WorktreeRemoval
+	KilledTmux       bool
+	TmuxSession      string
+	RuntimeCleared   bool
+	RuntimeClearWarn string
+	TmuxKillWarn     string
+}
+
+type Archiver struct {
+	RemoveWorktree func(repoMain, worktreePath string) error
+	SetStatus      func(featureDir, status string) error
+	MkdirAll       func(path string, perm os.FileMode) error
+	Rename         func(oldpath, newpath string) error
+	TmuxAvailable  func() bool
+	SessionExists  func(string) bool
+	KillSession    func(string) error
+	ClearRuntime   func(featureDir string) error
+}
+
+func NewArchiver() Archiver {
+	return Archiver{
+		RemoveWorktree: removeWorktree,
+		SetStatus:      state.SetStatus,
+		MkdirAll:       os.MkdirAll,
+		Rename:         os.Rename,
+		TmuxAvailable:  tmux.Available,
+		SessionExists:  tmux.SessionExists,
+		KillSession:    tmux.KillSession,
+		ClearRuntime:   state.ClearRuntime,
+	}
+}
+
+func Archive(opts ArchiveOptions) (*ArchiveResult, error) {
+	archiver := NewArchiver()
+	return archiver.Archive(opts)
+}
+
+func (a Archiver) Archive(opts ArchiveOptions) (*ArchiveResult, error) {
+	if opts.State == nil {
+		return nil, fmt.Errorf("state is required")
+	}
+	if a.RemoveWorktree == nil {
+		a.RemoveWorktree = removeWorktree
+	}
+	if a.SetStatus == nil {
+		a.SetStatus = state.SetStatus
+	}
+	if a.MkdirAll == nil {
+		a.MkdirAll = os.MkdirAll
+	}
+	if a.Rename == nil {
+		a.Rename = os.Rename
+	}
+	if a.TmuxAvailable == nil {
+		a.TmuxAvailable = tmux.Available
+	}
+	if a.SessionExists == nil {
+		a.SessionExists = tmux.SessionExists
+	}
+	if a.KillSession == nil {
+		a.KillSession = tmux.KillSession
+	}
+	if a.ClearRuntime == nil {
+		a.ClearRuntime = state.ClearRuntime
+	}
+
+	result := &ArchiveResult{
+		Slug:        filepath.Base(opts.FeatureDir),
+		TmuxSession: opts.State.Slug,
+	}
+
+	for name, repo := range opts.State.Repos {
+		if repo.Worktree == "" {
+			continue
+		}
+		worktreePath := filepath.Join(opts.Root, repo.Worktree)
+		removed := WorktreeRemoval{
+			Name:         name,
+			Main:         repo.Main,
+			WorktreePath: worktreePath,
+			WorktreeRel:  repo.Worktree,
+			Branch:       repo.Branch,
+		}
+		if err := a.RemoveWorktree(repo.Main, worktreePath); err != nil {
+			removed.Warning = err.Error()
+		}
+		result.Worktrees = append(result.Worktrees, removed)
+	}
+
+	if err := a.SetStatus(opts.FeatureDir, "archived"); err != nil {
+		return nil, fmt.Errorf("updating status: %w", err)
+	}
+
+	archiveDir := filepath.Join(opts.Root, "features", "_archive")
+	if err := a.MkdirAll(archiveDir, 0755); err != nil {
+		return nil, fmt.Errorf("creating _archive dir: %w", err)
+	}
+
+	dest := filepath.Join(archiveDir, result.Slug)
+	if err := a.Rename(opts.FeatureDir, dest); err != nil {
+		return nil, fmt.Errorf("moving feature folder: %w", err)
+	}
+	result.Destination = dest
+
+	if a.TmuxAvailable() && a.SessionExists(opts.State.Slug) {
+		if err := a.KillSession(opts.State.Slug); err != nil {
+			result.TmuxKillWarn = fmt.Sprintf("could not kill tmux session %s: %v", opts.State.Slug, err)
+		} else {
+			result.KilledTmux = true
+		}
+	}
+
+	if err := a.ClearRuntime(dest); err != nil {
+		result.RuntimeClearWarn = fmt.Sprintf("could not clear runtime from STATE.yaml: %v", err)
+	} else {
+		result.RuntimeCleared = true
+	}
+
+	return result, nil
+}
+
+func removeWorktree(repoMain, worktreePath string) error {
+	out, err := exec.Command("git", "-C", repoMain, "worktree", "remove", worktreePath, "--force").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}

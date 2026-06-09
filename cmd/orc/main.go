@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1110,53 +1109,35 @@ func runArchive(cmd *cobra.Command, args []string) error {
 }
 
 func archiveFeature(root, featureDir string, s *state.State) error {
-	// remove git worktrees for any write repos
-	for name, repo := range s.Repos {
-		if repo.Worktree == "" {
-			continue
-		}
-		worktreePath := filepath.Join(root, repo.Worktree)
-		fmt.Printf("Removing worktree: %s\n", repo.Worktree)
-		if err := removeWorktree(repo.Main, worktreePath); err != nil {
-			fmt.Printf("  warning: %v\n", err)
-			fmt.Printf("  you may need to run: git -C %q worktree remove %q --force\n", repo.Main, worktreePath)
+	result, err := orchestrator.Archive(orchestrator.ArchiveOptions{
+		Root:       root,
+		FeatureDir: featureDir,
+		State:      s,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, wt := range result.Worktrees {
+		fmt.Printf("Removing worktree: %s\n", wt.WorktreeRel)
+		if wt.Warning != "" {
+			fmt.Printf("  warning: %v\n", wt.Warning)
+			fmt.Printf("  you may need to run: git -C %q worktree remove %q --force\n", wt.Main, wt.WorktreePath)
 		} else {
-			fmt.Printf("  removed %s (%s)\n", name, repo.Branch)
+			fmt.Printf("  removed %s (%s)\n", wt.Name, wt.Branch)
 		}
 	}
 
-	// stamp status: archived in STATE.yaml before moving
-	if err := state.SetStatus(featureDir, "archived"); err != nil {
-		return fmt.Errorf("updating status: %w", err)
+	if result.TmuxKillWarn != "" {
+		fmt.Printf("warning: %s\n", result.TmuxKillWarn)
+	} else if result.KilledTmux {
+		fmt.Printf("Killed tmux session: %s\n", result.TmuxSession)
+	}
+	if result.RuntimeClearWarn != "" {
+		fmt.Printf("warning: %s\n", result.RuntimeClearWarn)
 	}
 
-	// move to features/_archive/
-	archiveDir := filepath.Join(root, "features", "_archive")
-	if err := os.MkdirAll(archiveDir, 0755); err != nil {
-		return fmt.Errorf("creating _archive dir: %w", err)
-	}
-
-	slug := filepath.Base(featureDir)
-	dest := filepath.Join(archiveDir, slug)
-	if err := os.Rename(featureDir, dest); err != nil {
-		return fmt.Errorf("moving feature folder: %w", err)
-	}
-
-	// Kill tmux session if one is running for this ticket.
-	if tmux.Available() && tmux.SessionExists(s.Slug) {
-		if err := tmux.KillSession(s.Slug); err != nil {
-			fmt.Printf("warning: could not kill tmux session %s: %v\n", s.Slug, err)
-		} else {
-			fmt.Printf("Killed tmux session: %s\n", s.Slug)
-		}
-	}
-	// Clear runtime from the archived STATE.yaml regardless of whether the session existed.
-	archiveDest := filepath.Join(root, "features", "_archive", filepath.Base(featureDir))
-	if err := state.ClearRuntime(archiveDest); err != nil {
-		fmt.Printf("warning: could not clear runtime from STATE.yaml: %v\n", err)
-	}
-
-	fmt.Printf("Archived: features/_archive/%s/\n", slug)
+	fmt.Printf("Archived: features/_archive/%s/\n", result.Slug)
 	return nil
 }
 
@@ -1372,14 +1353,6 @@ func resolveWorkflow(root, ticketWorkflow string) string {
 		return cfg.Settings.DefaultWorkflow
 	}
 	return ""
-}
-
-func removeWorktree(repoMain, worktreePath string) error {
-	out, err := exec.Command("git", "-C", repoMain, "worktree", "remove", worktreePath, "--force").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
-	}
-	return nil
 }
 
 func printJSON(v any) error {
