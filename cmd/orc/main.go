@@ -12,6 +12,7 @@ import (
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
+	"github.com/cengebretson/orc/internal/orchestrator"
 	"github.com/cengebretson/orc/internal/resume"
 	"github.com/cengebretson/orc/internal/runner"
 	"github.com/cengebretson/orc/internal/state"
@@ -533,48 +534,41 @@ func runNext(cmd *cobra.Command, args []string) error {
 }
 
 func launchPlan(root, featureDir string, s *state.State, plan *runner.Plan) error {
-	// Auto-tmux: create a session if available, fall through to foreground on failure.
-	if tmux.Available() {
-		session := s.Slug
-		window := s.Stage.Name
-
-		if s.Runtime.Tmux == nil {
-			stages := stageNamesForTicket(root, s)
-			if err := tmux.CreateSession(session, featureDir, stages); err != nil {
-				fmt.Printf("tmux session create failed (%v) — running in foreground\n", err)
-				goto runForeground
+	launcher := orchestrator.NewLauncher()
+	result, err := launcher.Launch(orchestrator.LaunchOptions{
+		Root:       root,
+		FeatureDir: featureDir,
+		State:      s,
+		Plan:       plan,
+		In:         os.Stdin,
+		Out:        os.Stdout,
+		Err:        os.Stderr,
+		OnFallback: func(message string) {
+			if strings.HasPrefix(message, "warning:") {
+				fmt.Println(message)
+			} else {
+				fmt.Printf("%s — running in foreground\n", message)
 			}
-			if err := state.SetRuntime(featureDir, session); err != nil {
-				fmt.Printf("warning: could not write runtime to STATE.yaml: %v\n", err)
-			}
-		} else {
-			session = s.Runtime.Tmux.Session
-			if !tmux.SessionExists(session) {
-				stages := stageNamesForTicket(root, s)
-				if err := tmux.CreateSession(session, featureDir, stages); err != nil {
-					fmt.Printf("tmux session recreate failed (%v) — running in foreground\n", err)
-					goto runForeground
-				}
-			}
-		}
-
-		fmt.Printf("Sending to tmux session %s:%s...\n", session, window)
-		if err := tmux.SendCommand(session, window, featureDir, plan.CWD, plan.LaunchArgv); err != nil {
-			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
-		} else {
-			fmt.Printf("Agent launched in background.\n")
-			fmt.Printf("Attach:  %s\n", tmux.AttachHint(session, window))
-			return nil
-		}
+		},
+		OnHistoryWarning: func(message string) {
+			fmt.Println(message)
+		},
+		OnTmuxSend: func(session, window string) {
+			fmt.Printf("Sending to tmux session %s:%s...\n", session, window)
+		},
+		OnForeground: func() {
+			fmt.Printf("Launching %s (%s)...\n", plan.Worker.Name, plan.Worker.Engine)
+		},
+	})
+	if err != nil {
+		return err
 	}
-runForeground:
-	fmt.Printf("Launching %s (%s)...\n", plan.Worker.Name, plan.Worker.Engine)
-	c := exec.Command(plan.LaunchArgv[0], plan.LaunchArgv[1:]...)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	c.Dir = plan.CWD
-	return c.Run()
+
+	if result.Mode == orchestrator.LaunchModeTmux {
+		fmt.Printf("Agent launched in background.\n")
+		fmt.Printf("Attach:  %s\n", result.AttachHint)
+	}
+	return nil
 }
 
 func runWork(cmd *cobra.Command, args []string) error {
@@ -1021,127 +1015,55 @@ func runMark(cmd *cobra.Command, args []string) error {
 }
 
 func runMarkNext(root, featureDir string) error {
-	s, err := state.Load(featureDir)
+	result, err := orchestrator.Advance(orchestrator.AdvanceOptions{
+		Root:       root,
+		FeatureDir: featureDir,
+		Stage:      markStage,
+		Worker:     markWorker,
+		Result:     markResult,
+	})
 	if err != nil {
 		return err
 	}
 
-	// Guard: archived or done tickets cannot be advanced.
-	if s.Status == "archived" || s.Status == "done" {
-		return fmt.Errorf("ticket %s is %s — cannot advance", s.Ticket, s.Status)
+	if result.Outcome == orchestrator.AdvanceOutcomePaused {
+		fmt.Printf("Loop limit reached %s. Pausing for human review.\n", strings.TrimPrefix(result.Reason, "loop limit reached "))
+		return nil
 	}
 
-	if err := state.ValidateRepos(s, root); err != nil {
-		return err
-	}
-
-	workflowCfg, err := config.Load(root)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-	workflow := resolveWorkflow(root, s.Workflow)
-	prevStage := s.Stage.Name
-
-	// If --stage is given manually, validate it exists in the workflow or as a loop stage.
-	if markStage != "" {
-		if _, ok := workflowCfg.StageConfig(workflow, markStage); !ok {
-			return fmt.Errorf("stage %q not found in workflow %q — check orc.yaml", markStage, workflow)
-		}
-	}
-
-	// Auto-advance to next stage in the pipeline.
-	// If current stage is a loop stage, auto-return to its owner when no --stage is given.
-	nextStage := markStage
-	if nextStage == "" {
-		nextStage = workflowCfg.NextStage(workflow, prevStage)
-		if nextStage == "" {
-			if owner, ok := workflowCfg.OwnerStage(workflow, prevStage); ok {
-				nextStage = owner
-			}
-		}
-	}
-
-	// Guard: manual gate — agent must call orc mark pause, not orc mark next.
-	if nextStage != "" && !workflowCfg.IsLoopStage(workflow, prevStage) {
-		if sc, ok := workflowCfg.StageConfig(workflow, prevStage); ok && sc.Advance == "manual" {
-			return fmt.Errorf(
-				"stage %q has advance: manual — use `orc mark %s pause \"<reason>\"` so a human can review before continuing",
-				prevStage, s.Ticket,
-			)
-		}
-	}
-
-	// Guard: loop routing — validate target is a valid loop stage for current stage,
-	// and auto-pause when the loop limit is reached.
-	if markStage != "" && workflowCfg.IsLoopStage(workflow, markStage) {
-		owner, _ := workflowCfg.OwnerStage(workflow, markStage)
-		if owner != prevStage {
-			return fmt.Errorf("stage %q is a loop stage owned by %q, not %q", markStage, owner, prevStage)
-		}
-		if loopDef, ok := workflowCfg.LoopConfig(workflow, prevStage); ok && loopDef.Max > 0 {
-			count := s.StageCounts[markStage]
-			if count >= loopDef.Max {
-				reason := fmt.Sprintf("loop limit reached (%d/%d for %s)", count, loopDef.Max, markStage)
-				if loopDef.OnMax == "fail" {
-					result := markResult
-					if result == "" {
-						result = reason
-					}
-					return state.Done(featureDir, result)
-				}
-				fmt.Printf("Loop limit reached (%d/%d for %s). Pausing for human review.\n", count, loopDef.Max, markStage)
-				return state.Pause(featureDir, reason)
-			}
-		}
-	}
-
-	result := markResult
-	if result == "" {
-		if nextStage != "" && nextStage != prevStage {
-			result = fmt.Sprintf("advanced from %s to %s", prevStage, nextStage)
-		} else {
-			result = fmt.Sprintf("completed %s", prevStage)
-		}
-	}
-
-	if err := state.Next(featureDir, nextStage, markWorker, result); err != nil {
-		return err
-	}
-
-	fmt.Printf("Ticket:   %s\n", s.Ticket)
-	if nextStage != "" && nextStage != prevStage {
-		fmt.Printf("Stage:    %s → %s\n", prevStage, nextStage)
-	} else if nextStage == "" {
-		fmt.Printf("Stage:    %s  (final)\n", prevStage)
+	fmt.Printf("Ticket:   %s\n", result.Ticket)
+	if result.Next != "" && result.Next != result.Previous {
+		fmt.Printf("Stage:    %s → %s\n", result.Previous, result.Next)
+	} else if result.Next == "" {
+		fmt.Printf("Stage:    %s  (final)\n", result.Previous)
 		fmt.Printf("Status:   done\n")
 	} else {
-		fmt.Printf("Stage:    %s  (unchanged)\n", prevStage)
+		fmt.Printf("Stage:    %s  (unchanged)\n", result.Previous)
 	}
-	if markWorker != "" {
+	if result.Worker != "" {
 		fmt.Printf("Worker:   %s\n", markWorker)
 	}
-	// Auto-archive if the pipeline is complete and the workspace opts in.
-	if nextStage == "" {
-		cfg, _ := config.Load(root)
-		if cfg != nil && cfg.Settings.AutoArchive {
+
+	if result.Outcome == orchestrator.AdvanceOutcomeDone {
+		if result.AutoArchive {
 			fmt.Println()
-			s, err = state.Load(featureDir)
-			if err != nil {
-				return err
+			s, err := state.Load(featureDir)
+			if err == nil {
+				return archiveFeature(root, featureDir, s)
 			}
-			return archiveFeature(root, featureDir, s)
+			return err
 		}
 		return nil
 	}
 
-	fmt.Printf("\nRun `orc next %s` to launch the next worker.\n", s.Ticket)
+	fmt.Printf("\nRun `orc next %s` to launch the next worker.\n", result.Ticket)
 	fmt.Println()
 
 	plan, err := runner.Compute(root, featureDir, "")
 	if err != nil {
 		return err
 	}
-	printDryRun(plan, s.Ticket)
+	printDryRun(plan, result.Ticket)
 	return nil
 }
 
@@ -1290,6 +1212,7 @@ func runJIT(cmd *cobra.Command, args []string) error {
 	outputDir := filepath.Join(featureDir, "jit", timestamp)
 	prompt := buildJITPrompt(s, instruction, outputDir)
 	launchArgv := workers.LaunchArgs(w, root, featureDir, prompt)
+	launchCommand := workers.LaunchCommand(w, root, featureDir, prompt)
 
 	if jitDry {
 		fmt.Printf("Worker:  %s (%s)\n", w.Name, w.Engine)
@@ -1299,7 +1222,7 @@ func runJIT(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Output:  jit/%s/\n", timestamp)
 		fmt.Println()
 		fmt.Println("Would run:")
-		fmt.Printf("  %s\n", workers.LaunchCommand(w, root, featureDir, prompt))
+		fmt.Printf("  %s\n", launchCommand)
 		fmt.Println()
 		fmt.Println("Prompt:")
 		fmt.Println(prompt)
@@ -1318,24 +1241,45 @@ func runJIT(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Output:  jit/%s/\n", timestamp)
 	fmt.Println()
 
-	if jitTmux && tmux.Available() && s.Runtime.Tmux != nil && tmux.SessionExists(s.Runtime.Tmux.Session) {
-		window := "jit"
-		if err := tmux.SendCommand(s.Runtime.Tmux.Session, window, featureDir, featureDir, launchArgv); err != nil {
-			fmt.Printf("tmux send failed (%v) — running in foreground\n", err)
-		} else {
-			fmt.Printf("Agent launched in tmux session %s:%s\n", s.Runtime.Tmux.Session, window)
-			fmt.Printf("Attach:  %s\n", tmux.AttachHint(s.Runtime.Tmux.Session, window))
-			return nil
-		}
+	plan := &runner.Plan{
+		Ticket:        s.Ticket,
+		Stage:         "jit",
+		Worker:        w,
+		Prompt:        prompt,
+		LaunchCommand: launchCommand,
+		LaunchArgv:    launchArgv,
+		CWD:           featureDir,
 	}
-
-	fmt.Printf("Launching %s (%s)...\n", w.Name, w.Engine)
-	c := exec.Command(launchArgv[0], launchArgv[1:]...)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	c.Dir = featureDir
-	return c.Run()
+	launcher := orchestrator.NewLauncher()
+	result, err := launcher.Launch(orchestrator.LaunchOptions{
+		Root:                root,
+		FeatureDir:          featureDir,
+		State:               s,
+		Plan:                plan,
+		Window:              "jit",
+		In:                  os.Stdin,
+		Out:                 os.Stdout,
+		Err:                 os.Stderr,
+		DisableTmux:         !jitTmux,
+		RequireExistingTmux: true,
+		OnFallback: func(message string) {
+			fmt.Printf("%s — running in foreground\n", message)
+		},
+		OnHistoryWarning: func(message string) {
+			fmt.Println(message)
+		},
+		OnForeground: func() {
+			fmt.Printf("Launching %s (%s)...\n", w.Name, w.Engine)
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if result.Mode == orchestrator.LaunchModeTmux {
+		fmt.Printf("Agent launched in tmux session %s:%s\n", result.Session, result.Window)
+		fmt.Printf("Attach:  %s\n", result.AttachHint)
+	}
+	return nil
 }
 
 func buildJITPrompt(s *state.State, instruction, outputDir string) string {
@@ -1405,12 +1349,6 @@ func resolveWorkflow(root, ticketWorkflow string) string {
 		return cfg.Settings.DefaultWorkflow
 	}
 	return ""
-}
-
-// stageNamesForTicket returns the ordered stage names for the ticket's workflow pipeline.
-func stageNamesForTicket(root string, s *state.State) []string {
-	workflowCfg, _ := config.Load(root)
-	return workflowCfg.StageNames(resolveWorkflow(root, s.Workflow))
 }
 
 func removeWorktree(repoMain, worktreePath string) error {

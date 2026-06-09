@@ -116,11 +116,11 @@ func writeScript(runDir string, argv []string) (string, error) {
 	for _, arg := range argv {
 		parts = append(parts, shellQuote(arg))
 	}
-	// cd to the right directory, run the command, then self-delete the script.
-	if _, err := fmt.Fprintf(f, "#!/usr/bin/env bash\ncd %s\n%s\nrm -f %s\n",
+	// cd to the right directory, run the command, and self-delete on any exit.
+	if _, err := fmt.Fprintf(f, "#!/usr/bin/env bash\ntrap 'rm -f %s' EXIT\ncd %s\n%s\n",
+		shellQuote(f.Name()),
 		shellQuote(runDir),
 		strings.Join(parts, " "),
-		shellQuote(f.Name()),
 	); err != nil {
 		return "", fmt.Errorf("write script: %w", err)
 	}

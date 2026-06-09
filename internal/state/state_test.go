@@ -1,6 +1,7 @@
 package state_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -117,6 +118,84 @@ func writeLegacyState(t *testing.T, featureDir, content string) {
 	}
 	if err := os.WriteFile(filepath.Join(featureDir, "STATE.yaml"), []byte(content), 0644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUpdateWritesStateAndRemovesLock(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "TICKET-1")
+	writeLegacyState(t, featureDir, `
+ticket: TICKET-1
+slug: TICKET-1
+status: pending
+stage:
+  worker: bob-developer
+  name: develop
+`)
+
+	if err := state.Update(featureDir, func(s *state.State) error {
+		s.Status = "active"
+		s.History = append(s.History, state.HistoryEntry{Result: "updated"})
+		return nil
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		t.Fatalf("Load after Update: %v", err)
+	}
+	if s.Status != "active" {
+		t.Errorf("status = %q, want active", s.Status)
+	}
+	if len(s.History) != 1 || s.History[0].Result != "updated" {
+		t.Errorf("history = %#v, want one updated entry", s.History)
+	}
+	assertNoStateArtifacts(t, featureDir)
+}
+
+func TestUpdateMutationErrorDoesNotRewriteState(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "TICKET-1")
+	writeLegacyState(t, featureDir, `
+ticket: TICKET-1
+slug: TICKET-1
+status: pending
+stage:
+  worker: bob-developer
+  name: develop
+`)
+
+	wantErr := errors.New("stop")
+	err := state.Update(featureDir, func(s *state.State) error {
+		s.Status = "active"
+		return wantErr
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Update error = %v, want %v", err, wantErr)
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		t.Fatalf("Load after Update: %v", err)
+	}
+	if s.Status != "pending" {
+		t.Errorf("status = %q, want pending", s.Status)
+	}
+	assertNoStateArtifacts(t, featureDir)
+}
+
+func assertNoStateArtifacts(t *testing.T, featureDir string) {
+	t.Helper()
+	entries, err := os.ReadDir(featureDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == "STATE.yaml.lock" || filepath.Ext(name) == ".tmp" {
+			t.Fatalf("unexpected state artifact left behind: %s", name)
+		}
 	}
 }
 

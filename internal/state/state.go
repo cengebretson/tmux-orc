@@ -1,6 +1,7 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +18,8 @@ func timeNow() string {
 const Filename = "STATE.yaml"
 
 const SchemaVersion = 1
+
+const lockTimeout = 5 * time.Second
 
 type State struct {
 	SchemaVersion int    `yaml:"schema_version,omitempty"`
@@ -89,6 +92,10 @@ type HistoryEntry struct {
 // Load reads STATE.yaml from the given feature directory.
 func Load(featureDir string) (*State, error) {
 	path := filepath.Join(featureDir, Filename)
+	return loadPath(path)
+}
+
+func loadPath(path string) (*State, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
@@ -102,186 +109,176 @@ func Load(featureDir string) (*State, error) {
 	return &s, nil
 }
 
-// Start marks the feature as active and records a history entry.
-func Start(featureDir string) error {
+// Update loads STATE.yaml, applies mutate, and writes the file back atomically.
+func Update(featureDir string, mutate func(*State) error) error {
 	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
+	unlock, err := lockPath(path)
 	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
+		return err
 	}
+	defer unlock()
 
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
+	s, err := loadPath(path)
+	if err != nil {
+		return err
 	}
+	if err := mutate(s); err != nil {
+		return err
+	}
+	return savePath(path, s)
+}
 
-	s.History = append(s.History, HistoryEntry{
-		At:     timeNow(),
-		Stage:  s.Stage.Name,
-		Worker: s.Stage.Worker,
-		Result: "started",
-	})
-	s.Status = "active"
-
-	out, err := yaml.Marshal(&s)
+func savePath(path string, s *State) error {
+	out, err := yaml.Marshal(s)
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, out, 0644)
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+Filename+"-*.tmp")
+	if err != nil {
+		return fmt.Errorf("creating temp state file: %w", err)
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmp.Write(out); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("writing temp state file: %w", err)
+	}
+	if err := tmp.Chmod(0644); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp state file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp state file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("replacing %s: %w", path, err)
+	}
+	cleanup = false
+	return nil
+}
+
+func lockPath(path string) (func(), error) {
+	lockName := path + ".lock"
+	deadline := time.Now().Add(lockTimeout)
+	for {
+		f, err := os.OpenFile(lockName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err == nil {
+			_, _ = fmt.Fprintf(f, "%d\n", os.Getpid())
+			_ = f.Close()
+			return func() { _ = os.Remove(lockName) }, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("creating state lock: %w", err)
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("timed out waiting for %s", lockName)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// Start marks the feature as active and records a history entry.
+func Start(featureDir string) error {
+	return Update(featureDir, func(s *State) error {
+		s.History = append(s.History, HistoryEntry{
+			At:     timeNow(),
+			Stage:  s.Stage.Name,
+			Worker: s.Stage.Worker,
+			Result: "started",
+		})
+		s.Status = "active"
+		return nil
+	})
 }
 
 // Pause marks the feature as paused (waiting for human input or external blocker).
 func Pause(featureDir, reason string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
+	return Update(featureDir, func(s *State) error {
+		s.History = append(s.History, HistoryEntry{
+			At:     timeNow(),
+			Stage:  s.Stage.Name,
+			Worker: s.Stage.Worker,
+			Result: "paused — " + reason,
+		})
 
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-
-	s.History = append(s.History, HistoryEntry{
-		At:     timeNow(),
-		Stage:  s.Stage.Name,
-		Worker: s.Stage.Worker,
-		Result: "paused — " + reason,
+		s.Status = "paused"
+		s.NextAction.Worker = "human"
+		s.NextAction.Prompt = reason
+		return nil
 	})
-
-	s.Status = "paused"
-	s.NextAction.Worker = "human"
-	s.NextAction.Prompt = reason
-
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, out, 0644)
 }
 
 // Next advances the feature to the next stage, records a history entry, and saves STATE.yaml.
 // When stageName is empty (no stages remain), status is set to "done".
 func Next(featureDir, stageName, worker, result string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
+	return Update(featureDir, func(s *State) error {
+		s.History = append(s.History, HistoryEntry{
+			At:     timeNow(),
+			Stage:  s.Stage.Name,
+			Worker: s.Stage.Worker,
+			Result: result,
+		})
 
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-
-	s.History = append(s.History, HistoryEntry{
-		At:     timeNow(),
-		Stage:  s.Stage.Name,
-		Worker: s.Stage.Worker,
-		Result: result,
-	})
-
-	if stageName != "" {
-		s.Stage.Name = stageName
-		if s.StageCounts == nil {
-			s.StageCounts = map[string]int{}
+		if stageName != "" {
+			s.Stage.Name = stageName
+			if s.StageCounts == nil {
+				s.StageCounts = map[string]int{}
+			}
+			s.StageCounts[stageName]++
+			s.Status = "pending"
+		} else {
+			s.Status = "done"
 		}
-		s.StageCounts[stageName]++
-		s.Status = "pending"
-	} else {
-		s.Status = "done"
-	}
-	if worker != "" {
-		s.Stage.Worker = worker
-	}
-	s.NextAction = NextAction{}
-
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, out, 0644)
+		if worker != "" {
+			s.Stage.Worker = worker
+		}
+		s.NextAction = NextAction{}
+		return nil
+	})
 }
 
 // Done marks the feature as done (all stages complete or explicitly closed).
 func Done(featureDir, result string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-
-	s.History = append(s.History, HistoryEntry{
-		At:     timeNow(),
-		Stage:  s.Stage.Name,
-		Worker: s.Stage.Worker,
-		Result: result,
+	return Update(featureDir, func(s *State) error {
+		s.History = append(s.History, HistoryEntry{
+			At:     timeNow(),
+			Stage:  s.Stage.Name,
+			Worker: s.Stage.Worker,
+			Result: result,
+		})
+		s.Status = "done"
+		s.NextAction = NextAction{}
+		return nil
 	})
-	s.Status = "done"
-	s.NextAction = NextAction{}
-
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, out, 0644)
 }
 
 // SetStatus updates only the status field in STATE.yaml, preserving all other content.
 func SetStatus(featureDir, status string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-
-	s.Status = status
-
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, out, 0644)
+	return Update(featureDir, func(s *State) error {
+		s.Status = status
+		return nil
+	})
 }
 
 // AppendHistory loads STATE.yaml, appends a history entry, and saves — no other fields touched.
 func AppendHistory(featureDir, stage, workerID, result string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-	s.History = append(s.History, HistoryEntry{
-		At:     timeNow(),
-		Stage:  stage,
-		Worker: workerID,
-		Result: result,
+	return Update(featureDir, func(s *State) error {
+		s.History = append(s.History, HistoryEntry{
+			At:     timeNow(),
+			Stage:  stage,
+			Worker: workerID,
+			Result: result,
+		})
+		return nil
 	})
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, out, 0644)
 }
 
 // FindFeatureDir locates the feature directory for the given slug or ticket ID.
@@ -359,86 +356,40 @@ func FindFeatureDirWithArchive(workspaceRoot, query string) (string, error) {
 	}
 }
 
-// ResolveCWD returns an absolute path for the next action cwd,
-// resolving relative paths against the feature directory.
 // SetRuntime writes the runtime.tmux session name to STATE.yaml.
 func SetRuntime(featureDir, tmuxSession string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-	s.Runtime.Tmux = &TmuxRuntime{Session: tmuxSession}
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, out, 0644)
+	return Update(featureDir, func(s *State) error {
+		s.Runtime.Tmux = &TmuxRuntime{Session: tmuxSession}
+		return nil
+	})
 }
 
 // ClearRuntime removes the runtime block from STATE.yaml.
 func ClearRuntime(featureDir string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-	s.Runtime = Runtime{}
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, out, 0644)
+	return Update(featureDir, func(s *State) error {
+		s.Runtime = Runtime{}
+		return nil
+	})
 }
 
 // SetJIT writes runtime.jit to STATE.yaml before a jit task launches.
 func SetJIT(featureDir, workerID, task string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-	s.Runtime.JIT = &JITRuntime{
-		Worker:    workerID,
-		Task:      task,
-		StartedAt: timeNow(),
-	}
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, out, 0644)
+	return Update(featureDir, func(s *State) error {
+		s.Runtime.JIT = &JITRuntime{
+			Worker:    workerID,
+			Task:      task,
+			StartedAt: timeNow(),
+		}
+		return nil
+	})
 }
 
 // ClearJIT removes runtime.jit from STATE.yaml after a jit task completes.
 func ClearJIT(featureDir string) error {
-	path := filepath.Join(featureDir, Filename)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-	var s State
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
-	}
-	s.Runtime.JIT = nil
-	out, err := yaml.Marshal(&s)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, out, 0644)
+	return Update(featureDir, func(s *State) error {
+		s.Runtime.JIT = nil
+		return nil
+	})
 }
 
 // ValidateRepos checks that repo fields in STATE.yaml are internally consistent
@@ -516,6 +467,8 @@ func ValidateRepos(s *State, workspaceRoot string) error {
 	return nil
 }
 
+// ResolveCWD returns an absolute path for the next action cwd,
+// resolving relative paths against the feature directory.
 func (s *State) ResolveCWD(workspaceRoot, featureDir string) string {
 	cwd := s.NextAction.CWD
 	if cwd == "" || cwd == "." {
