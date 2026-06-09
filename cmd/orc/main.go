@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cengebretson/orc/internal/config"
+	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/orchestrator"
 	"github.com/cengebretson/orc/internal/resume"
@@ -79,6 +80,13 @@ var healthCmd = &cobra.Command{
 	Short: "Check workspace health, or validate a ticket's state when a ticket ID is given",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runHealth,
+}
+
+var doctorCmd = &cobra.Command{
+	Use:   "doctor",
+	Short: "Check workspace and local tool readiness",
+	Args:  cobra.NoArgs,
+	RunE:  runDoctor,
 }
 
 var nextCmd = &cobra.Command{
@@ -255,6 +263,7 @@ func init() {
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(healthCmd)
+	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(nextCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(workCmd)
@@ -398,6 +407,20 @@ func runHealth(cmd *cobra.Command, args []string) error {
 
 	report := health.Run(root)
 	health.Print(report)
+	return nil
+}
+
+func runDoctor(cmd *cobra.Command, args []string) error {
+	root, err := resolveRoot(globalWorkspace)
+	if err != nil {
+		return err
+	}
+
+	report := doctor.Run(root)
+	doctor.Print(report)
+	if !report.OK() {
+		return fmt.Errorf("doctor found problems")
+	}
 	return nil
 }
 
