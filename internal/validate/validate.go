@@ -8,7 +8,7 @@ import (
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
-	"github.com/cengebretson/orc/internal/tmux"
+	"github.com/cengebretson/orc/internal/ticketview"
 	"github.com/cengebretson/orc/internal/workers"
 )
 
@@ -68,6 +68,7 @@ func Run(root, featureDir string) *Report {
 	}
 	r.Ticket = s.Ticket
 	r.Checks = append(r.Checks, ok("STATE.yaml"))
+	summary := ticketview.Build(root, featureDir, s, ticketview.Options{})
 
 	// Load orc.yaml — fail early if unreadable.
 	cfg, err := config.Load(root)
@@ -183,13 +184,12 @@ func Run(root, featureDir string) *Report {
 	}
 
 	// Tmux session alive (if configured).
-	if s.Runtime.Tmux != nil {
-		session := s.Runtime.Tmux.Session
-		if tmux.Available() {
-			if tmux.SessionExists(session) {
-				r.Checks = append(r.Checks, okd("tmux", fmt.Sprintf("session %q active", session)))
+	if summary.TmuxConfigured {
+		if summary.TmuxAvailable {
+			if summary.TmuxLive {
+				r.Checks = append(r.Checks, okd("tmux", fmt.Sprintf("session %q active", summary.TmuxSession)))
 			} else {
-				r.Checks = append(r.Checks, warn("tmux", fmt.Sprintf("session %q configured but not running", session)))
+				r.Checks = append(r.Checks, warn("tmux", fmt.Sprintf("session %q configured but not running", summary.TmuxSession)))
 			}
 		} else {
 			r.Checks = append(r.Checks, warn("tmux", "configured but tmux not available"))

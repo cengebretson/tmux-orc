@@ -17,6 +17,7 @@ import (
 	"github.com/cengebretson/orc/internal/resume"
 	"github.com/cengebretson/orc/internal/runner"
 	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/ticketview"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/tui"
 	"github.com/cengebretson/orc/internal/validate"
@@ -810,41 +811,32 @@ func loopCountSuffix(cfg *config.Config, workflow, stageName string, s *state.St
 }
 
 func printShow(root, featureDir string, s *state.State) error {
+	summary := ticketview.Build(root, featureDir, s, ticketview.Options{})
+
 	fmt.Printf("Ticket:   %s\n", s.Ticket)
 	fmt.Printf("Slug:     %s\n", s.Slug)
 	fmt.Printf("Status:   %s\n", s.Status)
-	if s.Runtime.Tmux != nil {
-		session := s.Runtime.Tmux.Session
-		if tmux.Available() && tmux.SessionExists(session) {
-			fmt.Printf("Session:  %s\n", tmux.AttachHint(session, s.Stage.Name))
+	if summary.TmuxConfigured {
+		if summary.TmuxLive {
+			fmt.Printf("Session:  %s\n", summary.TmuxAttachHint)
 		} else {
-			fmt.Printf("Session:  %s  (not running — run `orc next %s` to restart)\n", session, s.Ticket)
+			fmt.Printf("Session:  %s  (not running — %s)\n", summary.TmuxSession, summary.TmuxRestart)
 		}
 	}
-	if s.Runtime.JIT != nil {
+	if summary.JIT != nil {
 		fmt.Println()
 		fmt.Println("JIT")
-		fmt.Printf("  Worker:   %s\n", s.Runtime.JIT.Worker)
-		fmt.Printf("  Task:     %s\n", s.Runtime.JIT.Task)
-		fmt.Printf("  Started:  %s\n", s.Runtime.JIT.StartedAt)
+		fmt.Printf("  Worker:   %s\n", summary.JIT.Worker)
+		fmt.Printf("  Task:     %s\n", summary.JIT.Task)
+		fmt.Printf("  Started:  %s\n", summary.JIT.StartedAt)
 	}
 
 	fmt.Println()
 	fmt.Println("Stage")
-	workflow := resolveWorkflow(root, s.Workflow)
-	wfCfg, _ := config.Load(root)
-	stageSuffix := loopCountSuffix(wfCfg, workflow, s.Stage.Name, s)
-	fmt.Printf("  Stage:     %s · %s%s\n", workflow, s.Stage.Name, stageSuffix)
-	fmt.Printf("  Worker:    %s\n", s.Stage.Worker)
-	if wfCfg != nil {
-		if next := wfCfg.NextStage(workflow, s.Stage.Name); next != "" {
-			sc, _ := wfCfg.StageConfig(workflow, next)
-			advance := sc.Advance
-			if advance == "" {
-				advance = "auto"
-			}
-			fmt.Printf("  Next:      %s  (%s)\n", next, advance)
-		}
+	fmt.Printf("  Stage:     %s · %s%s\n", summary.Workflow, summary.Stage, summary.StageLoopLabel)
+	fmt.Printf("  Worker:    %s\n", summary.WorkerID)
+	if summary.NextStage != "" {
+		fmt.Printf("  Next:      %s  (%s)\n", summary.NextStage, summary.NextAdvance)
 	}
 
 	if len(s.Repos) > 0 {
@@ -894,32 +886,17 @@ func printShow(root, featureDir string, s *state.State) error {
 	fmt.Println("Next")
 	switch s.Status {
 	case "paused":
-		reason := ""
-		if len(s.History) > 0 {
-			reason = s.History[len(s.History)-1].Result
-		}
-		if reason == "" {
-			reason = s.NextAction.Prompt
-		}
-		fmt.Printf("  Paused:  %s\n", reason)
+		fmt.Printf("  Paused:  %s\n", summary.PausedReason)
 		fmt.Println("  Run `orc next` after resolving to continue.")
 	default:
-		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
-		wfCfg, _ := config.Load(root)
-		sc, _ := wfCfg.StageConfig(workflow, s.Stage.Name)
-		workerID := s.Stage.Worker
-		if workerID == "" {
-			workerID = sc.Worker
-		}
-		if workerID != "" {
-			preferred := workers.FindByID(allWorkers, workerID)
-			if preferred != nil {
-				fmt.Printf("  Worker:  %s (%s)\n", preferred.Name, preferred.Engine)
-				if preferred.Model != "" {
-					fmt.Printf("  Model:   %s\n", preferred.Model)
+		if summary.WorkerID != "" {
+			if summary.WorkerFound {
+				fmt.Printf("  Worker:  %s (%s)\n", summary.WorkerName, summary.WorkerEngine)
+				if summary.WorkerModel != "" {
+					fmt.Printf("  Model:   %s\n", summary.WorkerModel)
 				}
 			} else {
-				fmt.Printf("  Worker:  %s (not found in workers/)\n", workerID)
+				fmt.Printf("  Worker:  %s (not found in workers/)\n", summary.WorkerID)
 			}
 		} else {
 			fmt.Println("  Worker:  none assigned — set worker: in orc.yaml")

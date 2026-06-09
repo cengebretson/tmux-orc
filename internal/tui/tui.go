@@ -14,6 +14,7 @@ import (
 	"github.com/cengebretson/orc/internal/featurelist"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/ticketview"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -531,7 +532,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "t":
 			if m.detail.s.Runtime.Tmux != nil && m.detail.tmuxLive {
-				return m, attachTmux(m.detail.s.Slug, m.detail.s.Stage.Name)
+				return m, attachTmux(m.detail.s.Runtime.Tmux.Session, m.detail.s.Stage.Name)
 			}
 		case "enter":
 			if m.fileIdx < len(m.detailFiles) {
@@ -1330,6 +1331,15 @@ func (m Model) viewDetail() string {
 		return ""
 	}
 	s := m.detail.s
+	summary := ticketview.Build(m.root, m.detail.featureDir, s, ticketview.Options{
+		TmuxAvailable: func() bool { return true },
+		SessionExists: func(session string) bool {
+			return s.Runtime.Tmux != nil && session == s.Runtime.Tmux.Session && m.detail.tmuxLive
+		},
+		AttachHint: func(session, window string) string {
+			return "tmux attach -t " + session + ":" + window
+		},
+	})
 	outerW := m.width - 2
 	innerW := outerW - 2
 	var b strings.Builder
@@ -1338,44 +1348,44 @@ func (m Model) viewDetail() string {
 
 	// State fields
 	var stateLines []string
-	resolvedWF := s.Workflow
-	if resolvedWF == "" {
-		resolvedWF = "default"
+	workerLabel := summary.WorkerName
+	if workerLabel == "" {
+		workerLabel = summary.WorkerID
 	}
 	fields := []struct{ label, value string }{
 		{" Ticket  ", s.Ticket},
 		{" Status  ", statusStyle(s.Status).Render(statusIcon(s.Status) + " " + s.Status)},
-		{" Workflow", resolvedWF},
-		{" Stage   ", s.Stage.Name + chainLoopCountSuffix(m.workflows, resolvedWF, s.Stage.Name, s)},
-		{" Worker  ", s.Stage.Worker},
+		{" Workflow", summary.Workflow},
+		{" Stage   ", summary.Stage + summary.StageLoopLabel},
+		{" Worker  ", workerLabel},
 	}
 	for _, f := range fields {
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
 			styleDetailLabel.Render(f.label), f.value))
 	}
-	if s.Runtime.Tmux != nil {
-		if m.detail.tmuxLive {
-			hint := styleTmuxLive.Render("tmux attach -t " + s.Runtime.Tmux.Session + ":" + s.Stage.Name)
+	if summary.TmuxConfigured {
+		if summary.TmuxLive {
+			hint := styleTmuxLive.Render(summary.TmuxAttachHint)
 			stateLines = append(stateLines, fmt.Sprintf("%s  %s", styleDetailLabel.Render(" Session "), hint))
 		} else {
 			stateLines = append(stateLines, fmt.Sprintf("%s  %s",
 				styleDetailLabel.Render(" Session "),
-				styleTmuxDead.Render("not running — run orc next "+s.Ticket+" to restart")))
+				styleTmuxDead.Render("not running — "+summary.TmuxRestart)))
 		}
 	}
-	if s.Runtime.JIT != nil {
-		jit := s.Runtime.JIT
+	if summary.JIT != nil {
+		jit := summary.JIT
 		stateLines = append(stateLines,
 			fmt.Sprintf("%s  %s", styleDetailLabel.Render(" JIT     "), styleStatusWaiting.Render(jit.Worker+" · "+truncate(jit.Task, innerW-20))),
 			fmt.Sprintf("%s  %s", styleDetailLabel.Render("         "), styleDim.Render("started "+jit.StartedAt)),
 		)
 	}
-	if nextName, nextAdvance := nextStageFor(m.workflows, s.Workflow, s.Stage.Name); nextName != "" {
+	if summary.NextStage != "" {
 		var nextVal string
-		if nextAdvance == "auto" {
-			nextVal = styleHealthOK.Render("→ "+nextName) + styleDim.Render("  auto")
+		if summary.NextAdvance == "auto" {
+			nextVal = styleHealthOK.Render("→ "+summary.NextStage) + styleDim.Render("  auto")
 		} else {
-			nextVal = styleStatusWaiting.Render("→ "+nextName) + styleDim.Render("  awaiting approval")
+			nextVal = styleStatusWaiting.Render("→ "+summary.NextStage) + styleDim.Render("  awaiting approval")
 		}
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
 			styleDetailLabel.Render(" Next    "), nextVal))
@@ -1384,15 +1394,8 @@ func (m Model) viewDetail() string {
 			styleDetailLabel.Render(" Next    "), styleDim.Render("last stage")))
 	}
 	if s.Status == "paused" {
-		reason := ""
-		if len(s.History) > 0 {
-			reason = s.History[len(s.History)-1].Result
-		}
-		if reason == "" {
-			reason = s.NextAction.Prompt
-		}
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
-			styleDetailLabel.Render(" Paused  "), styleStatusWaiting.Render(truncate(reason, innerW-16))))
+			styleDetailLabel.Render(" Paused  "), styleStatusWaiting.Render(truncate(summary.PausedReason, innerW-16))))
 	}
 	b.WriteString(drawBox(styleSection.Render(" State "), stateLines, outerW) + "\n")
 
@@ -1593,23 +1596,6 @@ func chainLoopCountSuffix(chains []workflowChain, workflowName, stageName string
 		}
 	}
 	return ""
-}
-
-// nextStageFor returns the name and advance mode of the stage after stageName
-// in the named workflow chain, or empty strings if it is the last stage.
-func nextStageFor(chains []workflowChain, workflowName, stageName string) (name, advance string) {
-	for _, c := range chains {
-		if c.name != workflowName && workflowName != "" && workflowName != "default" {
-			continue
-		}
-		for i, step := range c.steps {
-			if step.name == stageName && i+1 < len(c.steps) {
-				next := c.steps[i+1]
-				return next.name, next.advance
-			}
-		}
-	}
-	return "", ""
 }
 
 func loadData(root string) tea.Cmd {
