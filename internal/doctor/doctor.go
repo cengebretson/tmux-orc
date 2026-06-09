@@ -12,7 +12,7 @@ import (
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
-	"github.com/cengebretson/orc/internal/workers"
+	"github.com/cengebretson/orc/internal/workspacectx"
 )
 
 type Status int
@@ -121,27 +121,16 @@ func appendHealth(report *Report, h *health.Report) {
 }
 
 func appendConfigChecks(report *Report, root string) {
-	cfg, err := config.Load(root)
+	_, errs, err := workspacectx.LoadValidated(root)
 	if err != nil {
 		report.Checks = append(report.Checks, Check{
 			Group:  "config",
-			Name:   config.Filename,
+			Name:   "workspace",
 			Status: Fail,
 			Detail: err.Error(),
 		})
 		return
 	}
-	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
-	if err != nil {
-		report.Checks = append(report.Checks, Check{
-			Group:  "config",
-			Name:   "workers",
-			Status: Fail,
-			Detail: fmt.Sprintf("cannot load workers/: %v", err),
-		})
-		return
-	}
-	errs := config.Validate(cfg, workerIDs(allWorkers))
 	if len(errs) == 0 {
 		report.Checks = append(report.Checks, Check{
 			Group:  "config",
@@ -275,12 +264,12 @@ func executableCheck(group, name, command string, lookPath func(string) (string,
 }
 
 func workerEngines(root string) ([]string, error) {
-	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+	ctx, err := workspacectx.Load(root)
 	if err != nil {
 		return nil, err
 	}
 	engines := map[string]bool{}
-	for _, w := range allWorkers {
+	for _, w := range ctx.Workers {
 		engine := strings.ToLower(strings.TrimSpace(w.Engine))
 		if engine == "" {
 			engine = "claude"
@@ -293,12 +282,4 @@ func workerEngines(root string) ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
-}
-
-func workerIDs(allWorkers []*workers.Worker) []string {
-	ids := make([]string, 0, len(allWorkers))
-	for _, worker := range allWorkers {
-		ids = append(ids, worker.ID)
-	}
-	return ids
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/cengebretson/orc/internal/validate"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/cengebretson/orc/internal/workspace"
+	"github.com/cengebretson/orc/internal/workspacectx"
 	"github.com/spf13/cobra"
 )
 
@@ -1184,11 +1185,11 @@ func runJIT(cmd *cobra.Command, args []string) error {
 			s.Ticket, s.Runtime.JIT.Worker, s.Runtime.JIT.StartedAt, s.Ticket)
 	}
 
-	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+	ctx, err := workspacectx.Load(root)
 	if err != nil {
-		return fmt.Errorf("loading workers: %w", err)
+		return err
 	}
-	w := workers.FindByID(allWorkers, jitWorker)
+	w := workers.FindByID(ctx.Workers, jitWorker)
 	if w == nil {
 		return fmt.Errorf("worker %q not found in workers/", jitWorker)
 	}

@@ -2,12 +2,12 @@ package runner
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
+	"github.com/cengebretson/orc/internal/workspacectx"
 )
 
 // Plan is the fully resolved next action for a ticket.
@@ -32,18 +32,15 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 		return nil, err
 	}
 
-	cfg, err := config.Load(root)
+	ctx, validationErrs, err := workspacectx.LoadValidated(root)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
-
-	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
-	if err != nil {
-		return nil, fmt.Errorf("loading workers: %w", err)
+	if len(validationErrs) > 0 {
+		return nil, fmt.Errorf("invalid workspace config: %w", validationErrs)
 	}
-	if errs := config.Validate(cfg, workerIDs(allWorkers)); len(errs) > 0 {
-		return nil, fmt.Errorf("invalid workspace config: %w", errs)
-	}
+	cfg := ctx.Config
+	allWorkers := ctx.Workers
 
 	workflow, err := resolveWorkflow(cfg, s.Workflow)
 	if err != nil {
@@ -81,14 +78,6 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 		EndInstruction: endInstruction(s.Ticket, nextStage, stageCfg.Advance, loopDef, isLoopStage),
 	}
 	return plan, nil
-}
-
-func workerIDs(allWorkers []*workers.Worker) []string {
-	ids := make([]string, 0, len(allWorkers))
-	for _, worker := range allWorkers {
-		ids = append(ids, worker.ID)
-	}
-	return ids
 }
 
 // ResolveWorkflow returns the ticket's workflow name, using the workspace default if unset.

@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/ticketview"
 	"github.com/cengebretson/orc/internal/workers"
+	"github.com/cengebretson/orc/internal/workspacectx"
 )
 
 type Status int
@@ -80,25 +80,21 @@ func Run(root, featureDir string) *Report {
 	summary := ticketview.Build(root, featureDir, s, ticketview.Options{})
 	appendStateShapeChecks(r, s)
 
-	// Load orc.yaml — fail early if unreadable.
-	cfg, err := config.Load(root)
+	ctx, validationErrs, err := workspacectx.LoadValidated(root)
 	if err != nil {
-		r.Checks = append(r.Checks, fail("orc.yaml", fmt.Sprintf("cannot load: %v", err)))
+		r.Checks = append(r.Checks, fail("workspace", fmt.Sprintf("cannot load: %v", err)))
 		return r
 	}
 	r.Checks = append(r.Checks, ok("orc.yaml"))
-	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
-	if err != nil {
-		r.Checks = append(r.Checks, fail("workers", fmt.Sprintf("cannot load workers/: %v", err)))
-		return r
-	}
-	if errs := config.Validate(cfg, workerIDs(allWorkers)); len(errs) > 0 {
-		for _, err := range errs {
+	if len(validationErrs) > 0 {
+		for _, err := range validationErrs {
 			r.Checks = append(r.Checks, fail("orc.yaml."+err.Path, err.Message))
 		}
 		return r
 	}
 	r.Checks = append(r.Checks, okd("orc.yaml.config", "valid"))
+	cfg := ctx.Config
+	allWorkers := ctx.Workers
 
 	// Resolve workflow name and verify it exists in orc.yaml.
 	workflow := s.Workflow
@@ -275,14 +271,6 @@ func appendRepoValidationChecks(r *Report, err error) {
 		name := "STATE.yaml." + strings.Fields(line)[0]
 		r.Checks = append(r.Checks, fail(name, line))
 	}
-}
-
-func workerIDs(allWorkers []*workers.Worker) []string {
-	ids := make([]string, 0, len(allWorkers))
-	for _, worker := range allWorkers {
-		ids = append(ids, worker.ID)
-	}
-	return ids
 }
 
 // Print renders the validation report to stdout.

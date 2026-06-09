@@ -2,11 +2,10 @@ package orchestrator
 
 import (
 	"fmt"
-	"path/filepath"
 
-	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
+	"github.com/cengebretson/orc/internal/workspacectx"
 )
 
 type AdvanceOutcome string
@@ -51,17 +50,15 @@ func Advance(opts AdvanceOptions) (*AdvanceResult, error) {
 		return nil, err
 	}
 
-	workflowCfg, err := config.Load(opts.Root)
+	ctx, validationErrs, err := workspacectx.LoadValidated(opts.Root)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
-	allWorkers, err := workers.Load(filepath.Join(opts.Root, "workers"))
-	if err != nil {
-		return nil, fmt.Errorf("loading workers: %w", err)
+	if len(validationErrs) > 0 {
+		return nil, fmt.Errorf("invalid workspace config: %w", validationErrs)
 	}
-	if errs := config.Validate(workflowCfg, workerIDs(allWorkers)); len(errs) > 0 {
-		return nil, fmt.Errorf("invalid workspace config: %w", errs)
-	}
+	workflowCfg := ctx.Config
+	allWorkers := ctx.Workers
 	if opts.Worker != "" && workers.FindByID(allWorkers, opts.Worker) == nil {
 		return nil, fmt.Errorf("worker %q not found in workers/", opts.Worker)
 	}
@@ -173,12 +170,4 @@ func Advance(opts AdvanceOptions) (*AdvanceResult, error) {
 		Outcome:     out,
 		AutoArchive: autoArchive,
 	}, nil
-}
-
-func workerIDs(allWorkers []*workers.Worker) []string {
-	ids := make([]string, 0, len(allWorkers))
-	for _, worker := range allWorkers {
-		ids = append(ids, worker.ID)
-	}
-	return ids
 }
