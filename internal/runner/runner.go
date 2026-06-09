@@ -41,6 +41,9 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading workers: %w", err)
 	}
+	if errs := config.Validate(cfg, workerIDs(allWorkers)); len(errs) > 0 {
+		return nil, fmt.Errorf("invalid workspace config: %w", errs)
+	}
 
 	workflow, err := resolveWorkflow(cfg, s.Workflow)
 	if err != nil {
@@ -78,6 +81,14 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 		EndInstruction: endInstruction(s.Ticket, nextStage, stageCfg.Advance, loopDef, isLoopStage),
 	}
 	return plan, nil
+}
+
+func workerIDs(allWorkers []*workers.Worker) []string {
+	ids := make([]string, 0, len(allWorkers))
+	for _, worker := range allWorkers {
+		ids = append(ids, worker.ID)
+	}
+	return ids
 }
 
 // ResolveWorkflow returns the ticket's workflow name, using the workspace default if unset.

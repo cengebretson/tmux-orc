@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
@@ -69,6 +70,7 @@ func RunWithOptions(root string, opts Options) *Report {
 
 	report := &Report{Root: root}
 	appendHealth(report, health.Run(root))
+	appendConfigChecks(report, root)
 	appendStateLockChecks(report, root)
 	appendToolChecks(report, root, opts.LookPath)
 	return report
@@ -114,6 +116,47 @@ func appendHealth(report *Report, h *health.Report) {
 			Name:   r.Name,
 			Status: status,
 			Detail: r.Detail,
+		})
+	}
+}
+
+func appendConfigChecks(report *Report, root string) {
+	cfg, err := config.Load(root)
+	if err != nil {
+		report.Checks = append(report.Checks, Check{
+			Group:  "config",
+			Name:   config.Filename,
+			Status: Fail,
+			Detail: err.Error(),
+		})
+		return
+	}
+	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+	if err != nil {
+		report.Checks = append(report.Checks, Check{
+			Group:  "config",
+			Name:   "workers",
+			Status: Fail,
+			Detail: fmt.Sprintf("cannot load workers/: %v", err),
+		})
+		return
+	}
+	errs := config.Validate(cfg, workerIDs(allWorkers))
+	if len(errs) == 0 {
+		report.Checks = append(report.Checks, Check{
+			Group:  "config",
+			Name:   config.Filename,
+			Status: OK,
+			Detail: "valid",
+		})
+		return
+	}
+	for _, err := range errs {
+		report.Checks = append(report.Checks, Check{
+			Group:  "config",
+			Name:   err.Path,
+			Status: Fail,
+			Detail: err.Message,
 		})
 	}
 }
@@ -250,4 +293,12 @@ func workerEngines(root string) ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+func workerIDs(allWorkers []*workers.Worker) []string {
+	ids := make([]string, 0, len(allWorkers))
+	for _, worker := range allWorkers {
+		ids = append(ids, worker.ID)
+	}
+	return ids
 }

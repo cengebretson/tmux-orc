@@ -95,6 +95,65 @@ func TestRunWithOptionsReportsNoStateLocks(t *testing.T) {
 	}
 }
 
+func TestRunWithOptionsReportsValidConfig(t *testing.T) {
+	report := doctor.RunWithOptions(fixtureWorkspace(), doctor.Options{
+		LookPath: func(name string) (string, error) {
+			return "/bin/" + name, nil
+		},
+	})
+
+	check := findCheck(report, "config", "orc.yaml")
+	if check == nil {
+		t.Fatal("config check not found")
+	}
+	if check.Status != doctor.OK {
+		t.Fatalf("config status = %v, want OK: %s", check.Status, check.Detail)
+	}
+	if check.Detail != "valid" {
+		t.Fatalf("config detail = %q, want valid", check.Detail)
+	}
+}
+
+func TestRunWithOptionsReportsInvalidConfig(t *testing.T) {
+	root := t.TempDir()
+	writeDoctorFile(t, filepath.Join(root, "orc.yaml"), `
+settings:
+  default_workflow: default
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: missing-worker
+        advance: auto
+`)
+	writeDoctorFile(t, filepath.Join(root, "workers", "fred.md"), `---
+id: fred
+name: Fred
+engine: claude
+---
+`)
+
+	report := doctor.RunWithOptions(root, doctor.Options{
+		LookPath: func(name string) (string, error) {
+			return "/bin/" + name, nil
+		},
+	})
+
+	check := findCheck(report, "config", "workflows.default.stages[0].worker")
+	if check == nil {
+		t.Fatal("invalid config check not found")
+	}
+	if check.Status != doctor.Fail {
+		t.Fatalf("config status = %v, want Fail", check.Status)
+	}
+	if check.Detail != `worker "missing-worker" not found in workers/` {
+		t.Fatalf("config detail = %q", check.Detail)
+	}
+	if report.OK() {
+		t.Fatal("report should fail when config is invalid")
+	}
+}
+
 func TestRunWithOptionsReportsStaleStateLock(t *testing.T) {
 	root := t.TempDir()
 	featureDir := filepath.Join(root, "features", "TICKET-1")
@@ -135,4 +194,14 @@ func findCheck(report *doctor.Report, group, name string) *doctor.Check {
 		}
 	}
 	return nil
+}
+
+func writeDoctorFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
 }
