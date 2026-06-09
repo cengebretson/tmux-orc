@@ -138,6 +138,33 @@ func TestRunMarkPauseUpdatesCopiedFixture(t *testing.T) {
 	}
 }
 
+func TestRunMarkStartUpdatesPendingTicket(t *testing.T) {
+	resetCommandGlobals(t)
+	globalWorkspace = mutableFixtureWorkspace(t)
+	featureDir := filepath.Join(globalWorkspace, "features", "HOT-42-login-500-error")
+	if err := state.Update(featureDir, func(s *state.State) error {
+		s.Status = "pending"
+		return nil
+	}); err != nil {
+		t.Fatalf("Update setup: %v", err)
+	}
+
+	out, err := captureStdout(func() error {
+		return runMark(nil, []string{"HOT-42", "start"})
+	})
+	if err != nil {
+		t.Fatalf("runMark start: %v", err)
+	}
+	if !strings.Contains(out, "Status:  active") {
+		t.Fatalf("start output unexpected:\n%s", out)
+	}
+
+	s := loadTicketState(t, globalWorkspace, "HOT-42")
+	if s.Status != "active" {
+		t.Fatalf("status = %q, want active", s.Status)
+	}
+}
+
 func TestRunMarkDoneUpdatesCopiedFixture(t *testing.T) {
 	resetCommandGlobals(t)
 	globalWorkspace = mutableFixtureWorkspace(t)
@@ -159,6 +186,25 @@ func TestRunMarkDoneUpdatesCopiedFixture(t *testing.T) {
 	}
 	if got := s.History[len(s.History)-1].Result; got != "implemented and verified" {
 		t.Fatalf("last history result = %q", got)
+	}
+}
+
+func TestRunMarkDoneRejectsPendingTicket(t *testing.T) {
+	resetCommandGlobals(t)
+	globalWorkspace = mutableFixtureWorkspace(t)
+	featureDir := filepath.Join(globalWorkspace, "features", "HOT-42-login-500-error")
+	if err := state.Update(featureDir, func(s *state.State) error {
+		s.Status = "pending"
+		return nil
+	}); err != nil {
+		t.Fatalf("Update setup: %v", err)
+	}
+
+	_, err := captureStdout(func() error {
+		return runMark(nil, []string{"HOT-42", "done"})
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot mark HOT-42 done from status \"pending\"") {
+		t.Fatalf("runMark done err = %v", err)
 	}
 }
 

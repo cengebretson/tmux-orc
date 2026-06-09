@@ -128,8 +128,8 @@ var (
 )
 
 var markCmd = &cobra.Command{
-	Use:   "mark <ticket> <next|pause|done> [reason]",
-	Short: "Update ticket state — next [--result] [--stage] [--worker] | pause <reason> | done [--result]",
+	Use:   "mark <ticket> <start|next|pause|done> [reason]",
+	Short: "Update ticket state — start | next [--result] [--stage] [--worker] | pause <reason> | done [--result]",
 	Args:  cobra.MinimumNArgs(2),
 	RunE:  runMark,
 
@@ -947,7 +947,24 @@ func runMark(cmd *cobra.Command, args []string) error {
 	}
 
 	switch action {
+	case "start":
+		if !oneOf(s.Status, "pending", "ready", "paused") {
+			return fmt.Errorf("cannot mark %s start from status %q", s.Ticket, s.Status)
+		}
+		if err := state.ValidateRepos(s, root); err != nil {
+			return err
+		}
+		if err := state.Start(featureDir); err != nil {
+			return err
+		}
+		fmt.Printf("Ticket:  %s\n", s.Ticket)
+		fmt.Printf("Status:  active\n")
+		return nil
+
 	case "pause":
+		if oneOf(s.Status, "done", "archived") {
+			return fmt.Errorf("cannot pause %s from status %q", s.Ticket, s.Status)
+		}
 		if err := state.ValidateRepos(s, root); err != nil {
 			return err
 		}
@@ -965,6 +982,9 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return runMarkNext(root, featureDir)
 
 	case "done":
+		if !oneOf(s.Status, "active", "ready", "paused") {
+			return fmt.Errorf("cannot mark %s done from status %q", s.Ticket, s.Status)
+		}
 		result := markResult
 		if result == "" {
 			result = "done"
@@ -995,8 +1015,17 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return nil
 
 	default:
-		return fmt.Errorf("unknown action %q — use: next [--result] [--stage] [--worker] | pause <reason> | done [--result] | jit <summary>", action)
+		return fmt.Errorf("unknown action %q — use: start | next [--result] [--stage] [--worker] | pause <reason> | done [--result] | jit <summary>", action)
 	}
+}
+
+func oneOf(value string, allowed ...string) bool {
+	for _, item := range allowed {
+		if value == item {
+			return true
+		}
+	}
+	return false
 }
 
 func runMarkNext(root, featureDir string) error {

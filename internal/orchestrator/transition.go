@@ -2,9 +2,11 @@ package orchestrator
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/workers"
 )
 
 type AdvanceOutcome string
@@ -42,6 +44,9 @@ func Advance(opts AdvanceOptions) (*AdvanceResult, error) {
 	if s.Status == "archived" || s.Status == "done" {
 		return nil, fmt.Errorf("ticket %s is %s — cannot advance", s.Ticket, s.Status)
 	}
+	if s.Status == "pending" {
+		return nil, fmt.Errorf("ticket %s is pending — run `orc next %s` or `orc mark %s start` before marking next", s.Ticket, s.Ticket, s.Ticket)
+	}
 	if err := state.ValidateRepos(s, opts.Root); err != nil {
 		return nil, err
 	}
@@ -50,12 +55,28 @@ func Advance(opts AdvanceOptions) (*AdvanceResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
+	allWorkers, err := workers.Load(filepath.Join(opts.Root, "workers"))
+	if err != nil {
+		return nil, fmt.Errorf("loading workers: %w", err)
+	}
+	if errs := config.Validate(workflowCfg, workerIDs(allWorkers)); len(errs) > 0 {
+		return nil, fmt.Errorf("invalid workspace config: %w", errs)
+	}
+	if opts.Worker != "" && workers.FindByID(allWorkers, opts.Worker) == nil {
+		return nil, fmt.Errorf("worker %q not found in workers/", opts.Worker)
+	}
 
 	workflow := s.Workflow
 	if workflow == "" {
 		workflow = workflowCfg.DefaultWorkflow()
 	}
+	if _, ok := workflowCfg.Workflows[workflow]; !ok {
+		return nil, fmt.Errorf("workflow %q not found in orc.yaml", workflow)
+	}
 	prevStage := s.Stage.Name
+	if _, ok := workflowCfg.StageConfig(workflow, prevStage); !ok {
+		return nil, fmt.Errorf("current stage %q not found in workflow %q — check STATE.yaml.stage.name", prevStage, workflow)
+	}
 
 	if opts.Stage != "" {
 		if _, ok := workflowCfg.StageConfig(workflow, opts.Stage); !ok {
@@ -152,4 +173,12 @@ func Advance(opts AdvanceOptions) (*AdvanceResult, error) {
 		Outcome:     out,
 		AutoArchive: autoArchive,
 	}, nil
+}
+
+func workerIDs(allWorkers []*workers.Worker) []string {
+	ids := make([]string, 0, len(allWorkers))
+	for _, worker := range allWorkers {
+		ids = append(ids, worker.ID)
+	}
+	return ids
 }

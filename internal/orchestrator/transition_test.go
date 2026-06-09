@@ -95,6 +95,48 @@ func TestAdvanceRejectsManualGate(t *testing.T) {
 	}
 }
 
+func TestAdvanceRejectsPendingTicket(t *testing.T) {
+	root := copyFixtureWorkspace(t)
+	featureDir := filepath.Join(root, "features", "STORY-123-add-user-auth")
+	clearRepoValidationFields(t, featureDir)
+	if err := state.Update(featureDir, func(s *state.State) error {
+		s.Status = "pending"
+		s.Stage.Name = "intake"
+		return nil
+	}); err != nil {
+		t.Fatalf("Update setup: %v", err)
+	}
+
+	_, err := Advance(AdvanceOptions{
+		Root:       root,
+		FeatureDir: featureDir,
+	})
+	if err == nil {
+		t.Fatal("expected pending status error")
+	}
+}
+
+func TestAdvanceRejectsUnknownWorkerOverride(t *testing.T) {
+	root := copyFixtureWorkspace(t)
+	featureDir := filepath.Join(root, "features", "STORY-123-add-user-auth")
+	clearRepoValidationFields(t, featureDir)
+	if err := state.Update(featureDir, func(s *state.State) error {
+		s.Stage.Name = "intake"
+		return nil
+	}); err != nil {
+		t.Fatalf("Update setup: %v", err)
+	}
+
+	_, err := Advance(AdvanceOptions{
+		Root:       root,
+		FeatureDir: featureDir,
+		Worker:     "missing-worker",
+	})
+	if err == nil {
+		t.Fatal("expected unknown worker error")
+	}
+}
+
 func TestAdvancePausesWhenLoopLimitReached(t *testing.T) {
 	root := copyFixtureWorkspace(t)
 	featureDir := filepath.Join(root, "features", "STORY-123-add-user-auth")
