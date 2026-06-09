@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -20,6 +22,8 @@ const Filename = "STATE.yaml"
 const SchemaVersion = 1
 
 const lockTimeout = 5 * time.Second
+
+const staleLockAge = 30 * time.Second
 
 type State struct {
 	SchemaVersion int    `yaml:"schema_version,omitempty"`
@@ -178,11 +182,57 @@ func lockPath(path string) (func(), error) {
 		if !errors.Is(err, os.ErrExist) {
 			return nil, fmt.Errorf("creating state lock: %w", err)
 		}
+		if removed, err := removeStaleLock(lockName); err != nil {
+			return nil, err
+		} else if removed {
+			continue
+		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("timed out waiting for %s", lockName)
+			return nil, fmt.Errorf("timed out waiting for %s — if no orc process is running, remove the lock and retry", lockName)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+func removeStaleLock(lockName string) (bool, error) {
+	info, err := os.Stat(lockName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("checking state lock: %w", err)
+	}
+
+	staleByAge := time.Since(info.ModTime()) > staleLockAge
+	staleByPID := false
+	hasLivePID := false
+	data, err := os.ReadFile(lockName)
+	if err == nil {
+		pidText := strings.TrimSpace(string(data))
+		if pid, err := strconv.Atoi(pidText); err == nil && pid > 0 {
+			if processExists(pid) {
+				hasLivePID = true
+			} else {
+				staleByPID = true
+			}
+		}
+	}
+
+	if hasLivePID || (!staleByAge && !staleByPID) {
+		return false, nil
+	}
+	if err := os.Remove(lockName); err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("removing stale state lock %s: %w", lockName, err)
+	}
+	return true, nil
+}
+
+func processExists(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 // Start marks the feature as active and records a history entry.

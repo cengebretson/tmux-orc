@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/cengebretson/orc/internal/state"
 )
@@ -182,6 +183,68 @@ stage:
 	if s.Status != "pending" {
 		t.Errorf("status = %q, want pending", s.Status)
 	}
+	assertNoStateArtifacts(t, featureDir)
+}
+
+func TestUpdateRemovesLockFromDeadPID(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "TICKET-1")
+	writeLegacyState(t, featureDir, `
+ticket: TICKET-1
+slug: TICKET-1
+status: pending
+stage:
+  worker: bob-developer
+  name: develop
+`)
+	if err := os.WriteFile(filepath.Join(featureDir, "STATE.yaml.lock"), []byte("999999999\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := state.Update(featureDir, func(s *state.State) error {
+		s.Status = "active"
+		return nil
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		t.Fatalf("Load after Update: %v", err)
+	}
+	if s.Status != "active" {
+		t.Errorf("status = %q, want active", s.Status)
+	}
+	assertNoStateArtifacts(t, featureDir)
+}
+
+func TestUpdateRemovesOldLockWithoutPID(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "TICKET-1")
+	writeLegacyState(t, featureDir, `
+ticket: TICKET-1
+slug: TICKET-1
+status: pending
+stage:
+  worker: bob-developer
+  name: develop
+`)
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte("not-a-pid\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Minute)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := state.Update(featureDir, func(s *state.State) error {
+		s.Status = "active"
+		return nil
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
 	assertNoStateArtifacts(t, featureDir)
 }
 
