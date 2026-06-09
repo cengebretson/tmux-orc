@@ -42,6 +42,27 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestLoad_DefaultsMissingSchemaVersionToV1(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "LEGACY-1")
+	writeLegacyState(t, featureDir, `
+ticket: LEGACY-1
+slug: LEGACY-1
+status: pending
+stage:
+  worker: bob-developer
+  name: develop
+`)
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if s.SchemaVersion != state.SchemaVersion {
+		t.Errorf("SchemaVersion = %d, want %d", s.SchemaVersion, state.SchemaVersion)
+	}
+}
+
 func TestLoad_Missing(t *testing.T) {
 	_, err := state.Load("/nonexistent/feature")
 	if err == nil {

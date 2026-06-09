@@ -43,7 +43,7 @@ Update `STATE.yaml` whenever any of these change:
 
 - `status`
 - `stage.name`
-- `stage.owner`
+- `stage.worker`
 - `next_action`
 - required or completed outputs
 - active repo/worktree paths

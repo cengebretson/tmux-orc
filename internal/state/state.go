@@ -125,6 +125,9 @@ func loadPath(path string) (*State, error) {
 	if err := yaml.Unmarshal(data, &s); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
+	if s.SchemaVersion == 0 {
+		s.SchemaVersion = SchemaVersion
+	}
 
 	return &s, nil
 }

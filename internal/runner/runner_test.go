@@ -1,6 +1,7 @@
 package runner_test
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -38,7 +39,7 @@ func TestCompute_ResolvesWorkerFromConfig(t *testing.T) {
 	if plan.Worker == nil {
 		t.Fatal("expected a worker, got nil")
 	}
-	// STORY-123 has stage.owner set, so it resolves via stage owner
+	// STORY-123 has stage.worker set, so it resolves via the state-assigned worker.
 	if plan.WorkerReason != "stage owner" && plan.WorkerReason != "workflow default" {
 		t.Errorf("WorkerReason = %q, want stage owner or workflow default", plan.WorkerReason)
 	}
@@ -146,5 +147,197 @@ func TestCompute_WorkflowAndStagePopulated(t *testing.T) {
 	}
 	if plan.Ticket != s.Ticket {
 		t.Errorf("Ticket = %q, want %q", plan.Ticket, s.Ticket)
+	}
+}
+
+func TestCompute_NextActionResolutionCases(t *testing.T) {
+	root := writeRunnerWorkspace(t)
+
+	tests := []struct {
+		name          string
+		stateYAML     string
+		override      string
+		wantWorker    string
+		wantReason    string
+		wantWorkflow  string
+		wantStage     string
+		wantEndParts  []string
+		rejectEndPart string
+	}{
+		{
+			name: "default workflow and automatic advance",
+			stateYAML: `
+ticket: TICKET-1
+slug: TICKET-1
+status: pending
+stage:
+  name: intake
+next_action:
+  prompt: Start intake.
+  cwd: .
+`,
+			wantWorker:   "fred-documentor",
+			wantReason:   "workflow default",
+			wantWorkflow: "default",
+			wantStage:    "intake",
+			wantEndParts: []string{"orc mark TICKET-1 next --result", "When this stage is complete"},
+		},
+		{
+			name: "explicit worker override wins",
+			stateYAML: `
+ticket: TICKET-2
+slug: TICKET-2
+status: pending
+stage:
+  name: intake
+next_action:
+  prompt: Start intake.
+  cwd: .
+`,
+			override:     "brian-qa",
+			wantWorker:   "brian-qa",
+			wantReason:   "flag override",
+			wantWorkflow: "default",
+			wantStage:    "intake",
+			wantEndParts: []string{"orc mark TICKET-2 next --result"},
+		},
+		{
+			name: "stage worker beats workflow default",
+			stateYAML: `
+ticket: TICKET-3
+slug: TICKET-3
+status: active
+stage:
+  worker: fred-documentor
+  name: develop
+next_action:
+  prompt: Continue development.
+  cwd: .
+`,
+			wantWorker:   "fred-documentor",
+			wantReason:   "stage owner",
+			wantWorkflow: "default",
+			wantStage:    "develop",
+			wantEndParts: []string{"orc mark TICKET-3 pause", "--stage code-review"},
+		},
+		{
+			name: "manual stage with loop gives branch instructions",
+			stateYAML: `
+ticket: TICKET-4
+slug: TICKET-4
+status: active
+stage:
+  name: develop
+next_action:
+  prompt: Continue development.
+  cwd: .
+`,
+			wantWorker:   "bob-developer",
+			wantReason:   "workflow default",
+			wantWorkflow: "default",
+			wantStage:    "develop",
+			wantEndParts: []string{"orc mark TICKET-4 pause", "--stage code-review", "enter code-review loop"},
+		},
+		{
+			name: "loop stage returns to owner without branching",
+			stateYAML: `
+ticket: TICKET-5
+slug: TICKET-5
+status: active
+stage:
+  name: code-review
+next_action:
+  prompt: Review the work.
+  cwd: .
+`,
+			wantWorker:    "zach-reviewer",
+			wantReason:    "workflow default",
+			wantWorkflow:  "default",
+			wantStage:     "code-review",
+			wantEndParts:  []string{"orc mark TICKET-5 next --result", "When your work is complete"},
+			rejectEndPart: "--stage code-review",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featureDir := writeRunnerFeature(t, root, tt.stateYAML)
+			plan, err := runner.Compute(root, featureDir, tt.override)
+			if err != nil {
+				t.Fatalf("Compute: %v", err)
+			}
+			if plan.Worker.ID != tt.wantWorker {
+				t.Errorf("Worker.ID = %q, want %q", plan.Worker.ID, tt.wantWorker)
+			}
+			if plan.WorkerReason != tt.wantReason {
+				t.Errorf("WorkerReason = %q, want %q", plan.WorkerReason, tt.wantReason)
+			}
+			if plan.Workflow != tt.wantWorkflow {
+				t.Errorf("Workflow = %q, want %q", plan.Workflow, tt.wantWorkflow)
+			}
+			if plan.Stage != tt.wantStage {
+				t.Errorf("Stage = %q, want %q", plan.Stage, tt.wantStage)
+			}
+			for _, part := range tt.wantEndParts {
+				if !strings.Contains(plan.EndInstruction, part) {
+					t.Errorf("EndInstruction missing %q:\n%s", part, plan.EndInstruction)
+				}
+			}
+			if tt.rejectEndPart != "" && strings.Contains(plan.EndInstruction, tt.rejectEndPart) {
+				t.Errorf("EndInstruction contains rejected %q:\n%s", tt.rejectEndPart, plan.EndInstruction)
+			}
+		})
+	}
+}
+
+func writeRunnerWorkspace(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	writeRunnerFile(t, filepath.Join(root, "orc.yaml"), `
+settings:
+  default_workflow: default
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: develop
+        worker: bob-developer
+        advance: manual
+        loop:
+          via: code-review
+          worker: zach-reviewer
+          max: 3
+          on_max: pause
+      - name: qa-automation
+        worker: brian-qa
+        advance: auto
+`)
+	for _, id := range []string{"bob-developer", "fred-documentor", "zach-reviewer", "brian-qa"} {
+		writeRunnerFile(t, filepath.Join(root, "workers", id+".md"), `---
+id: `+id+`
+name: `+id+`
+engine: claude
+---
+`)
+	}
+	return root
+}
+
+func writeRunnerFeature(t *testing.T, root, stateYAML string) string {
+	t.Helper()
+	featureDir := filepath.Join(root, "features", strings.ReplaceAll(t.Name(), "/", "-"))
+	writeRunnerFile(t, filepath.Join(featureDir, "STATE.yaml"), stateYAML)
+	return featureDir
+}
+
+func writeRunnerFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
 	}
 }

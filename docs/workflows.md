@@ -1,0 +1,137 @@
+# Workflow Configuration
+
+`orc.yaml` is the workspace configuration file. It defines the repos a workspace
+can use, the named workflows tickets can follow, and the default safety settings
+for launching and archiving work.
+
+Workflow policy belongs in `orc.yaml` and worker markdown files. `orc` enforces
+generic state transitions and safety rules around that policy.
+
+## File Shape
+
+```yaml
+settings:
+  default_workflow: default
+  auto_archive: false
+  auto_tmux: false
+  auto_next: false
+  tui_refresh: 60
+  theme: catppuccin-mocha
+
+repos:
+  - name: my-app
+    path: ../my-app
+    purpose: Application code, APIs, tests
+
+workflows:
+  default:
+    stages:
+      - name: intake
+        worker: fred-documentor
+        advance: auto
+      - name: develop
+        worker: bob-developer
+        advance: manual
+        loop:
+          via: code-review
+          worker: zach-reviewer
+          max: 3
+          on_max: pause
+      - name: pr-open
+        worker: bob-developer
+        advance: manual
+      - name: qa-automation
+        worker: brian-qa
+        advance: auto
+```
+
+## Settings
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `default_workflow` | Yes, when workflows exist | Workflow used by `orc work <ticket>` when `--workflow` is omitted. |
+| `auto_archive` | No | Archives tickets automatically after the last stage completes. |
+| `auto_tmux` | No | Uses tmux for new ticket launches by default. Same intent as `orc work --tmux`. |
+| `auto_next` | No | Launches the first stage immediately after `orc work`. Same intent as `orc work --next`. |
+| `tui_refresh` | No | TUI refresh interval in seconds. Defaults to 60 when unset or zero. |
+| `theme` | No | TUI color theme. Defaults to `catppuccin-mocha`. |
+| `quotes` | No | Optional TUI status quotes. |
+
+## Repos
+
+`repos` describes source repositories available to the workspace.
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `name` | Yes | Stable repo identifier used in state and displays. |
+| `path` | Yes | Path to the repo, usually relative to the workspace root. |
+| `purpose` | No | Human-readable description of what belongs in the repo. |
+
+## Workflows
+
+`workflows` is a map of workflow names to ordered stage lists. A ticket stores
+its selected workflow in `STATE.yaml`. If the ticket omits `workflow`, `orc`
+uses `settings.default_workflow`.
+
+Each workflow stage supports:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `name` | Yes | Stage identifier. Also names the stage instruction file in `stages/<name>.md`. |
+| `worker` | Yes | Worker ID from `workers/*.md` that owns the stage by default. |
+| `advance` | Yes | Completion mode. Valid values are `auto` and `manual`. |
+| `loop` | No | Optional repair/review loop attached to this stage. |
+
+## Advance Modes
+
+`advance: auto` means the agent should run `orc mark <ticket> next --result
+"<summary>"` when the stage is complete.
+
+`advance: manual` means the agent should run `orc mark <ticket> pause
+"<summary>"` so a human can review before advancing.
+
+## Loops
+
+A `loop` attaches a non-linear repair or review stage to a main workflow stage.
+The loop stage is not part of the normal stage order. It is entered only when the
+owning stage sends the ticket there.
+
+```yaml
+- name: develop
+  worker: bob-developer
+  advance: manual
+  loop:
+    via: code-review
+    worker: zach-reviewer
+    max: 3
+    on_max: pause
+```
+
+Loop fields:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `via` | Yes | Loop stage name. |
+| `worker` | Yes | Worker ID assigned to the loop stage. |
+| `max` | No | Maximum loop count before `on_max` behavior applies. |
+| `on_max` | No | Behavior at max loop count. Supported value today: `pause`. |
+
+## Validation Expectations
+
+Workspace configuration should satisfy these rules:
+
+- `settings.default_workflow` names an existing workflow when workflows are configured.
+- Every stage has a non-empty `name`.
+- Stage names are unique within a workflow, including loop stage names.
+- Every stage `worker` and loop `worker` names an existing file in `workers/`.
+- `advance` is either `auto` or `manual`.
+- `loop.via` names a loop stage owned by exactly one workflow stage.
+- `loop.on_max`, when set, is `pause`.
+
+## Where to Put Policy
+
+- Put stage order, default workers, and loop shape in `orc.yaml`.
+- Put agent behavior, model choice, permissions, and launch defaults in `workers/*.md`.
+- Put per-stage instructions in `stages/<stage>.md`.
+- Put current ticket state in `features/<slug>/STATE.yaml`.
+- Put code-level safety checks in `orc` internals only when they are generic across workflows.

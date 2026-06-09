@@ -5,7 +5,7 @@ status: pending
 workflow: default
 
 stage:
-  owner: human
+  worker: human
   name: intake
 
 repos: {}
@@ -25,5 +25,5 @@ next_action:
 history:
   - at: YYYY-MM-DDTHH:MM:SS-00:00
     stage: intake
-    owner: human
+    worker: human
     result: feature context created

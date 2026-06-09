@@ -8,8 +8,9 @@ work across repos — from ticket intake through implementation, PR repair, QA a
 and evidence collection.
 
 The core idea: durable state lives in files (`STATE.yaml`, markdown docs), not in memory.
-Policy lives in files (`RULES.md`, `AGENTS.md`, worker definitions), not in code.
-`orc` reads, validates, renders, and updates — it does not encode workflow logic.
+Workflow policy lives in files (`orc.yaml`, `RULES.md`, `AGENTS.md`, worker definitions),
+not in command handlers. `orc` enforces generic state transitions and safety rules,
+then reads, validates, renders, and updates those files.
 
 ## Repository Layout
 
@@ -36,6 +37,8 @@ orc/
       templates/                  embedded workspace scaffold templates
   scripts/
     pre-commit                    tidy → fmt → lint → test (symlink to .git/hooks/pre-commit)
+  docs/
+    workflows.md                  workspace workflow configuration reference
   go.mod
   Makefile
   plan.md                         active roadmap and future ideas
@@ -103,8 +106,9 @@ To add a new template file, drop it under `internal/workspace/templates/` and re
 
 ## Design Principles
 
-- **Policy in files, not code.** Worker behavior, model choice, and cost tier live in
-  markdown files. `orc` parses, matches, renders, and updates state.
+- **Policy in files, not code.** Worker behavior, model choice, cost tier, and
+  workflow routing live in markdown files and `orc.yaml`. `orc` parses, matches,
+  renders, updates state, and enforces generic transition safety.
 - **Durable state.** `STATE.yaml` survives restarts, session changes, and agent switches.
 - **Atomic state writes.** All state mutations go through `state.Update`, which locks,
   writes a temp file, and atomically replaces `STATE.yaml`. Stale dead-PID locks are

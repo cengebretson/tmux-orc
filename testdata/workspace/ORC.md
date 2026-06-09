@@ -66,6 +66,25 @@ Use `orc mark <ticket> pause "<reason>"` for all cases where a human needs to ac
 
 ## STATE.yaml Update Rules
 
+`STATE.yaml` is the durable state contract for the feature. Missing
+`schema_version` means legacy v1.
+
+| Field | Owner | Notes |
+|-------|-------|-------|
+| `schema_version` | `orc-owned` | State file contract version. New files use v1. |
+| `ticket` | `orc-owned` | Stable ticket identifier. |
+| `slug` | `orc-owned` | Feature folder slug. |
+| `status` | `orc-owned` / `agent-writable` | Agents update this through `orc mark`. |
+| `workflow` | `orc-owned` | Workflow selected when the feature is created. |
+| `stage` | `orc-owned` / `agent-writable` | Current stage name and assigned worker. Change through `orc mark next`. |
+| `stage_counts` | `orc-owned` | Retry and loop counts maintained by `orc`. |
+| `runtime` | `orc-owned` | Runtime handles such as tmux session or active JIT task. |
+| `repos` | `orc-owned` / `agent-writable` | Repo main paths, worktrees, and branches used for this feature. |
+| `inputs` | `human-editable` / `agent-writable` | Context available to the current stage. |
+| `outputs` | `agent-writable` | Required and completed stage outputs. |
+| `next_action` | `agent-writable` | Who should act next, what they should do, and where commands should run. |
+| `history` | `agent-writable` | Append-only summary of starts, transitions, pauses, and completions. |
+
 Write a history entry for every stage transition, block, or wait:
 
 ```yaml
@@ -75,7 +94,17 @@ Write a history entry for every stage transition, block, or wait:
   result: <one line>
 ```
 
-Also update `stage.name`, `stage.owner`, `next_action`, and `repos` whenever those change.
+Also update `stage.name`, `stage.worker`, `next_action`, and `repos` whenever those change.
+
+### STATE.yaml.lock
+
+`orc` creates `STATE.yaml.lock` while it is writing state. Do not edit
+`STATE.yaml` while the lock exists. If an `orc` command times out waiting for the
+lock, run `orc doctor` and check whether the recorded PID is still active.
+
+Locks with a dead PID, unreadable PID, or old timestamp are treated as stale and
+may be removed by `orc` during the next state update. Active locks mean another
+`orc` process is still writing state.
 
 ---
 

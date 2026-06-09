@@ -49,9 +49,10 @@ exit criteria, and the exact `orc mark <ticket> next` command to run when done. 
 decide what to do next — the workspace tells them.
 
 **Policy lives in files, not code.** Stage docs are plain markdown, and
-`orc.yaml` declares the stage order, default worker, and advance mode. Change the
-review criteria, add a preflight check, swap models — edit the file and the next
-session picks it up immediately.
+`orc.yaml` declares the stage order, default worker, and advance mode. `orc`
+enforces generic state transitions and safety rules around those files. Change
+the review criteria, add a preflight check, swap models — edit the file and the
+next session picks it up immediately.
 
 **Right agent for each job.** A fast model for implementation, a smarter one for
 review, a specialist for QA. Each worker is configured independently in a markdown
@@ -384,7 +385,8 @@ my-workspace/
 ## orc.yaml
 
 `orc.yaml` is the workspace config. It declares repos, named workflows, loop
-stages, and optional settings.
+stages, and optional settings. See [docs/workflows.md](docs/workflows.md) for
+the full configuration reference.
 
 ```yaml
 settings:
@@ -438,6 +440,7 @@ Every ticket has one. Agents update it as work progresses. `orc` reads it to
 route work to the right agent.
 
 ```yaml
+schema_version: 1
 ticket: STORY-123
 slug: STORY-123-add-login
 status: active
