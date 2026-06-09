@@ -17,6 +17,7 @@ import (
 	"github.com/cengebretson/orc/internal/resume"
 	"github.com/cengebretson/orc/internal/runner"
 	"github.com/cengebretson/orc/internal/state"
+	"github.com/cengebretson/orc/internal/ticket"
 	"github.com/cengebretson/orc/internal/ticketview"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/tui"
@@ -394,7 +395,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(args) == 1 {
-		featureDir, err := state.FindFeatureDir(root, args[0])
+		featureDir, err := ticket.Resolve(root, args[0])
 		if err != nil {
 			return err
 		}
@@ -431,15 +432,12 @@ func runNext(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	featureDir, err := state.FindFeatureDir(root, args[0])
+	t, err := ticket.Load(root, args[0])
 	if err != nil {
 		return err
 	}
-
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
+	featureDir := t.FeatureDir
+	s := t.State
 
 	if nextJSON {
 		plan, err := runner.Compute(root, featureDir, nextWorker)
@@ -650,18 +648,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(args) == 1 {
-		featureDir, err := state.FindFeatureDir(root, args[0])
-		if err != nil {
-			return err
-		}
-		s, err := state.Load(featureDir)
+		t, err := ticket.Load(root, args[0])
 		if err != nil {
 			return err
 		}
 		if statusJSON {
-			return printJSON(s)
+			return printJSON(t.State)
 		}
-		return printShow(root, featureDir, s)
+		return printShow(root, t.FeatureDir, t.State)
 	}
 
 	type row struct {
@@ -932,30 +926,28 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ticket := args[0]
+	ticketArg := args[0]
 	action := strings.ToLower(args[1])
 
 	// jit can target any status including archived; all other actions use features/ only.
-	var featureDir string
+	var t *ticket.Ticket
 	if action == "jit" {
-		featureDir, err = state.FindFeatureDirWithArchive(root, ticket)
+		t, err = ticket.LoadWithArchive(root, ticketArg)
 	} else {
-		featureDir, err = state.FindFeatureDir(root, ticket)
+		t, err = ticket.Load(root, ticketArg)
 	}
 	if err != nil {
 		return err
 	}
+	featureDir := t.FeatureDir
+	s := t.State
 
 	if action == "pause" && len(args) < 3 {
-		return fmt.Errorf("orc mark %s pause requires a reason — e.g. orc mark %s pause \"<reason>\"", ticket, ticket)
+		return fmt.Errorf("orc mark %s pause requires a reason — e.g. orc mark %s pause \"<reason>\"", ticketArg, ticketArg)
 	}
 
 	switch action {
 	case "pause":
-		s, err := state.Load(featureDir)
-		if err != nil {
-			return err
-		}
 		if err := state.ValidateRepos(s, root); err != nil {
 			return err
 		}
@@ -973,10 +965,6 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return runMarkNext(root, featureDir)
 
 	case "done":
-		s, err := state.Load(featureDir)
-		if err != nil {
-			return err
-		}
 		result := markResult
 		if result == "" {
 			result = "done"
@@ -990,11 +978,7 @@ func runMark(cmd *cobra.Command, args []string) error {
 
 	case "jit":
 		if len(args) < 3 {
-			return fmt.Errorf("orc mark %s jit requires a summary", ticket)
-		}
-		s, err := state.Load(featureDir)
-		if err != nil {
-			return err
+			return fmt.Errorf("orc mark %s jit requires a summary", ticketArg)
 		}
 		summary := strings.Join(args[2:], " ")
 		workerID := ""
@@ -1074,17 +1058,12 @@ func runArchive(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	featureDir, err := state.FindFeatureDir(root, args[0])
+	t, err := ticket.Load(root, args[0])
 	if err != nil {
 		return err
 	}
 
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
-
-	return archiveFeature(root, featureDir, s)
+	return archiveFeature(root, t.FeatureDir, t.State)
 }
 
 func archiveFeature(root, featureDir string, s *state.State) error {
@@ -1126,15 +1105,12 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	featureDir, err := state.FindFeatureDirWithArchive(root, args[0])
+	t, err := ticket.LoadWithArchive(root, args[0])
 	if err != nil {
 		return err
 	}
-
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
+	featureDir := t.FeatureDir
+	s := t.State
 
 	if s.Status != "done" && s.Status != "archived" {
 		return fmt.Errorf("cannot delete %q: status is %q (must be done or archived)", s.Slug, s.Status)
@@ -1164,18 +1140,15 @@ func runJIT(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ticket := args[0]
+	ticketArg := args[0]
 	instruction := args[1]
 
-	featureDir, err := state.FindFeatureDirWithArchive(root, ticket)
+	t, err := ticket.LoadWithArchive(root, ticketArg)
 	if err != nil {
 		return err
 	}
-
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
+	featureDir := t.FeatureDir
+	s := t.State
 
 	if s.Runtime.JIT != nil && !jitDry {
 		return fmt.Errorf("jit task already running for %s (worker: %s, started: %s)\nRun `orc mark %s jit \"<summary>\"` to close it first",
@@ -1306,14 +1279,11 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("tmux is not installed or not in PATH")
 	}
 
-	featureDir, err := state.FindFeatureDir(root, args[0])
+	t, err := ticket.Load(root, args[0])
 	if err != nil {
 		return err
 	}
-	s, err := state.Load(featureDir)
-	if err != nil {
-		return err
-	}
+	s := t.State
 
 	if !tmux.SessionExists(s.Slug) {
 		return fmt.Errorf("no tmux session for %s — run `orc next %s` to start one", s.Ticket, s.Ticket)
