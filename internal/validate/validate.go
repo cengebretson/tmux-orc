@@ -57,6 +57,15 @@ func okd(name, d string) Check  { return Check{Name: name, Status: OK, Detail: d
 func warn(name, d string) Check { return Check{Name: name, Status: Warning, Detail: d} }
 func fail(name, d string) Check { return Check{Name: name, Status: Fail, Detail: d} }
 
+var validStatuses = map[string]bool{
+	"pending":  true,
+	"ready":    true,
+	"active":   true,
+	"paused":   true,
+	"done":     true,
+	"archived": true,
+}
+
 // Run validates a ticket's STATE.yaml against the workspace.
 func Run(root, featureDir string) *Report {
 	r := &Report{FeatureDir: featureDir}
@@ -69,6 +78,7 @@ func Run(root, featureDir string) *Report {
 	r.Ticket = s.Ticket
 	r.Checks = append(r.Checks, ok("STATE.yaml"))
 	summary := ticketview.Build(root, featureDir, s, ticketview.Options{})
+	appendStateShapeChecks(r, s)
 
 	// Load orc.yaml — fail early if unreadable.
 	cfg, err := config.Load(root)
@@ -77,6 +87,18 @@ func Run(root, featureDir string) *Report {
 		return r
 	}
 	r.Checks = append(r.Checks, ok("orc.yaml"))
+	allWorkers, err := workers.Load(filepath.Join(root, "workers"))
+	if err != nil {
+		r.Checks = append(r.Checks, fail("workers", fmt.Sprintf("cannot load workers/: %v", err)))
+		return r
+	}
+	if errs := config.Validate(cfg, workerIDs(allWorkers)); len(errs) > 0 {
+		for _, err := range errs {
+			r.Checks = append(r.Checks, fail("orc.yaml."+err.Path, err.Message))
+		}
+		return r
+	}
+	r.Checks = append(r.Checks, okd("orc.yaml.config", "valid"))
 
 	// Resolve workflow name and verify it exists in orc.yaml.
 	workflow := s.Workflow
@@ -89,7 +111,7 @@ func Run(root, featureDir string) *Report {
 		if len(known) > 0 {
 			detail += fmt.Sprintf(" (available: %s)", strings.Join(known, ", "))
 		}
-		r.Checks = append(r.Checks, fail("workflow", detail))
+		r.Checks = append(r.Checks, fail("STATE.yaml.workflow", detail))
 		return r
 	}
 	if _, ok := cfg.Workflows[workflow]; !ok {
@@ -98,10 +120,10 @@ func Run(root, featureDir string) *Report {
 		if len(known) > 0 {
 			detail += fmt.Sprintf(" (available: %s)", strings.Join(known, ", "))
 		}
-		r.Checks = append(r.Checks, fail("workflow", detail))
+		r.Checks = append(r.Checks, fail("STATE.yaml.workflow", detail))
 		return r
 	}
-	r.Checks = append(r.Checks, okd("workflow", workflow))
+	r.Checks = append(r.Checks, okd("STATE.yaml.workflow", workflow))
 	stageNames := cfg.StageNames(workflow)
 
 	// Current stage exists in the workflow.
@@ -120,9 +142,9 @@ func Run(root, featureDir string) *Report {
 		}
 	}
 	if !stageInWorkflow && len(stageNames) > 0 {
-		r.Checks = append(r.Checks, fail("stage in workflow", fmt.Sprintf("%q not found in %q pipeline", stageName, workflow)))
+		r.Checks = append(r.Checks, fail("STATE.yaml.stage.name", fmt.Sprintf("%q not found in %q pipeline", stageName, workflow)))
 	} else if stageInWorkflow {
-		r.Checks = append(r.Checks, okd("stage in workflow", stageName))
+		r.Checks = append(r.Checks, okd("STATE.yaml.stage.name", stageName))
 	}
 
 	// Stage markdown file exists.
@@ -140,14 +162,31 @@ func Run(root, featureDir string) *Report {
 		workerID = sc.Worker
 	}
 	if workerID != "" {
-		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
 		if workers.FindByID(allWorkers, workerID) == nil {
-			r.Checks = append(r.Checks, fail("worker", fmt.Sprintf("%q not found in workers/", workerID)))
+			r.Checks = append(r.Checks, fail("STATE.yaml.stage.worker", fmt.Sprintf("%q not found in workers/", workerID)))
 		} else {
-			r.Checks = append(r.Checks, okd("worker", workerID))
+			r.Checks = append(r.Checks, okd("STATE.yaml.stage.worker", workerID))
 		}
 	} else {
-		r.Checks = append(r.Checks, warn("worker", "no worker assigned for this stage"))
+		r.Checks = append(r.Checks, fail("STATE.yaml.stage.worker", "no worker assigned for this stage"))
+	}
+
+	if s.NextAction.Worker != "" && s.NextAction.Worker != "human" {
+		if workers.FindByID(allWorkers, s.NextAction.Worker) == nil {
+			r.Checks = append(r.Checks, fail("STATE.yaml.next_action.worker", fmt.Sprintf("%q not found in workers/", s.NextAction.Worker)))
+		} else {
+			r.Checks = append(r.Checks, okd("STATE.yaml.next_action.worker", s.NextAction.Worker))
+		}
+	}
+	if err := state.ValidateRepos(s, root); err != nil {
+		appendRepoValidationChecks(r, err)
+	} else if len(s.Repos) > 0 {
+		r.Checks = append(r.Checks, ok("STATE.yaml.repos"))
+		if s.NextAction.CWD != "" {
+			r.Checks = append(r.Checks, okd("STATE.yaml.next_action.cwd", s.ResolveCWD(root, featureDir)))
+		}
+	} else if s.NextAction.CWD != "" {
+		r.Checks = append(r.Checks, okd("STATE.yaml.next_action.cwd", s.ResolveCWD(root, featureDir)))
 	}
 
 	// Repo worktrees exist.
@@ -167,10 +206,10 @@ func Run(root, featureDir string) *Report {
 		}
 		if len(missing) > 0 {
 			for _, m := range missing {
-				r.Checks = append(r.Checks, fail("worktree", "not found: "+m))
+				r.Checks = append(r.Checks, fail("STATE.yaml.repos.worktree", "not found: "+m))
 			}
 		} else {
-			r.Checks = append(r.Checks, ok("worktrees"))
+			r.Checks = append(r.Checks, ok("STATE.yaml.repos.worktrees"))
 		}
 	}
 
@@ -197,6 +236,53 @@ func Run(root, featureDir string) *Report {
 	}
 
 	return r
+}
+
+func appendStateShapeChecks(r *Report, s *state.State) {
+	if s.SchemaVersion > state.SchemaVersion {
+		r.Checks = append(r.Checks, fail("STATE.yaml.schema_version", fmt.Sprintf("unsupported schema version %d", s.SchemaVersion)))
+	} else {
+		r.Checks = append(r.Checks, okd("STATE.yaml.schema_version", fmt.Sprintf("v%d", s.SchemaVersion)))
+	}
+	if s.Ticket == "" {
+		r.Checks = append(r.Checks, fail("STATE.yaml.ticket", "ticket is required"))
+	} else {
+		r.Checks = append(r.Checks, okd("STATE.yaml.ticket", s.Ticket))
+	}
+	if s.Slug == "" {
+		r.Checks = append(r.Checks, fail("STATE.yaml.slug", "slug is required"))
+	} else {
+		r.Checks = append(r.Checks, okd("STATE.yaml.slug", s.Slug))
+	}
+	if s.Status == "" {
+		r.Checks = append(r.Checks, fail("STATE.yaml.status", "status is required"))
+	} else if !validStatuses[s.Status] {
+		r.Checks = append(r.Checks, fail("STATE.yaml.status", fmt.Sprintf("%q is not a valid status", s.Status)))
+	} else {
+		r.Checks = append(r.Checks, okd("STATE.yaml.status", s.Status))
+	}
+	if s.Stage.Name == "" {
+		r.Checks = append(r.Checks, fail("STATE.yaml.stage.name", "stage name is required"))
+	}
+}
+
+func appendRepoValidationChecks(r *Report, err error) {
+	for _, line := range strings.Split(err.Error(), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "STATE.yaml repo validation failed") {
+			continue
+		}
+		name := "STATE.yaml." + strings.Fields(line)[0]
+		r.Checks = append(r.Checks, fail(name, line))
+	}
+}
+
+func workerIDs(allWorkers []*workers.Worker) []string {
+	ids := make([]string, 0, len(allWorkers))
+	for _, worker := range allWorkers {
+		ids = append(ids, worker.ID)
+	}
+	return ids
 }
 
 // Print renders the validation report to stdout.

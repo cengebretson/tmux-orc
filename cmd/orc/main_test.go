@@ -79,7 +79,7 @@ func TestRunHealthTicketPrintsValidationReport(t *testing.T) {
 	for _, want := range []string{
 		"Ticket: STORY-123",
 		"✓  STATE.yaml",
-		"✗  worktree",
+		"✗  STATE.yaml.repos.worktree",
 		"Some checks failed",
 	} {
 		if !strings.Contains(out, want) {
