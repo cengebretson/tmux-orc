@@ -116,10 +116,12 @@ type sectionItem struct {
 // ── data types ───────────────────────────────────────────────────
 
 type featureRow struct {
-	s          *state.State
-	featureDir string
-	workerName string
-	tmuxLive   bool
+	s              *state.State
+	featureDir     string
+	workflow       string
+	stageLoopLabel string
+	workerName     string
+	tmuxLive       bool
 }
 
 // ── model ─────────────────────────────────────────────────────────
@@ -1264,11 +1266,7 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 
 		icon := statusIcon(s.Status)
 		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
-		wf := s.Workflow
-		if wf == "" {
-			wf = "default"
-		}
-		stageCell := wf + "/" + s.Stage.Name + chainLoopCountSuffix(m.workflows, wf, s.Stage.Name, s)
+		stageCell := row.workflow + "/" + s.Stage.Name + row.stageLoopLabel
 		if s.Runtime.JIT != nil {
 			stageCell += " + jit"
 		}
@@ -1579,25 +1577,6 @@ func tickEvery(d time.Duration) tea.Cmd {
 	})
 }
 
-// chainLoopCountSuffix returns " (N/M)" when stageName is a loop stage with a tracked count.
-func chainLoopCountSuffix(chains []workflowChain, workflowName, stageName string, s *state.State) string {
-	for _, c := range chains {
-		if c.name != workflowName && workflowName != "" && workflowName != "default" {
-			continue
-		}
-		for _, rs := range c.repairSteps {
-			if rs.name == stageName && rs.maxRetries > 0 {
-				count := s.StageCounts[stageName]
-				if count == 0 {
-					return ""
-				}
-				return fmt.Sprintf(" (%d/%d)", count, rs.maxRetries)
-			}
-		}
-	}
-	return ""
-}
-
 func loadData(root string) tea.Cmd {
 	return func() tea.Msg {
 		features := collectFeatures(root)
@@ -1760,10 +1739,12 @@ func collectFeatures(root string) []*featureRow {
 			continue
 		}
 		rows = append(rows, &featureRow{
-			s:          f.State,
-			featureDir: f.FeatureDir,
-			workerName: f.WorkerName,
-			tmuxLive:   f.TmuxLive,
+			s:              f.State,
+			featureDir:     f.FeatureDir,
+			workflow:       f.Workflow,
+			stageLoopLabel: f.StageLoopLabel,
+			workerName:     f.WorkerName,
+			tmuxLive:       f.TmuxLive,
 		})
 	}
 	return rows

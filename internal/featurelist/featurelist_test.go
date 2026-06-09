@@ -18,6 +18,10 @@ workflows:
     stages:
       - name: develop
         worker: bob-developer
+        loop:
+          via: code-review
+          worker: bob-developer
+          max: 3
 `)
 	writeFile(t, filepath.Join(root, "workers", "bob.md"), `---
 id: bob-developer
@@ -30,7 +34,9 @@ ticket: TICKET-1
 slug: TICKET-1
 status: active
 stage:
-  name: develop
+  name: code-review
+stage_counts:
+  code-review: 2
 runtime:
   tmux:
     session: TICKET-1
@@ -52,6 +58,12 @@ runtime:
 	}
 	if f.WorkerName != "Bob Developer" {
 		t.Fatalf("WorkerName = %q, want Bob Developer", f.WorkerName)
+	}
+	if f.Workflow != "default" {
+		t.Fatalf("Workflow = %q, want default", f.Workflow)
+	}
+	if f.StageLoopLabel != " (2/3)" {
+		t.Fatalf("StageLoopLabel = %q, want (2/3)", f.StageLoopLabel)
 	}
 	if !f.TmuxLive {
 		t.Fatal("TmuxLive = false, want true")

@@ -1,6 +1,7 @@
 package featurelist
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -11,13 +12,15 @@ import (
 )
 
 type Feature struct {
-	State      *state.State
-	FeatureDir string
-	Archived   bool
-	WorkerID   string
-	WorkerName string
-	TmuxLive   bool
-	LoadError  error
+	State          *state.State
+	FeatureDir     string
+	Archived       bool
+	Workflow       string
+	StageLoopLabel string
+	WorkerID       string
+	WorkerName     string
+	TmuxLive       bool
+	LoadError      error
 }
 
 type Options struct {
@@ -80,29 +83,38 @@ func collectDir(root, dir string, archived bool, cfg *config.Config, allWorkers 
 			continue
 		}
 
-		workerID := resolveWorkerID(cfg, s)
+		workflow := resolveWorkflow(cfg, s)
+		workerID := resolveWorkerID(cfg, workflow, s)
 		*out = append(*out, &Feature{
-			State:      s,
-			FeatureDir: featureDir,
-			Archived:   archived,
-			WorkerID:   workerID,
-			WorkerName: resolveWorkerName(allWorkers, workerID),
-			TmuxLive:   s.Runtime.Tmux != nil && activeSessions[s.Runtime.Tmux.Session],
+			State:          s,
+			FeatureDir:     featureDir,
+			Archived:       archived,
+			Workflow:       workflow,
+			StageLoopLabel: loopCountSuffix(cfg, workflow, s.Stage.Name, s),
+			WorkerID:       workerID,
+			WorkerName:     resolveWorkerName(allWorkers, workerID),
+			TmuxLive:       s.Runtime.Tmux != nil && activeSessions[s.Runtime.Tmux.Session],
 		})
 	}
 	return nil
 }
 
-func resolveWorkerID(cfg *config.Config, s *state.State) string {
+func resolveWorkflow(cfg *config.Config, s *state.State) string {
+	if s.Workflow != "" {
+		return s.Workflow
+	}
+	if cfg != nil && cfg.DefaultWorkflow() != "" {
+		return cfg.DefaultWorkflow()
+	}
+	return "default"
+}
+
+func resolveWorkerID(cfg *config.Config, workflow string, s *state.State) string {
 	if s.Stage.Worker != "" {
 		return s.Stage.Worker
 	}
 	if cfg == nil {
 		return ""
-	}
-	workflow := s.Workflow
-	if workflow == "" {
-		workflow = cfg.DefaultWorkflow()
 	}
 	if sc, ok := cfg.StageConfig(workflow, s.Stage.Name); ok {
 		return sc.Worker
@@ -118,4 +130,23 @@ func resolveWorkerName(allWorkers []*workers.Worker, workerID string) string {
 		return w.Name
 	}
 	return workerID
+}
+
+func loopCountSuffix(cfg *config.Config, workflow, stageName string, s *state.State) string {
+	if cfg == nil || !cfg.IsLoopStage(workflow, stageName) {
+		return ""
+	}
+	owner, ok := cfg.OwnerStage(workflow, stageName)
+	if !ok {
+		return ""
+	}
+	loopDef, ok := cfg.LoopConfig(workflow, owner)
+	if !ok || loopDef.Max <= 0 {
+		return ""
+	}
+	count := s.StageCounts[stageName]
+	if count == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (%d/%d)", count, loopDef.Max)
 }
