@@ -129,8 +129,8 @@ var (
 )
 
 var markCmd = &cobra.Command{
-	Use:   "mark <ticket> <start|next|pause|done> [reason]",
-	Short: "Update ticket state — start | next [--result] [--stage] [--worker] | pause <reason> | done [--result]",
+	Use:   "mark <ticket> <start|resume|next|pause|done> [reason]",
+	Short: "Update ticket state — start | resume | next [--result] [--stage] [--worker] | pause <reason> | done [--result]",
 	Args:  cobra.MinimumNArgs(2),
 	RunE:  runMark,
 
@@ -949,13 +949,27 @@ func runMark(cmd *cobra.Command, args []string) error {
 
 	switch action {
 	case "start":
-		if !oneOf(s.Status, "pending", "ready", "paused") {
-			return fmt.Errorf("cannot mark %s start from status %q", s.Ticket, s.Status)
+		if !oneOf(s.Status, "pending", "ready") {
+			return fmt.Errorf("cannot mark %s start from status %q — use `orc mark %s resume` to continue a paused ticket", s.Ticket, s.Status, s.Ticket)
 		}
 		if err := state.ValidateRepos(s, root); err != nil {
 			return err
 		}
 		if err := state.Start(featureDir); err != nil {
+			return err
+		}
+		fmt.Printf("Ticket:  %s\n", s.Ticket)
+		fmt.Printf("Status:  active\n")
+		return nil
+
+	case "resume":
+		if s.Status != "paused" {
+			return fmt.Errorf("cannot mark %s resume from status %q — resume is only valid from paused", s.Ticket, s.Status)
+		}
+		if err := state.ValidateRepos(s, root); err != nil {
+			return err
+		}
+		if err := state.Resume(featureDir); err != nil {
 			return err
 		}
 		fmt.Printf("Ticket:  %s\n", s.Ticket)
@@ -1016,7 +1030,7 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return nil
 
 	default:
-		return fmt.Errorf("unknown action %q — use: start | next [--result] [--stage] [--worker] | pause <reason> | done [--result] | jit <summary>", action)
+		return fmt.Errorf("unknown action %q — use: start | resume | next [--result] [--stage] [--worker] | pause <reason> | done [--result] | jit <summary>", action)
 	}
 }
 

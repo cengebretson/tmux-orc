@@ -450,3 +450,40 @@ stage:
 		t.Errorf("status = %q, want done", s.Status)
 	}
 }
+
+func TestResume_SetsActiveAndClearsNextAction(t *testing.T) {
+	dir := t.TempDir()
+	featureDir := filepath.Join(dir, "features", "PAUSED-1")
+	writeLegacyState(t, featureDir, `
+ticket: PAUSED-1
+slug: PAUSED-1
+status: paused
+stage:
+  worker: bob-developer
+  name: develop
+next_action:
+  worker: human
+  prompt: waiting for product decision
+`)
+
+	if err := state.Resume(featureDir); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+
+	s, err := state.Load(featureDir)
+	if err != nil {
+		t.Fatalf("Load after Resume: %v", err)
+	}
+	if s.Status != "active" {
+		t.Errorf("status = %q, want active", s.Status)
+	}
+	if s.NextAction.Worker != "" || s.NextAction.Prompt != "" {
+		t.Errorf("NextAction not cleared: worker=%q prompt=%q", s.NextAction.Worker, s.NextAction.Prompt)
+	}
+	if len(s.History) == 0 {
+		t.Fatal("expected history entry")
+	}
+	if got := s.History[len(s.History)-1].Result; got != "resumed" {
+		t.Errorf("last history result = %q, want resumed", got)
+	}
+}

@@ -165,6 +165,58 @@ func TestRunMarkStartUpdatesPendingTicket(t *testing.T) {
 	}
 }
 
+func TestRunMarkResumeUpdatesPausedTicket(t *testing.T) {
+	resetCommandGlobals(t)
+	globalWorkspace = mutableFixtureWorkspace(t)
+
+	out, err := captureStdout(func() error {
+		return runMark(nil, []string{"STORY-789", "resume"})
+	})
+	if err != nil {
+		t.Fatalf("runMark resume: %v", err)
+	}
+	if !strings.Contains(out, "Status:  active") {
+		t.Fatalf("resume output unexpected:\n%s", out)
+	}
+
+	s := loadTicketState(t, globalWorkspace, "STORY-789")
+	if s.Status != "active" {
+		t.Fatalf("status = %q, want active", s.Status)
+	}
+	if got := s.History[len(s.History)-1].Result; got != "resumed" {
+		t.Fatalf("last history result = %q, want resumed", got)
+	}
+	if s.NextAction.Worker != "" {
+		t.Fatalf("NextAction.Worker = %q, want cleared", s.NextAction.Worker)
+	}
+}
+
+func TestRunMarkStartRejectsPaused(t *testing.T) {
+	resetCommandGlobals(t)
+	globalWorkspace = mutableFixtureWorkspace(t)
+
+	err := runMark(nil, []string{"STORY-789", "start"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "resume") {
+		t.Fatalf("error should mention resume, got: %v", err)
+	}
+}
+
+func TestRunMarkResumeRejectsNonPaused(t *testing.T) {
+	resetCommandGlobals(t)
+	globalWorkspace = mutableFixtureWorkspace(t)
+
+	err := runMark(nil, []string{"HOT-42", "resume"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "paused") {
+		t.Fatalf("error should mention paused, got: %v", err)
+	}
+}
+
 func TestRunMarkDoneUpdatesCopiedFixture(t *testing.T) {
 	resetCommandGlobals(t)
 	globalWorkspace = mutableFixtureWorkspace(t)

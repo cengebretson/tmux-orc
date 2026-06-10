@@ -12,9 +12,12 @@ Also read:
 
 **Start every session:**
 ```
-orc mark <ticket> start
 orc status <ticket> --json
 ```
+Then mark the ticket active based on its current status:
+- `pending` or `ready` → `orc mark <ticket> start`
+- `paused` → `orc mark <ticket> resume`
+
 Read `stages/<stage>.md` for the current stage instructions.
 
 **End every session with exactly one of:**
@@ -36,19 +39,23 @@ until STATE.yaml shows `paused`.
 ## orc mark — Command Reference
 
 ```
-orc mark <ticket> start                                               # begin session, sets active
+orc mark <ticket> start                                               # begin fresh session (pending or ready)
+orc mark <ticket> resume                                              # continue a paused session
 orc mark <ticket> next --result "<what was done>"                     # stage complete, move to next
 orc mark <ticket> next --stage <name> --worker <id>                  # jump to a specific stage
 orc mark <ticket> pause "<what you need or what is blocking>"        # human needed (input, approval, or blocker)
 orc mark <ticket> done [--result "<what was done>"]                  # all stages complete
 ```
 
+Use `start` for a fresh session on a `pending` or `ready` ticket.
+Use `resume` to pick up a `paused` ticket — it clears the human-directed next action so you can write fresh context.
 Use `next` when the stage exit criteria are met. If no stages remain, status is automatically set to `done`.
 Use `pause` when you need a human decision, approval, information, or when an external condition prevents progress.
 Use `done` to explicitly close active, ready, or paused work.
 
 Transition guards:
-- `start` is allowed only from `pending`, `ready`, or `paused`.
+- `start` is allowed only from `pending` or `ready`.
+- `resume` is allowed only from `paused`.
 - `next` is rejected while a ticket is still `pending`; start the session first.
 - `next --stage` must name a configured workflow or loop stage.
 - `next --worker` must name a worker from `workers/`.

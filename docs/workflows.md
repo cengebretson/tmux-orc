@@ -141,7 +141,8 @@ Agents should use `orc mark`; they should not hand-edit `STATE.yaml`.
 
 | Command | Allowed From | Result |
 |---------|--------------|--------|
-| `orc mark <ticket> start` | `pending`, `ready`, `paused` | Marks the ticket `active` and records the session start. |
+| `orc mark <ticket> start` | `pending`, `ready` | Marks the ticket `active` and records the session start. |
+| `orc mark <ticket> resume` | `paused` | Marks the ticket `active` and records the continuation. Clears the human-directed next action set by `pause`. |
 | `orc mark <ticket> next --result "<summary>"` | `active`, `ready`, `paused` | Advances to the next workflow stage, returns from a loop stage, or marks the ticket `done` after the final stage. |
 | `orc mark <ticket> next --stage <name> --worker <id>` | `active`, `ready`, `paused` | Moves to a configured workflow or loop stage and assigns the named worker. |
 | `orc mark <ticket> pause "<reason>"` | Any non-final feature state | Marks the ticket `paused` and records why a human or external condition is needed. |
@@ -149,6 +150,8 @@ Agents should use `orc mark`; they should not hand-edit `STATE.yaml`.
 
 Transition validation rejects:
 
+- `start` from `paused`; use `resume` to continue a paused ticket.
+- `resume` from any status other than `paused`.
 - `next` while a ticket is still `pending`; start the session first.
 - `done` while a ticket is still `pending`.
 - `next --stage` values that do not name a configured workflow or loop stage.
