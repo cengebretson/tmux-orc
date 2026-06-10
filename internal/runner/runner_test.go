@@ -65,6 +65,22 @@ func TestCompute_FlagOverrideTakesPriority(t *testing.T) {
 	}
 }
 
+func TestCompute_UnknownFlagOverrideReturnsError(t *testing.T) {
+	ws := fixtureWorkspace()
+	featureDir := fixtureFeatureDir(ws, "STORY-123")
+	if featureDir == "" {
+		t.Fatal("fixture STORY-123 not found")
+	}
+
+	_, err := runner.Compute(ws, featureDir, "no-such-worker")
+	if err == nil {
+		t.Fatal("expected error for unknown --worker flag, got nil")
+	}
+	if !strings.Contains(err.Error(), "no-such-worker") {
+		t.Errorf("error %q does not mention the unknown worker id", err.Error())
+	}
+}
+
 func TestCompute_PromptContainsPreamble(t *testing.T) {
 	ws := fixtureWorkspace()
 	featureDir := fixtureFeatureDir(ws, "STORY-123")
