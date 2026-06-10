@@ -9,6 +9,7 @@ import (
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/tmux"
 	"github.com/cengebretson/orc/internal/workers"
+	"github.com/cengebretson/orc/internal/workspacectx"
 )
 
 type Feature struct {
@@ -20,6 +21,7 @@ type Feature struct {
 	WorkerID       string
 	WorkerName     string
 	TmuxLive       bool
+	HasIssues      bool
 	LoadError      error
 }
 
@@ -37,8 +39,13 @@ func Collect(root string, opts Options) ([]*Feature, error) {
 		opts.ListSessions = tmux.ListSessions
 	}
 
-	cfg, _ := config.Load(root)
-	allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
+	ctx, _ := workspacectx.Load(root)
+	var cfg *config.Config
+	var allWorkers []*workers.Worker
+	if ctx != nil {
+		cfg = ctx.Config
+		allWorkers = ctx.Workers
+	}
 	activeSessions := map[string]bool{}
 	if opts.TmuxAvailable() {
 		for _, name := range opts.ListSessions() {
@@ -94,6 +101,7 @@ func collectDir(root, dir string, archived bool, cfg *config.Config, allWorkers 
 			WorkerID:       workerID,
 			WorkerName:     resolveWorkerName(allWorkers, workerID),
 			TmuxLive:       s.Runtime.Tmux != nil && activeSessions[s.Runtime.Tmux.Session],
+			HasIssues:      workerID == "",
 		})
 	}
 	return nil

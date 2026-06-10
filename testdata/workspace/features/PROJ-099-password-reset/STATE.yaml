@@ -7,6 +7,8 @@ stage:
   worker: bob-developer
   name: develop
 runtime:
+  tmux:
+    session: PROJ-099-password-reset
   jit:
     worker: zach-the-reviewer
     task: "make sure fred did a good job on the SPEC.md before we go further"

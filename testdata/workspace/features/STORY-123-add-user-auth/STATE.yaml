@@ -11,6 +11,8 @@ repos:
     main: ../../projects/my-app
     worktree: ../../worktrees/my-app/STORY-123-add-user-auth
     branch: feature/STORY-123-add-user-auth
+stage_counts:
+  code-review: 2
 next_action:
   worker: bob-developer
   prompt: Implement JWT auth middleware per SPEC.md — token validation and refresh flow are the priority

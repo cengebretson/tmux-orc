@@ -122,6 +122,7 @@ type featureRow struct {
 	stageLoopLabel string
 	workerName     string
 	tmuxLive       bool
+	hasIssues      bool
 }
 
 // ── model ─────────────────────────────────────────────────────────
@@ -1233,13 +1234,14 @@ func renderRouteChain(chain []routeStep, loops []repairLoop, maxW int) []string 
 
 func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 	const (
-		wTicket = 12
-		wName   = 22
-		wStatus = 20
-		wTmux   = 6
+		wTicket  = 12
+		wName    = 22
+		wStatus  = 20
+		wTmux    = 6
+		wHealth  = 2
 	)
-	// fixed overhead: leading space + static columns + separators (5 × "  ")
-	fixed := 1 + wTicket + wName + wStatus + wTmux + 5*2
+	// fixed overhead: leading space + static columns + separators (6 × "  ")
+	fixed := 1 + wTicket + wName + wStatus + wTmux + wHealth + 6*2
 	flex := w - fixed
 	if flex < 24 {
 		flex = 24
@@ -1253,7 +1255,8 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
 		padRight(styleTableHeader.Render("Stage"), wWorkflow) + "  " +
 		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
-		padRight(styleTableHeader.Render("Tmux"), wTmux)
+		padRight(styleTableHeader.Render("Tmux"), wTmux) + "  " +
+		padRight("", wHealth)
 
 	div := " " + styleDivider.Render(strings.Repeat("─", w-1))
 
@@ -1284,6 +1287,11 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 			}
 		}
 
+		plainHealth := "·"
+		if row.hasIssues {
+			plainHealth = "!"
+		}
+
 		if selected {
 			// Plain unstyled text so styleRowSelected background covers the full row
 			line := " " +
@@ -1292,7 +1300,8 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 				padRight(truncate(icon+" "+s.Status, wStatus), wStatus) + "  " +
 				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
 				padRight(truncate(plainWorker, wWorker), wWorker) + "  " +
-				padRight(plainTmux, wTmux)
+				padRight(plainTmux, wTmux) + "  " +
+				padRight(plainHealth, wHealth)
 			lines = append(lines, styleRowSelected.Width(w).Render(line))
 		} else {
 			statusCell := statusStyle(s.Status).Render(icon + " " + s.Status)
@@ -1308,13 +1317,20 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 			} else {
 				tmuxCell = styleTmuxNone.Render(plainTmux)
 			}
+			var healthCell string
+			if row.hasIssues {
+				healthCell = styleHealthWarn.Render(plainHealth)
+			} else {
+				healthCell = styleHealthOK.Render(plainHealth)
+			}
 			line := " " +
 				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
 				padRight(nameCell, wName) + "  " +
 				padRight(statusCell, wStatus) + "  " +
 				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
 				padRight(workerCell, wWorker) + "  " +
-				padRight(tmuxCell, wTmux)
+				padRight(tmuxCell, wTmux) + "  " +
+				padRight(healthCell, wHealth)
 			lines = append(lines, line)
 		}
 	}
@@ -1360,6 +1376,11 @@ func (m Model) viewDetail() string {
 	for _, f := range fields {
 		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
 			styleDetailLabel.Render(f.label), f.value))
+	}
+	if m.detail.hasIssues {
+		stateLines = append(stateLines, fmt.Sprintf("%s  %s",
+			styleDetailLabel.Render(" Issues  "),
+			styleHealthWarn.Render("! no worker assigned for this stage — set worker: in orc.yaml or run `orc mark "+s.Ticket+" next --worker <id>`")))
 	}
 	if summary.TmuxConfigured {
 		if summary.TmuxLive {
@@ -1745,6 +1766,7 @@ func collectFeatures(root string) []*featureRow {
 			stageLoopLabel: f.StageLoopLabel,
 			workerName:     f.WorkerName,
 			tmuxLive:       f.TmuxLive,
+			hasIssues:      f.HasIssues,
 		})
 	}
 	return rows
