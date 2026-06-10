@@ -17,7 +17,7 @@ features/
   _template/            copied for each new ticket by orc work
   _archive/             completed features moved here by orc archive
   TICKET-0000-slug/
-    STATE.yaml          current stage, owner, status, next action
+    STATE.yaml          current stage, worker, status, next action
     TICKET.md           ticket description and acceptance criteria
     SPEC.md             context, scope, and open questions
     PLAN.md             implementation approach and steps

@@ -151,6 +151,20 @@ func Update(featureDir string, mutate func(*State) error) error {
 	return savePath(path, s)
 }
 
+// Create writes a fresh STATE.yaml in featureDir through the same locked,
+// atomic temp-file path as Update. Used when scaffolding a feature, where the
+// file holds template placeholders (or does not exist) and there is no prior
+// state to read.
+func Create(featureDir string, s *State) error {
+	path := filepath.Join(featureDir, Filename)
+	unlock, err := lockPath(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return savePath(path, s)
+}
+
 func savePath(path string, s *State) error {
 	out, err := yaml.Marshal(s)
 	if err != nil {

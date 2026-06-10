@@ -144,6 +144,26 @@ func TestWork_CreatesFeatureFolder(t *testing.T) {
 	if _, err := os.Stat(stateFile); err != nil {
 		t.Error("STATE.yaml not created")
 	}
+
+	// The stamped file must round-trip through the canonical schema — the old
+	// hand-rolled marshal wrote stage.owner/history[].owner, which state.Load
+	// silently dropped.
+	st, err := state.Load(result.FeatureDir)
+	if err != nil {
+		t.Fatalf("loading stamped STATE.yaml: %v", err)
+	}
+	if st.Ticket != "TEST-001" {
+		t.Errorf("ticket = %q, want TEST-001", st.Ticket)
+	}
+	if st.Status != "pending" {
+		t.Errorf("status = %q, want pending", st.Status)
+	}
+	if st.Stage.Name == "" {
+		t.Error("stage.name not stamped")
+	}
+	if len(st.History) != 1 || st.History[0].Worker != "agent" {
+		t.Errorf("history not round-tripped: %+v", st.History)
+	}
 }
 
 func TestWork_UsesConfiguredDefaultWorkflow(t *testing.T) {

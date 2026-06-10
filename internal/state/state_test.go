@@ -42,6 +42,52 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestCreate_WritesLoadableState(t *testing.T) {
+	dir := t.TempDir()
+	s := &state.State{
+		SchemaVersion: state.SchemaVersion,
+		Ticket:        "TEST-9",
+		Slug:          "TEST-9-create",
+		Status:        "pending",
+		Stage:         state.Stage{Name: "intake"},
+		History: []state.HistoryEntry{
+			{At: time.Now().Format(time.RFC3339), Stage: "intake", Worker: "agent", Result: "created"},
+		},
+	}
+	if err := state.Create(dir, s); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := state.Load(dir)
+	if err != nil {
+		t.Fatalf("Load after Create: %v", err)
+	}
+	if got.Ticket != "TEST-9" || got.Stage.Name != "intake" {
+		t.Errorf("round-trip mismatch: ticket=%q stage=%q", got.Ticket, got.Stage.Name)
+	}
+	if len(got.History) != 1 || got.History[0].Worker != "agent" {
+		t.Errorf("history round-trip mismatch: %+v", got.History)
+	}
+}
+
+func TestCreate_ReplacesPlaceholder(t *testing.T) {
+	dir := t.TempDir()
+	placeholder := filepath.Join(dir, state.Filename)
+	if err := os.WriteFile(placeholder, []byte("ticket: TICKET-0000\nslug: placeholder\nstatus: pending\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Create(dir, &state.State{Ticket: "TEST-10", Slug: "TEST-10-x", Status: "pending"}); err != nil {
+		t.Fatalf("Create over placeholder: %v", err)
+	}
+	got, err := state.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Ticket != "TEST-10" {
+		t.Errorf("ticket = %q, want TEST-10 (placeholder not replaced)", got.Ticket)
+	}
+}
+
 func TestLoad_DefaultsMissingSchemaVersionToV1(t *testing.T) {
 	dir := t.TempDir()
 	featureDir := filepath.Join(dir, "features", "LEGACY-1")

@@ -10,7 +10,6 @@ import (
 
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/state"
-	"gopkg.in/yaml.v3"
 )
 
 type WorkOptions struct {
@@ -120,68 +119,35 @@ func buildSlug(ticket, suffix string) string {
 	return ticket + "-" + suffix
 }
 
-// writeStateYAML stamps STATE.yaml with real ticket/slug values.
+// writeStateYAML stamps STATE.yaml with real ticket/slug values, replacing
+// the template placeholder copied into the feature dir. Uses the canonical
+// state.State schema so the scaffold can never drift from what state.Load
+// reads back.
 func writeStateYAML(featureDir, ticket, slug, workflowName, firstStage string) error {
-	type stateStage struct {
-		Owner string `yaml:"owner"`
-		Name  string `yaml:"name"`
-	}
-	type stateNextAction struct {
-		Worker string `yaml:"worker"`
-		Prompt string `yaml:"prompt"`
-		CWD    string `yaml:"cwd"`
-	}
-	type stateHistory struct {
-		At     string `yaml:"at"`
-		Stage  string `yaml:"stage"`
-		Owner  string `yaml:"owner"`
-		Result string `yaml:"result"`
-	}
-	type stateFile struct {
-		SchemaVersion int    `yaml:"schema_version,omitempty"`
-		Ticket        string `yaml:"ticket"`
-		Slug          string `yaml:"slug"`
-		Status        string `yaml:"status"`
-		Workflow      string `yaml:"workflow,omitempty"`
-
-		Stage stateStage `yaml:"stage"`
-
-		NextAction stateNextAction `yaml:"next_action"`
-
-		History []stateHistory `yaml:"history"`
-	}
-
-	s := stateFile{
+	s := &state.State{
 		SchemaVersion: state.SchemaVersion,
 		Ticket:        ticket,
 		Slug:          slug,
 		Status:        "pending",
 		Workflow:      workflowName,
-		Stage: stateStage{
-			Owner: "agent",
-			Name:  firstStage,
+		Stage: state.Stage{
+			Name: firstStage,
 		},
-		NextAction: stateNextAction{
+		NextAction: state.NextAction{
 			Worker: firstStage,
 			Prompt: fmt.Sprintf("Load ticket %s and populate TICKET.md, SPEC.md, and PLAN.md. Update STATE.yaml when complete.", ticket),
 			CWD:    ".",
 		},
-		History: []stateHistory{
+		History: []state.HistoryEntry{
 			{
 				At:     time.Now().Format(time.RFC3339),
 				Stage:  firstStage,
-				Owner:  "agent",
+				Worker: "agent",
 				Result: "feature context created by orc work",
 			},
 		},
 	}
-
-	data, err := yaml.Marshal(s)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(filepath.Join(featureDir, "STATE.yaml"), data, 0644)
+	return state.Create(featureDir, s)
 }
 
 func copyDir(src, dst string) error {

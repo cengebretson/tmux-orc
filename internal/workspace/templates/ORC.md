@@ -164,7 +164,7 @@ Every ticket has a context pack at `features/<ticket-slug>/`:
 
 | File | Purpose |
 |------|---------|
-| `STATE.yaml` | Durable state — status, stage, owner, next action, history |
+| `STATE.yaml` | Durable state — status, stage, worker, next action, history |
 | `TICKET.md` | Ticket description and acceptance criteria |
 | `SPEC.md` | Context, scope, constraints, open questions |
 | `PLAN.md` | Implementation approach and steps |

@@ -13,7 +13,7 @@ work back for rework.
 Before starting, check whether `code-review/REVIEW.md` exists in the feature folder.
 
 **If `code-review/REVIEW.md` does not exist** — this is the initial implementation pass.
-Follow the steps below and end with `orc mark ... wait` for human approval before code review.
+Follow the steps below and end with `orc mark ... pause` for human approval before code review.
 
 **If `code-review/REVIEW.md` exists with `verdict: needs-changes` or `verdict: blocked`** — this is a
 rework pass in response to review feedback. Read the findings carefully, address every

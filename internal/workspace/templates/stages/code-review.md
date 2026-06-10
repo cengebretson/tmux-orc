@@ -14,7 +14,7 @@ Before reviewing, count how many times `code-review` appears in `STATE.yaml` his
 (entries where `stage: code-review`). This is the current cycle number.
 
 - Cycle 1–2: if changes needed, route back to `develop` automatically
-- Cycle 3: if still not approved, call `orc mark ... wait` — a human must resolve
+- Cycle 3: if still not approved, call `orc mark ... pause` — a human must resolve
 
 ## Steps
 
