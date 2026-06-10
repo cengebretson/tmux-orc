@@ -68,8 +68,8 @@ Transition guards:
 
 | Status | Meaning |
 |--------|---------|
-| `pending` | Feature created, intake not yet run |
-| `ready` | Stage complete, queued for next agent |
+| `pending` | Session not yet started for the current stage — set by `orc work` and after each `orc mark next` |
+| `ready` | Human-set: stage complete and cleared for the next session |
 | `active` | Agent is actively working |
 | `paused` | Human needed — input, approval, or external blocker |
 | `done` | All stages complete (or explicitly closed) |
@@ -100,16 +100,14 @@ Use `orc mark <ticket> pause "<reason>"` for all cases where a human needs to ac
 | `next_action` | `agent-writable` | Who should act next, what they should do, and where commands should run. |
 | `history` | `agent-writable` | Append-only summary of starts, transitions, pauses, and completions. |
 
-Write a history entry for every stage transition, block, or wait:
+`orc mark` writes a history entry automatically for every transition (start, resume, next, pause, done). Do not write history entries manually.
 
-```yaml
-- at: <RFC3339>
-  stage: <stage name>
-  worker: <worker id or "human">
-  result: <one line>
-```
+Agents are responsible for keeping these fields current as work progresses:
 
-Also update `stage.name`, `stage.worker`, `next_action`, and `repos` whenever those change.
+- `next_action` — set the worker, prompt, and cwd for whoever picks up next
+- `repos` — record worktree path and branch when created or changed
+
+`stage.name` and `stage.worker` are updated by `orc mark next`. Do not hand-edit them.
 
 ### STATE.yaml.lock
 

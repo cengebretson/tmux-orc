@@ -96,7 +96,7 @@ If no — mark `claude: complete` and skip this section.
 
 **Ask:**
 > Which Claude model should the intake agent use?
-> (1) claude-opus-4-7  (2) claude-sonnet-4-6  (3) claude-haiku-4-5-20251001
+> (1) claude-opus-4-8  (2) claude-sonnet-4-6  (3) claude-haiku-4-5-20251001
 
 **Ask:**
 > Do you have MCP servers configured in ~/.claude/mcp.json?
