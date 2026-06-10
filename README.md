@@ -69,6 +69,26 @@ cd orc
 go build -o orc ./cmd/orc/...
 ```
 
+## Dependencies
+
+`orc` itself has no runtime dependencies beyond Go. Two optional tools unlock
+additional features:
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| `tmux` | Session management — `orc work` launches and attaches agent sessions | `brew install tmux` |
+| `chafa` | Pixel portrait rendering in `orc tui` (`!` character sheet) | `brew install chafa` |
+
+**tmux + chafa pixel rendering:** if you run inside tmux, add this to your
+`tmux.conf` to allow Kitty graphics protocol passthrough to the outer terminal:
+
+```
+set -g allow-passthrough on
+```
+
+Without it, tmux silently drops the image escape sequences and portraits fall
+back to character art.
+
 ## Getting started
 
 ### 1. Scaffold a workspace
