@@ -55,7 +55,7 @@ Update `STATE.yaml` whenever any of these change:
 - completion state
 
 Before ending an agent session, update `STATE.yaml` so `orc status`,
-`orc next`, and `orc status` reflect reality.
+`orc next`, and `orc tui` reflect reality.
 
 ---
 
@@ -76,7 +76,7 @@ requires it. Record the active worktree path in `features/<ticket-slug>/STATE.ya
 before ending the session.
 
 Use repo names from `orc.yaml`. If you cannot determine the correct repo or branch
-name, run `orc mark <ticket> wait "<question>"` instead of guessing.
+name, run `orc mark <ticket> pause "<question>"` instead of guessing.
 
 ---
 
@@ -90,7 +90,7 @@ A stage doc should have:
 - **Explicit output definitions** — which files get written and where
 - **Unambiguous signals** — structured fields like `verdict:` that downstream
   stages can read without interpretation
-- **Exact commands** — `orc mark ... advance`, `orc mark ... wait`, or `orc mark ... block` for every outcome,
+- **Exact commands** — `orc mark ... next`, `orc mark ... pause`, or `orc mark ... done` for every outcome,
   with no ambiguity about which to use
 
 The sample workflows are a starting point. Tune them to your stack, review

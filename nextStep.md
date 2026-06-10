@@ -95,7 +95,7 @@ recoverable, and clear when something is stale or locked.
 - `orc doctor` explains what to do when a lock is stale or active.
 - Tests prove failed mutations do not rewrite state.
 
-## 5. Preserve the CLI/TUI Boundary
+## ~~5. Preserve the CLI/TUI Boundary~~ ✓ Done
 
 **Why:** The TUI should present workflow state, not become a parallel workflow
 implementation.
@@ -113,7 +113,7 @@ implementation.
 - TUI mutation actions, if added, call existing domain services.
 - CLI and TUI show consistent workflow/stage/worker information.
 
-## 6. Reframe the Architecture Language
+## ~~6. Reframe the Architecture Language~~ ✓ Done
 
 **Why:** “`orc` does not encode workflow logic” is directionally useful, but not
 quite precise. The tool necessarily enforces generic transition behavior.

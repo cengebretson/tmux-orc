@@ -139,9 +139,13 @@ func buildPrompt(s *state.State, nextStage, advanceMode string, loopDef *config.
 		)
 	}
 
+	markAction := "start"
+	if s.Status == "paused" {
+		markAction = "resume"
+	}
 	preamble := fmt.Sprintf(
-		"Before starting: read AGENTS.md and ORC.md. Run `orc mark %s start` to mark as active.\n\n",
-		s.Ticket,
+		"Before starting: read AGENTS.md and ORC.md. Run `orc mark %s %s` to mark as active.\n\n",
+		s.Ticket, markAction,
 	)
 
 	return preamble + prompt + endInstruction(s.Ticket, nextStage, advanceMode, loopDef, isLoopStage)

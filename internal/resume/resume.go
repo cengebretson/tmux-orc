@@ -55,7 +55,7 @@ func Build(root, featureDir string) (*Context, error) {
 func buildPrompt(root, featureDir string, s *state.State, ctx *Context) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "Before starting: read AGENTS.md and ORC.md. Run `orc mark %s start` to mark active.\n\n", s.Ticket)
+	fmt.Fprintf(&b, "Before starting: read AGENTS.md and ORC.md. Run `orc mark %s resume` to mark active.\n\n", s.Ticket)
 	fmt.Fprintf(&b, "## Resuming %s — stage: %s\n\n", s.Ticket, s.Stage.Name)
 	fmt.Fprintf(&b, "This session was interrupted. Status was `%s` when it stopped.\n\n", s.Status)
 
