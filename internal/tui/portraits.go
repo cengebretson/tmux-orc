@@ -359,7 +359,15 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 
 	// ── assemble ─────────────────────────────────────────────────────
 	dismiss := styleDim.Render("[!] or [esc] to dismiss")
-	content := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, portraitPanel) + "\n" + dismiss
+	// At narrow widths both panels hit their minimums and the horizontal join
+	// overflows. Stack vertically instead (portrait panel drops below info).
+	const minTwoColumn = 60
+	var content string
+	if availW >= minTwoColumn {
+		content = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, portraitPanel) + "\n" + dismiss
+	} else {
+		content = lipgloss.JoinVertical(lipgloss.Left, leftColumn, portraitPanel) + "\n" + dismiss
+	}
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, content)
 }

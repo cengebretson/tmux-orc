@@ -201,7 +201,7 @@ func New(root string) Model {
 		sectionItems: map[string][]sectionItem{},
 		expanded: map[string]bool{
 			"health":    false,
-			"workflows": true,
+			"workflows": false,
 			"workers":   false,
 			"routes":    true,
 		},
@@ -562,12 +562,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.wfDetailCursor > 0 {
 				m.wfDetailCursor--
-				m.reRenderWorkflowDetail()
+				m.reRenderWorkflowDetailAndScroll()
 			}
 		case "down", "j":
 			if m.wfDetailCursor < wfDetailTotal(m.wfDetailName, m.workflows)-1 {
 				m.wfDetailCursor++
-				m.reRenderWorkflowDetail()
+				m.reRenderWorkflowDetailAndScroll()
 			}
 		case "enter":
 			stageName, advance, stepNum, total := wfDetailSelectedStage(m.wfDetailName, m.wfDetailCursor, m.workflows)
@@ -604,6 +604,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.reRenderWorkflowDetail()
 			}
 			m.view = m.viewerReturn
+		case "left", "h":
+			if m.viewerReturn == viewDetail && m.fileIdx > 0 {
+				m.fileIdx--
+				m.loadViewerFile()
+			}
+		case "right", "l":
+			if m.viewerReturn == viewDetail && m.fileIdx < len(m.detailFiles)-1 {
+				m.fileIdx++
+				m.loadViewerFile()
+			}
 		case "!":
 			if m.charSheetWorker != nil {
 				m.charSheetReturn = viewFile
@@ -1507,11 +1517,17 @@ func (m Model) viewFile() string {
 		styleSubtext.Render(m.viewerTitle+" ")
 	b.WriteString("\n" + drawBox(title, nil, outerW) + "\n")
 	b.WriteString(m.viewport.View())
-	help := strings.Join([]string{
+	helpItems := []string{
 		helpItem("↑↓/pgup/pgdn", "scroll"),
+	}
+	if m.viewerReturn == viewDetail {
+		helpItems = append(helpItems, helpItem("←→", "prev/next file"))
+	}
+	helpItems = append(helpItems,
 		helpItem("esc", "back"),
 		helpItem("q", "quit"),
-	}, "  ")
+	)
+	help := strings.Join(helpItems, "  ")
 	b.WriteString("\n" + styleHelp.Render("  "+help))
 	return b.String()
 }
@@ -1528,6 +1544,7 @@ func (m Model) viewWorkflowDetailPage() string {
 	b.WriteString(m.viewport.View())
 	help := strings.Join([]string{
 		helpItem("↑↓", "select stage"),
+		helpItem("pgup/pgdn", "scroll"),
 		helpItem("enter", "view stage"),
 		helpItem("esc", "back"),
 		helpItem("q", "quit"),
@@ -1541,6 +1558,35 @@ func (m *Model) reRenderWorkflowDetail() {
 	content := renderWorkflowDetail(m.wfDetailName, m.workflows, m.allWorkers, filepath.Join(m.root, "stages"), m.features, m.wfDetailCursor, m.width-4)
 	m.viewport.SetContent(content)
 	m.viewport.SetYOffset(yOff)
+}
+
+// reRenderWorkflowDetailAndScroll re-renders the workflow detail and scrolls the
+// viewport so the selected cursor row stays visible.
+func (m *Model) reRenderWorkflowDetailAndScroll() {
+	content := renderWorkflowDetail(m.wfDetailName, m.workflows, m.allWorkers, filepath.Join(m.root, "stages"), m.features, m.wfDetailCursor, m.width-4)
+	m.viewport.SetContent(content)
+	// Stage rows begin after the route box (~8 lines) and the table header+divider (2 lines).
+	const headerLines = 10
+	targetLine := headerLines + m.wfDetailCursor
+	viewH := m.viewport.Height
+	curY := m.viewport.YOffset
+	if targetLine < curY {
+		m.viewport.SetYOffset(targetLine)
+	} else if targetLine >= curY+viewH {
+		m.viewport.SetYOffset(targetLine - viewH + 1)
+	}
+}
+
+// loadViewerFile loads m.detailFiles[m.fileIdx] into the viewport for viewFile.
+func (m *Model) loadViewerFile() {
+	f := m.detailFiles[m.fileIdx]
+	content, err := renderFile(f.path)
+	if err != nil {
+		content = styleHealthErr.Render("could not read file: " + err.Error())
+	}
+	m.viewport.SetContent(content)
+	m.viewport.SetYOffset(0)
+	m.viewerTitle = f.label
 }
 
 func wfDetailTotal(name string, chains []workflowChain) int {
