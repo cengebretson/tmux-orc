@@ -1,5 +1,9 @@
 # ORC.md — Agent State Contract
 
+<!-- This file defines the orc state contract. Do not add team conventions or
+     custom instructions here — put those in AGENTS.md under Team Conventions.
+     Editing this file may break agent session protocol and state transitions. -->
+
 Read this file at the start of every session.
 
 Also read:
