@@ -51,3 +51,12 @@ the workflow explicitly says to.
 If a stage requires code changes, create or use a ticket worktree under
 `worktrees/<repo-name>/<ticket-slug>/` and record it in `STATE.yaml` as described
 in `ORC.md`. Do not leave repository changes untracked by the feature state.
+
+---
+
+## Team Conventions
+
+<!-- This section is yours. Add team-specific conventions, coding standards,
+     review expectations, naming rules, or anything else agents should know
+     about how this team works. orc does not read or modify this section. -->
+
