@@ -496,7 +496,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.viewport.SetContent(content)
 						m.view = viewWorkflowDetail
 					default:
-						content, err = renderFile(f.path)
+						content, err = renderFile(f.path, m.width-4)
 						if err != nil {
 							content = styleHealthErr.Render("could not read: " + err.Error())
 						}
@@ -540,7 +540,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.fileIdx < len(m.detailFiles) {
 				f := m.detailFiles[m.fileIdx]
-				content, err := renderFile(f.path)
+				content, err := renderFile(f.path, m.width-4)
 				if err != nil {
 					content = styleHealthErr.Render("could not read file: " + err.Error())
 				}
@@ -573,7 +573,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			stageName, advance, stepNum, total := wfDetailSelectedStage(m.wfDetailName, m.wfDetailCursor, m.workflows)
 			if stageName != "" {
 				stagesDir := filepath.Join(m.root, "stages")
-				content, err := renderFile(filepath.Join(stagesDir, stageName+".md"))
+				content, err := renderFile(filepath.Join(stagesDir, stageName+".md"), m.width-4)
 				if err != nil {
 					content = styleHealthErr.Render("could not read: " + err.Error())
 				}
@@ -1580,7 +1580,7 @@ func (m *Model) reRenderWorkflowDetailAndScroll() {
 // loadViewerFile loads m.detailFiles[m.fileIdx] into the viewport for viewFile.
 func (m *Model) loadViewerFile() {
 	f := m.detailFiles[m.fileIdx]
-	content, err := renderFile(f.path)
+	content, err := renderFile(f.path, m.viewport.Width)
 	if err != nil {
 		content = styleHealthErr.Render("could not read file: " + err.Error())
 	}
@@ -1840,14 +1840,17 @@ func buildFileList(featureDir string, s *state.State) []detailFile {
 	return out
 }
 
-func renderFile(path string) (string, error) {
+func renderFile(path string, width int) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
+	if width <= 0 {
+		width = 80
+	}
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStylesFromJSONBytes(activeTheme.Glamour),
-		glamour.WithWordWrap(120),
+		glamour.WithWordWrap(width),
 	)
 	if err != nil {
 		return string(data), nil
