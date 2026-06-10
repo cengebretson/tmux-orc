@@ -385,6 +385,23 @@ my-workspace/
   worktrees/         git worktrees for ticket branches (gitignored)
 ```
 
+## Workspace files
+
+The root files are the shared context every agent reads before starting work. Each has a distinct owner and purpose.
+
+| File | Owner | Purpose |
+|------|-------|---------|
+| `AGENTS.md` | shared | Entry point for all agents — routing, session protocol, repo commands. Add team conventions at the bottom. |
+| `CLAUDE.md` | orc | Imports `AGENTS.md`. Claude's entrypoint — do not edit. |
+| `ORC.md` | orc | State contract — status values, `orc mark` commands, STATE.yaml rules. Do not add team conventions here. |
+| `ROUTER.md` | user | Ticket system details, repo purposes, worktree layout. Fill in during setup. |
+| `TOOLS.md` | user | Approved tools, MCP servers, CLI commands, external systems. Fill in during setup. |
+| `RULES.md` | user | What requires human approval before agents act — PR gates, cost limits, destructive operations. |
+| `SETUP.md` | orc | One-time setup guide. Run with your agent after `orc init` to configure repos, workers, and tool policy. |
+| `orc.yaml` | user | Workflow config — repos, stage order, workers, loop stages, settings. |
+
+`AGENTS.md` is the entry point — it fans out to everything else. `ORC.md` and `CLAUDE.md` are orc-managed and should not be edited directly. Everything else is yours to configure and extend.
+
 ## Feature folder
 
 Every ticket is a self-contained context pack under `features/<slug>/`. Stages read what the previous one wrote and write their own outputs to a named subfolder — so any agent can pick up mid-flight without asking anyone.
