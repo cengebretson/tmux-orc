@@ -89,7 +89,7 @@ func TestValidate_LoopFields(t *testing.T) {
 						Name:    "develop",
 						Worker:  "bob-developer",
 						Advance: "manual",
-						Loop:    &config.LoopDef{Via: "", Worker: "", Max: -1, OnMax: "fail"},
+						Loop:    &config.LoopDef{Via: "", Worker: "", Max: -1, OnMax: "invalid"},
 					},
 					{
 						Name:    "pr-open",
@@ -106,9 +106,35 @@ func TestValidate_LoopFields(t *testing.T) {
 	assertValidationError(t, errs, "workflows.default.stages[0].loop.via", "loop stage name is required")
 	assertValidationError(t, errs, "workflows.default.stages[0].loop.worker", "worker is required")
 	assertValidationError(t, errs, "workflows.default.stages[0].loop.max", "loop max must be zero or greater")
-	assertValidationError(t, errs, "workflows.default.stages[0].loop.on_max", `loop on_max must be "pause"`)
+	assertValidationError(t, errs, "workflows.default.stages[0].loop.on_max", `loop on_max must be "pause" or "fail"`)
 	assertValidationError(t, errs, "workflows.default.stages[1].loop.via", `duplicate stage name "develop"`)
 	assertValidationError(t, errs, "workflows.default.stages[1].loop.worker", `worker "missing" not found`)
+}
+
+func TestValidate_LoopOnMaxValidValues(t *testing.T) {
+	for _, onMax := range []string{"", "pause", "fail"} {
+		cfg := &config.Config{
+			Settings: config.Settings{DefaultWorkflow: "default"},
+			Workflows: map[string]config.WorkflowDef{
+				"default": {
+					Stages: []config.StageDef{
+						{
+							Name:    "develop",
+							Worker:  "bob-developer",
+							Advance: "auto",
+							Loop:    &config.LoopDef{Via: "code-review", Worker: "bob-developer", Max: 3, OnMax: onMax},
+						},
+					},
+				},
+			},
+		}
+		errs := config.Validate(cfg, []string{"bob-developer"})
+		for _, err := range errs {
+			if err.Path == "workflows.default.stages[0].loop.on_max" {
+				t.Errorf("on_max=%q got unexpected error: %s", onMax, err.Message)
+			}
+		}
+	}
 }
 
 func assertValidationError(t *testing.T, errs config.ValidationErrors, path, message string) {

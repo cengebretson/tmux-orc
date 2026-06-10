@@ -116,10 +116,10 @@ func Validate(cfg *Config, workerIDs []string) ValidationErrors {
 						Message: "loop max must be zero or greater",
 					})
 				}
-				if stage.Loop.OnMax != "" && stage.Loop.OnMax != "pause" {
+				if stage.Loop.OnMax != "" && stage.Loop.OnMax != "pause" && stage.Loop.OnMax != "fail" {
 					errs = append(errs, ValidationError{
 						Path:    loopPath + ".on_max",
-						Message: `loop on_max must be "pause" when set`,
+						Message: `loop on_max must be "pause" or "fail"`,
 					})
 				}
 			}

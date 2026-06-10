@@ -114,7 +114,7 @@ Loop fields:
 | `via` | Yes | Loop stage name. |
 | `worker` | Yes | Worker ID assigned to the loop stage. |
 | `max` | No | Maximum loop count before `on_max` behavior applies. |
-| `on_max` | No | Behavior at max loop count. Supported value today: `pause`. |
+| `on_max` | No | Behavior when the loop count reaches `max`. `pause` (default) pauses for human review. `fail` marks the ticket done immediately. |
 
 ## Validation Expectations
 
@@ -126,7 +126,7 @@ Workspace configuration should satisfy these rules:
 - Every stage `worker` and loop `worker` names an existing file in `workers/`.
 - `advance` is either `auto` or `manual`.
 - `loop.via` names a loop stage owned by exactly one workflow stage.
-- `loop.on_max`, when set, is `pause`.
+- `loop.on_max`, when set, is `pause` or `fail`.
 
 `orc` validates this configuration in the paths that would otherwise route work:
 
