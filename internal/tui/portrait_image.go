@@ -63,6 +63,7 @@ func renderPortrait(class string, data []byte, cols, rows int) string {
 
 	out, err := exec.Command(path,
 		"--size", fmt.Sprintf("%dx%d", cols, rows),
+		"--format", "symbols", // Kitty/pixel output breaks lipgloss layout; character art composes correctly
 		"--colors", "full",
 		"--symbols", "half",
 		tmp.Name(),
