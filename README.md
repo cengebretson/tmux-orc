@@ -20,57 +20,40 @@ Keep feature work moving across agents, sessions, and repos — without losing c
 orc · workspace orchestrator
 ```
 
-## What it is
+## What it does
 
 Agentic workflows break down at the session boundary. An agent finishes a task,
 the session ends, and the next agent starts cold — no memory of what was decided,
-what was built, or what still needs fixing. You end up re-explaining the same
-context over and over, or the work drifts.
+what was built, or what still needs fixing.
 
 `orc` fixes this with a **feature folder**: a durable context pack that travels
-with the ticket. Every stage reads what the previous one wrote, then writes its
-own outputs into a named subfolder. Any agent — or human — can pick up mid-flight
-and know exactly where things stand without asking anyone.
-
-Further reading on the context loss problem and file-based approaches to solving it:
-
-- [Context Loss: Why Your AI Coding Agent Forgets](https://cleanaim.com/silent-wiring/problems/context-loss/) — CleanAim
-- [Agent Memory vs. Context Engineering: What Persists Between Sessions](https://www.augmentcode.com/guides/agent-memory-vs-context-engineering) — Augment Code
-- [Codified Context: Infrastructure for AI Agents in a Complex Codebase](https://arxiv.org/abs/2602.20478) — arXiv 2026
-
-## Why orc?
+with the ticket. Every stage reads what the previous one wrote and writes its own
+outputs into a named subfolder. Any agent — or human — can pick up mid-flight and
+know exactly where things stand without asking anyone.
 
 **Context survives everything.** Session ends, agent switches, restarts — the
-feature folder is the source of truth. `orc next <ticket>` / `orc status <ticket> --json` gives any
-agent a complete picture in seconds.
+feature folder is the source of truth. `orc next <ticket>` gives any agent a
+complete picture in seconds.
 
 **Each stage has one job and clear handoffs.** Stage docs define inputs, outputs,
-exit criteria, and the exact `orc mark <ticket> next` command to run when done. Agents don't
+exit criteria, and the exact `orc mark` command to run when done. Agents don't
 decide what to do next — the workspace tells them.
 
-**Policy lives in files, not code.** Stage docs are plain markdown, and
-`orc.yaml` declares the stage order, default worker, and advance mode. `orc`
-enforces generic state transitions and safety rules around those files. Change
-the review criteria, add a preflight check, swap models — edit the file and the
-next session picks it up immediately.
+**Policy lives in files, not code.** `orc.yaml` declares stage order, default
+workers, and advance mode. Stage docs are plain markdown. Change review criteria,
+add a preflight check, swap models — edit the file and the next session picks it
+up immediately.
 
 **Right agent for each job.** A fast model for implementation, a smarter one for
-review, a specialist for QA. Each worker is configured independently in a markdown
-file. Use `--worker` to override for a single run.
+review, a specialist for QA. Each worker is a markdown file. Use `--worker` to
+override for a single run.
 
-**Human-in-the-loop where it counts.** `orc mark <ticket> pause` creates explicit review gates.
-Agents call it when they need a human decision — not at every step, and not never.
-`orc next <ticket>` continues when you're ready.
+**Human-in-the-loop where it counts.** `orc mark <ticket> pause` creates explicit
+review gates. Agents call it when they need a human decision. `orc next <ticket>`
+continues when you're ready.
 
 **Agent-agnostic by design.** Works with Claude, Codex, or anything that can read
 a file and run a shell command. No SDK dependency, no lock-in.
-
----
-
-The quality of the system depends on the quality of the stage docs. A well-written
-stage file has clear exit criteria, explicit output definitions, and exact commands
-for every outcome. The samples are a starting point — tune them to your stack, your
-review standards, and your team's process.
 
 ## Install
 
@@ -331,7 +314,8 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
 
 These are called by agents at the end of each session. They are hidden from `orc --help` but visible via `orc help-all`.
 
-- `orc mark <ticket> start` — mark the current session active; allowed from `pending`, `ready`, or `paused`
+- `orc mark <ticket> start` — begin a fresh session; allowed from `pending` or `ready`
+- `orc mark <ticket> resume` — continue a paused session; allowed from `paused` only; clears the human-directed next action
 - `orc mark <ticket> next` — mark the current stage complete and advance (`done` if no stages remain)
   - `--stage <name>` — jump to a specific stage (e.g. send back to develop after review)
   - `--worker <id>` — override the worker for the next stage
@@ -540,9 +524,9 @@ history:
 
 | Status | Meaning | Set by |
 |--------|---------|--------|
-| `pending` | Feature created, intake not yet run | `orc work` |
-| `ready` | Stage complete, queued for next agent | `orc mark <ticket> next` |
-| `active` | Agent is actively working | `orc next`, `orc mark <ticket> start` |
+| `pending` | Session not yet started for the current stage | `orc work`, `orc mark <ticket> next` |
+| `ready` | Human-set: cleared for the next session | human |
+| `active` | Agent is actively working | `orc mark <ticket> start`, `orc mark <ticket> resume` |
 | `paused` | Human needed — input, approval, or external blocker | `orc mark <ticket> pause` |
 | `done` | All stages complete, or explicitly closed | `orc mark <ticket> next` (final stage) or `orc mark <ticket> done` |
 | `archived` | Feature folder moved to `_archive/` | `orc archive` |
@@ -598,3 +582,11 @@ This means no agent ever starts cold. The prompt is a complete handoff: what the
 3. `worker:` for the current stage in `orc.yaml`
 
 If no worker is found at any step, `orc next` exits with a clear error pointing to `orc.yaml`. Use `--dry` to preview the full launch command before running it.
+
+---
+
+## Further reading
+
+- [Context Loss: Why Your AI Coding Agent Forgets](https://cleanaim.com/silent-wiring/problems/context-loss/) — CleanAim
+- [Agent Memory vs. Context Engineering: What Persists Between Sessions](https://www.augmentcode.com/guides/agent-memory-vs-context-engineering) — Augment Code
+- [Codified Context: Infrastructure for AI Agents in a Complex Codebase](https://arxiv.org/abs/2602.20478) — arXiv 2026
