@@ -38,12 +38,21 @@ func pngAspectHeight(data []byte, cols int) int {
 	return cols * imgH / imgW
 }
 
-// renderPortrait renders PNG data as a terminal image at cols×rows cells using
-// chafa. Results are cached by (class, cols, rows) so chafa only re-runs when
-// the size or subject changes. Returns "" if chafa is not installed.
+// renderPortrait renders PNG data as a terminal image at cols×rows cells.
+// On kitty/Ghostty it uses Kitty Unicode placeholders for true pixel output
+// (see portrait_kitty.go); elsewhere it falls back to chafa character art.
+// Results are cached by (class, cols, rows) so neither path re-runs on every
+// Bubble Tea render cycle. Returns "" if no renderer is available.
 func renderPortrait(class string, data []byte, cols, rows int) string {
 	if portraitCache.class == class && portraitCache.cols == cols && portraitCache.rows == rows {
 		return portraitCache.out
+	}
+
+	if kittyPortraitSupported() {
+		if out := renderPortraitKitty(class, data, cols, rows); out != "" {
+			portraitCache = portraitCacheEntry{class: class, cols: cols, rows: rows, out: out}
+			return out
+		}
 	}
 
 	path, err := exec.LookPath("chafa")

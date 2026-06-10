@@ -1244,11 +1244,11 @@ func renderRouteChain(chain []routeStep, loops []repairLoop, maxW int) []string 
 
 func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 	const (
-		wTicket  = 12
-		wName    = 22
-		wStatus  = 20
-		wTmux    = 6
-		wHealth  = 2
+		wTicket = 12
+		wName   = 22
+		wStatus = 20
+		wTmux   = 6
+		wHealth = 2
 	)
 	// fixed overhead: leading space + static columns + separators (6 × "  ")
 	fixed := 1 + wTicket + wName + wStatus + wTmux + wHealth + 6*2
