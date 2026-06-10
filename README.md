@@ -385,6 +385,43 @@ my-workspace/
   worktrees/         git worktrees for ticket branches (gitignored)
 ```
 
+## Feature folder
+
+Every ticket is a self-contained context pack under `features/<slug>/`. Stages read what the previous one wrote and write their own outputs to a named subfolder — so any agent can pick up mid-flight without asking anyone.
+
+```
+features/STORY-123/
+  STATE.yaml          orc-managed — status, stage, worker, history
+  TICKET.md           intake writes   →  all stages read
+  SPEC.md             intake writes   →  develop, code-review read
+  PLAN.md             intake writes   →  develop reads
+  DECISIONS.md        any stage writes → any stage reads
+
+  develop/
+    HANDOFF.md        develop writes  →  code-review, pr-open read
+  code-review/
+    REVIEW.md         code-review writes → develop, pr-open read
+  pr-open/
+    PR.md             pr-open writes  →  pr-repair, qa-automation, human read
+  qa-automation/
+    PLAN.md           qa-automation writes and reads across sessions
+    RUNS.md
+    RESULT.md
+```
+
+The stage subfolder names match the stage names in `orc.yaml` — provenance is always unambiguous. If you need to find what `develop` produced, look in `develop/`.
+
+| File | Written by | Read by |
+|------|-----------|---------|
+| `STATE.yaml` | orc | orc, all agents |
+| `TICKET.md` | intake | all stages |
+| `SPEC.md` | intake | develop, code-review |
+| `PLAN.md` | intake | develop |
+| `DECISIONS.md` | any stage | any stage |
+| `develop/HANDOFF.md` | develop | code-review, pr-open, qa-automation |
+| `code-review/REVIEW.md` | code-review | develop, pr-open |
+| `pr-open/PR.md` | pr-open | pr-repair, qa-automation, human |
+
 ## orc.yaml
 
 `orc.yaml` is the workspace config. It declares repos, named workflows, loop
