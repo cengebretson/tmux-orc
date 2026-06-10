@@ -492,19 +492,39 @@ func ClearJIT(featureDir string) error {
 	})
 }
 
+// RepoError is a single structured problem found by ValidateRepos.
+type RepoError struct {
+	Field   string // dotted path, e.g. "repos.myrepo.main" or "next_action.cwd"
+	Message string // human-readable detail
+}
+
+// RepoValidationErrors is returned by ValidateRepos when one or more problems are found.
+type RepoValidationErrors []RepoError
+
+func (e RepoValidationErrors) Error() string {
+	msgs := make([]string, len(e))
+	for i, r := range e {
+		msgs[i] = r.Field + ": " + r.Message
+	}
+	return "STATE.yaml repo validation failed:\n  " + strings.Join(msgs, "\n  ")
+}
+
 // ValidateRepos checks that repo fields in STATE.yaml are internally consistent
 // and point to paths that make sense within the workspace. Returns a non-nil
-// error listing all problems found. Only validates fields that are set — a repo
-// with no worktree recorded is not an error.
+// RepoValidationErrors listing all problems found. Only validates fields that
+// are set — a repo with no worktree recorded is not an error.
 func ValidateRepos(s *State, workspaceRoot string) error {
 	worktreesRoot := filepath.Join(workspaceRoot, "worktrees")
-	var errs []string
+	var errs RepoValidationErrors
 
 	for name, r := range s.Repos {
 		// main must exist if set
 		if r.Main != "" {
 			if _, err := os.Stat(r.Main); os.IsNotExist(err) {
-				errs = append(errs, fmt.Sprintf("repos.%s.main %q does not exist", name, r.Main))
+				errs = append(errs, RepoError{
+					Field:   fmt.Sprintf("repos.%s.main", name),
+					Message: fmt.Sprintf("%q does not exist", r.Main),
+				})
 			}
 		}
 
@@ -516,14 +536,23 @@ func ValidateRepos(s *State, workspaceRoot string) error {
 			}
 			rel, err := filepath.Rel(worktreesRoot, abs)
 			if err != nil || strings.HasPrefix(rel, "..") {
-				errs = append(errs, fmt.Sprintf("repos.%s.worktree %q is not under worktrees/ in the workspace", name, r.Worktree))
+				errs = append(errs, RepoError{
+					Field:   fmt.Sprintf("repos.%s.worktree", name),
+					Message: fmt.Sprintf("%q is not under worktrees/ in the workspace", r.Worktree),
+				})
 			} else if _, err := os.Stat(abs); os.IsNotExist(err) {
-				errs = append(errs, fmt.Sprintf("repos.%s.worktree %q does not exist", name, r.Worktree))
+				errs = append(errs, RepoError{
+					Field:   fmt.Sprintf("repos.%s.worktree", name),
+					Message: fmt.Sprintf("%q does not exist", r.Worktree),
+				})
 			}
 
 			// branch must be non-empty when a worktree is recorded
 			if r.Branch == "" {
-				errs = append(errs, fmt.Sprintf("repos.%s.branch is empty but worktree is set", name))
+				errs = append(errs, RepoError{
+					Field:   fmt.Sprintf("repos.%s.branch", name),
+					Message: "empty but worktree is set",
+				})
 			}
 		}
 	}
@@ -557,12 +586,15 @@ func ValidateRepos(s *State, workspaceRoot string) error {
 			}
 		}
 		if !matched {
-			errs = append(errs, fmt.Sprintf("next_action.cwd %q does not match any recorded worktree", s.NextAction.CWD))
+			errs = append(errs, RepoError{
+				Field:   "next_action.cwd",
+				Message: fmt.Sprintf("%q does not match any recorded worktree", s.NextAction.CWD),
+			})
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("STATE.yaml repo validation failed:\n  %s", strings.Join(errs, "\n  "))
+		return errs
 	}
 	return nil
 }

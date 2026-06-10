@@ -114,6 +114,7 @@ func resolveWorker(allWorkers []*workers.Worker, flagOverride, stageOwner, confi
 		if w := workers.FindByID(allWorkers, flagOverride); w != nil {
 			return w, "flag override", nil
 		}
+		return nil, "", fmt.Errorf("worker %q not found in workers/", flagOverride)
 	}
 	if stageOwner != "" {
 		if w := workers.FindByID(allWorkers, stageOwner); w != nil {
@@ -139,7 +140,7 @@ func buildPrompt(s *state.State, nextStage, advanceMode string, loopDef *config.
 	}
 
 	preamble := fmt.Sprintf(
-		"Before starting: read AGENTS.md and ORC.md. Run `orc mark %s start` to mark in_progress.\n\n",
+		"Before starting: read AGENTS.md and ORC.md. Run `orc mark %s start` to mark as active.\n\n",
 		s.Ticket,
 	)
 

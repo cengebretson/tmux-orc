@@ -245,7 +245,7 @@ repos:
 
 	assertCheck(t, report, "STATE.yaml.repos.app.main", validate.Fail, "does not exist")
 	assertCheck(t, report, "STATE.yaml.repos.app.worktree", validate.Fail, "is not under worktrees/")
-	assertCheck(t, report, "STATE.yaml.repos.app.branch", validate.Fail, "branch is empty")
+	assertCheck(t, report, "STATE.yaml.repos.app.branch", validate.Fail, "empty but worktree is set")
 	assertCheck(t, report, "STATE.yaml.next_action.cwd", validate.Fail, "does not match any recorded worktree")
 }
 

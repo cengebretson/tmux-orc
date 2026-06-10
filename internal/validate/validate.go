@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -141,6 +142,8 @@ func Run(root, featureDir string) *Report {
 		r.Checks = append(r.Checks, fail("STATE.yaml.stage.name", fmt.Sprintf("%q not found in %q pipeline", stageName, workflow)))
 	} else if stageInWorkflow {
 		r.Checks = append(r.Checks, okd("STATE.yaml.stage.name", stageName))
+	} else if stageName != "" {
+		r.Checks = append(r.Checks, warn("STATE.yaml.stage.name", fmt.Sprintf("workflow %q has no stages defined", workflow)))
 	}
 
 	// Stage markdown file exists.
@@ -263,14 +266,14 @@ func appendStateShapeChecks(r *Report, s *state.State) {
 }
 
 func appendRepoValidationChecks(r *Report, err error) {
-	for _, line := range strings.Split(err.Error(), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "STATE.yaml repo validation failed") {
-			continue
+	var repoErrs state.RepoValidationErrors
+	if errors.As(err, &repoErrs) {
+		for _, e := range repoErrs {
+			r.Checks = append(r.Checks, fail("STATE.yaml."+e.Field, e.Message))
 		}
-		name := "STATE.yaml." + strings.Fields(line)[0]
-		r.Checks = append(r.Checks, fail(name, line))
+		return
 	}
+	r.Checks = append(r.Checks, fail("STATE.yaml.repos", err.Error()))
 }
 
 // Print renders the validation report to stdout.
