@@ -77,17 +77,20 @@ additional features:
 | Tool | Purpose | Install |
 |------|---------|---------|
 | `tmux` | Session management — `orc work` launches and attaches agent sessions | `brew install tmux` |
-| `chafa` | Pixel portrait rendering in `orc tui` (`!` character sheet) | `brew install chafa` |
+| `chafa` | Character-art portraits in `orc tui` (`!` character sheet) on terminals without Kitty graphics support | `brew install chafa` |
 
-**tmux + chafa pixel rendering:** if you run inside tmux, add this to your
-`tmux.conf` to allow Kitty graphics protocol passthrough to the outer terminal:
+**Pixel portraits:** on kitty and Ghostty, `orc tui` renders portraits as true
+pixel images natively (Kitty graphics protocol, Unicode placeholders) — no
+extra tools needed. Inside tmux, add this to your `tmux.conf` so the one-time
+image transmission reaches the outer terminal:
 
 ```
 set -g allow-passthrough on
 ```
 
-Without it, tmux silently drops the image escape sequences and portraits fall
-back to character art.
+Without it — or on other terminals — portraits fall back to chafa character
+art, then to built-in ASCII art if chafa is not installed. Set
+`ORC_PORTRAIT=symbols` or `ORC_PORTRAIT=kitty` to override the detection.
 
 ## Getting started
 

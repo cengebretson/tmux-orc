@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -78,6 +79,11 @@ func kittyPortraitSupported() bool {
 	case "symbols":
 		return false
 	}
+	// Without allow-passthrough tmux drops the image transmission but the
+	// placeholder cells would still render, as garbage — fall back instead.
+	if os.Getenv("TMUX") != "" && !tmuxAllowsPassthrough() {
+		return false
+	}
 	if os.Getenv("KITTY_WINDOW_ID") != "" {
 		return true
 	}
@@ -86,6 +92,17 @@ func kittyPortraitSupported() bool {
 	}
 	term := os.Getenv("TERM")
 	return strings.Contains(term, "kitty") || strings.Contains(term, "ghostty")
+}
+
+// tmuxAllowsPassthrough checks the pane's effective allow-passthrough value.
+// Stubbed in tests.
+var tmuxAllowsPassthrough = func() bool {
+	out, err := exec.Command("tmux", "show", "-Apv", "allow-passthrough").Output()
+	if err != nil {
+		return false
+	}
+	v := strings.TrimSpace(string(out))
+	return strings.HasPrefix(v, "on") || strings.HasPrefix(v, "all")
 }
 
 // kittyImageIDs assigns each class a stable image ID in 1..255 so the ID fits

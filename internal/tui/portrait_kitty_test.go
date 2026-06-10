@@ -72,7 +72,7 @@ func TestKittyTransmitChunksAndTmuxWrap(t *testing.T) {
 }
 
 func TestKittyPortraitSupported(t *testing.T) {
-	for _, v := range []string{"ORC_PORTRAIT", "KITTY_WINDOW_ID", "GHOSTTY_RESOURCES_DIR", "GHOSTTY_BIN_DIR", "TERM"} {
+	for _, v := range []string{"ORC_PORTRAIT", "KITTY_WINDOW_ID", "GHOSTTY_RESOURCES_DIR", "GHOSTTY_BIN_DIR", "TERM", "TMUX"} {
 		t.Setenv(v, "")
 	}
 	if kittyPortraitSupported() {
@@ -89,6 +89,26 @@ func TestKittyPortraitSupported(t *testing.T) {
 	t.Setenv("ORC_PORTRAIT", "kitty")
 	if !kittyPortraitSupported() {
 		t.Error("ORC_PORTRAIT=kitty should force pixel mode")
+	}
+}
+
+func TestKittyPortraitSupportedTmuxPassthrough(t *testing.T) {
+	for _, v := range []string{"ORC_PORTRAIT", "KITTY_WINDOW_ID", "GHOSTTY_RESOURCES_DIR", "GHOSTTY_BIN_DIR"} {
+		t.Setenv(v, "")
+	}
+	t.Setenv("TERM", "xterm-ghostty")
+	t.Setenv("TMUX", "/tmp/tmux-501/default,123,0")
+
+	orig := tmuxAllowsPassthrough
+	defer func() { tmuxAllowsPassthrough = orig }()
+
+	tmuxAllowsPassthrough = func() bool { return false }
+	if kittyPortraitSupported() {
+		t.Error("supported inside tmux without allow-passthrough")
+	}
+	tmuxAllowsPassthrough = func() bool { return true }
+	if !kittyPortraitSupported() {
+		t.Error("not supported inside tmux with allow-passthrough on")
 	}
 }
 
