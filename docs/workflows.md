@@ -128,6 +128,32 @@ Workspace configuration should satisfy these rules:
 - `loop.via` names a loop stage owned by exactly one workflow stage.
 - `loop.on_max`, when set, is `pause`.
 
+`orc` validates this configuration in the paths that would otherwise route work:
+
+- `orc doctor` reports invalid config under the `config` check.
+- `orc health <ticket>` validates workspace config along with that ticket's `STATE.yaml`.
+- `orc next <ticket>` refuses to launch when the workspace config is invalid.
+- `orc mark <ticket> next` refuses to advance when the workspace config is invalid.
+
+## State Transitions
+
+Agents should use `orc mark`; they should not hand-edit `STATE.yaml`.
+
+| Command | Allowed From | Result |
+|---------|--------------|--------|
+| `orc mark <ticket> start` | `pending`, `ready`, `paused` | Marks the ticket `active` and records the session start. |
+| `orc mark <ticket> next --result "<summary>"` | `active`, `ready`, `paused` | Advances to the next workflow stage, returns from a loop stage, or marks the ticket `done` after the final stage. |
+| `orc mark <ticket> next --stage <name> --worker <id>` | `active`, `ready`, `paused` | Moves to a configured workflow or loop stage and assigns the named worker. |
+| `orc mark <ticket> pause "<reason>"` | Any non-final feature state | Marks the ticket `paused` and records why a human or external condition is needed. |
+| `orc mark <ticket> done --result "<summary>"` | `active`, `ready`, `paused` | Explicitly closes active work. |
+
+Transition validation rejects:
+
+- `next` while a ticket is still `pending`; start the session first.
+- `done` while a ticket is still `pending`.
+- `next --stage` values that do not name a configured workflow or loop stage.
+- `next --worker` values that do not name a worker file in `workers/`.
+
 ## Where to Put Policy
 
 - Put stage order, default workers, and loop shape in `orc.yaml`.

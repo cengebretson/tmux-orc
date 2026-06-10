@@ -45,7 +45,15 @@ orc mark <ticket> done [--result "<what was done>"]                  # all stage
 
 Use `next` when the stage exit criteria are met. If no stages remain, status is automatically set to `done`.
 Use `pause` when you need a human decision, approval, information, or when an external condition prevents progress.
-Use `done` to explicitly close a ticket at any point.
+Use `done` to explicitly close active, ready, or paused work.
+
+Transition guards:
+- `start` is allowed only from `pending`, `ready`, or `paused`.
+- `next` is rejected while a ticket is still `pending`; start the session first.
+- `next --stage` must name a configured workflow or loop stage.
+- `next --worker` must name a worker from `workers/`.
+- `done` is rejected from `pending`.
+- Invalid `orc.yaml` blocks `next`.
 
 ---
 

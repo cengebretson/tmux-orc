@@ -306,8 +306,8 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
   - `--dry-run` — preview without writing
   - `--force` — overwrite existing files
 - `orc health` — check workspace filesystem health
-  - `orc health <ticket>` — validate a ticket's state: workflow, stage, worker, worktrees
-- `orc doctor` — check workspace health plus local tools, worker engines, tmux, and state locks
+  - `orc health <ticket>` — validate a ticket's `STATE.yaml`: workflow, stage, worker, next action, repos, and worktrees
+- `orc doctor` — check workspace health plus `orc.yaml`, local tools, worker engines, tmux, and state locks
 - `orc status` — show all features and their current workflow/stage
   - `orc status <ticket>` — show full details for a specific ticket
   - `--json` — output as JSON for scripting
@@ -331,13 +331,16 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
 
 These are called by agents at the end of each session. They are hidden from `orc --help` but visible via `orc help-all`.
 
+- `orc mark <ticket> start` — mark the current session active; allowed from `pending`, `ready`, or `paused`
 - `orc mark <ticket> next` — mark the current stage complete and advance (`done` if no stages remain)
   - `--stage <name>` — jump to a specific stage (e.g. send back to develop after review)
   - `--worker <id>` — override the worker for the next stage
   - `--result "<summary>"` — record what was accomplished in history
 - `orc mark <ticket> pause "<reason>"` — pause for human input, approval, or an external blocker
-- `orc mark <ticket> done` — mark a ticket as done — force-close at any point
+- `orc mark <ticket> done` — mark active, ready, or paused work as done
 - `orc mark <ticket> jit "<summary>"` — record a jit task as complete and clear `runtime.jit`
+
+`orc mark` validates transitions before writing `STATE.yaml`: pending tickets must be started before `next`, `done` is rejected from `pending`, stage and worker overrides must exist, and invalid workspace config blocks advancement.
 
 ## Workspace layout
 
@@ -483,8 +486,9 @@ history:
 
 | Status | Meaning | Set by |
 |--------|---------|--------|
-| `pending` | Feature created or stage complete, waiting for next `orc next` | `orc work`, `orc mark <ticket> next` |
-| `active` | Agent is actively working | `orc next` |
+| `pending` | Feature created, intake not yet run | `orc work` |
+| `ready` | Stage complete, queued for next agent | `orc mark <ticket> next` |
+| `active` | Agent is actively working | `orc next`, `orc mark <ticket> start` |
 | `paused` | Human needed — input, approval, or external blocker | `orc mark <ticket> pause` |
 | `done` | All stages complete, or explicitly closed | `orc mark <ticket> next` (final stage) or `orc mark <ticket> done` |
 | `archived` | Feature folder moved to `_archive/` | `orc archive` |
