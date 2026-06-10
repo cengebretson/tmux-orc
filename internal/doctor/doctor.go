@@ -216,7 +216,7 @@ func appendStateLockChecks(report *Report, root string) {
 		detail := lock.Detail
 		switch lock.Status {
 		case state.LockActive:
-			detail += " — another orc process may be running"
+			detail += " — if no orc process is running, remove the lock file to unlock"
 		case state.LockStale:
 			detail += " — will be recovered on next state write"
 		default:

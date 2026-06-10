@@ -3,7 +3,7 @@
 This file turns the architecture review into actionable work. The goal is to harden
 the file-backed workflow model without turning `orc` into a hidden workflow engine.
 
-## 1. Define the `STATE.yaml` Contract
+## ~~1. Define the `STATE.yaml` Contract~~ ✓ Done
 
 **Why:** `STATE.yaml` is the durable source of truth for every feature. As the
 tool grows, the state file needs an explicit ownership and compatibility model.
@@ -27,7 +27,7 @@ tool grows, the state file needs an explicit ownership and compatibility model.
 - `orc health <ticket>` reports actionable errors for invalid state.
 - Existing test fixtures still load successfully.
 
-## 2. Formalize Workflow Semantics in `orc.yaml`
+## ~~2. Formalize Workflow Semantics in `orc.yaml`~~ ✓ Done
 
 **Why:** Workflow policy should live in workspace files, but `orc` still needs to
 enforce generic transition rules consistently.
@@ -53,7 +53,7 @@ enforce generic transition rules consistently.
 - Invalid workflow config fails clearly in `orc doctor` or `orc health`.
 - Tests cover missing workers, duplicate stages, and invalid loop targets.
 
-## 3. Keep `runner.Compute` as the Single Next-Action Resolver
+## ~~3. Keep `runner.Compute` as the Single Next-Action Resolver~~ ✓ Done
 
 **Why:** The CLI, TUI, dry-run output, tmux launch path, and future automation all
 need the same answer to “what happens next?”
@@ -76,7 +76,7 @@ need the same answer to “what happens next?”
 - New next-action behavior can be tested through `runner.Compute`.
 - No command handler independently reconstructs stage/worker/prompt behavior.
 
-## 4. Strengthen State Mutation Safety
+## ~~4. Strengthen State Mutation Safety~~ ✓ Done
 
 **Why:** File-backed coordination only works if state updates are atomic,
 recoverable, and clear when something is stale or locked.
