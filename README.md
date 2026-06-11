@@ -130,7 +130,8 @@ orc doctor
 
 `orc doctor` checks workspace files plus local readiness: configured worker
 engines on your `PATH`, tmux availability, and any `STATE.yaml.lock` files
-that could affect ticket updates.
+that could affect ticket updates. Add `--fix` to remove provably-stale locks
+(dead PID, or old without a valid PID) — live locks are never touched.
 
 ### 4. Start working on a ticket
 
@@ -312,6 +313,7 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
   - `--force` — overwrite existing files
 - `orc doctor` — check workspace health plus `orc.yaml`, local tools, worker engines, tmux, and state locks
   - `orc doctor <ticket>` — validate a ticket's `STATE.yaml`: workflow, stage, worker, next action, repos, and worktrees
+  - `--fix` — remove provably-stale state locks (dead PID or old without a valid PID); live locks are never touched
 - `orc status` — show all features and their current workflow/stage
   - `orc status <ticket>` — show full details for a specific ticket
   - `--json` — output as JSON for scripting
@@ -565,7 +567,8 @@ State writes use `STATE.yaml.lock` with atomic temp-file replacement. If an orc
 process dies mid-write, the next state write can recover dead-PID locks and old
 malformed locks automatically. `orc doctor` reports any lock files it finds so
 you can tell whether a live process is holding state or a stale lock will be
-recovered on the next write.
+recovered on the next write; `orc doctor --fix` removes the stale ones
+immediately without waiting for a write.
 
 ## Workers
 

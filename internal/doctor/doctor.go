@@ -57,6 +57,10 @@ func (r *Report) OK() bool {
 
 type Options struct {
 	LookPath func(string) (string, error)
+	// Fix removes provably-stale state locks (dead PID, or old without a
+	// valid PID) instead of only reporting them. Live or ambiguous locks
+	// are never touched.
+	Fix bool
 }
 
 func Run(root string) *Report {
@@ -71,7 +75,7 @@ func RunWithOptions(root string, opts Options) *Report {
 	report := &Report{Root: root}
 	appendHealth(report, health.Run(root))
 	appendConfigChecks(report, root)
-	appendStateLockChecks(report, root)
+	appendStateLockChecks(report, root, opts.Fix)
 	appendToolChecks(report, root, opts.LookPath)
 	return report
 }
@@ -169,7 +173,7 @@ func appendToolChecks(report *Report, root string, lookPath func(string) (string
 	}
 }
 
-func appendStateLockChecks(report *Report, root string) {
+func appendStateLockChecks(report *Report, root string, fix bool) {
 	featuresDir := filepath.Join(root, "features")
 	if _, err := os.Stat(featuresDir); err != nil {
 		return
@@ -218,7 +222,21 @@ func appendStateLockChecks(report *Report, root string) {
 		case state.LockActive:
 			detail += " — if no orc process is running, remove the lock file to unlock"
 		case state.LockStale:
-			detail += " — will be recovered on next state write"
+			if !fix {
+				detail += " — will be recovered on next state write"
+				break
+			}
+			removed, fixErr := state.ClearStaleLock(featureDir)
+			switch {
+			case fixErr != nil:
+				status = Fail
+				detail += fmt.Sprintf(" — fix failed: %v", fixErr)
+			case removed:
+				status = OK
+				detail += " — stale lock removed"
+			default:
+				detail += " — not removed (lock changed since inspection)"
+			}
 		default:
 			status = OK
 		}

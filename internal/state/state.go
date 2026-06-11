@@ -231,6 +231,27 @@ func InspectLock(featureDir string) (LockInfo, error) {
 	return inspectLockPath(filepath.Join(featureDir, Filename+".lock"))
 }
 
+// ClearStaleLock removes the feature's state lock only when it is provably
+// stale — dead PID, or old without a valid PID. It reports whether a lock was
+// removed; live or ambiguous locks are left untouched.
+func ClearStaleLock(featureDir string) (bool, error) {
+	lockName := filepath.Join(featureDir, Filename+".lock")
+	lock, err := inspectLockPath(lockName)
+	if err != nil {
+		return false, err
+	}
+	if lock.Status != LockStale {
+		return false, nil
+	}
+	if err := os.Remove(lockName); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("removing stale state lock %s: %w", lockName, err)
+	}
+	return true, nil
+}
+
 func removeStaleLock(lockName string) (bool, error) {
 	lock, err := inspectLockPath(lockName)
 	if err != nil {

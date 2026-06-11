@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
@@ -184,6 +185,73 @@ func TestRunWithOptionsReportsStaleStateLock(t *testing.T) {
 	}
 	if check.Detail != "old lock without a valid PID — will be recovered on next state write" {
 		t.Fatalf("state lock detail = %q", check.Detail)
+	}
+}
+
+func TestRunWithOptionsFixRemovesStaleLock(t *testing.T) {
+	root := t.TempDir()
+	featureDir := filepath.Join(root, "features", "TICKET-1")
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte("not-a-pid\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Minute)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	report := doctor.RunWithOptions(root, doctor.Options{
+		LookPath: func(name string) (string, error) {
+			return "/bin/" + name, nil
+		},
+		Fix: true,
+	})
+
+	check := findCheck(report, "state locks", "TICKET-1")
+	if check == nil {
+		t.Fatal("state lock check not found")
+	}
+	if check.Status != doctor.OK {
+		t.Fatalf("state lock status = %v, want OK: %s", check.Status, check.Detail)
+	}
+	if check.Detail != "old lock without a valid PID — stale lock removed" {
+		t.Fatalf("state lock detail = %q", check.Detail)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("lock should be gone, stat err = %v", err)
+	}
+}
+
+func TestRunWithOptionsFixKeepsLiveLock(t *testing.T) {
+	root := t.TempDir()
+	featureDir := filepath.Join(root, "features", "TICKET-1")
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := doctor.RunWithOptions(root, doctor.Options{
+		LookPath: func(name string) (string, error) {
+			return "/bin/" + name, nil
+		},
+		Fix: true,
+	})
+
+	check := findCheck(report, "state locks", "TICKET-1")
+	if check == nil {
+		t.Fatal("state lock check not found")
+	}
+	if check.Status != doctor.Warning {
+		t.Fatalf("state lock status = %v, want Warning: %s", check.Status, check.Detail)
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("live lock should remain: %v", err)
 	}
 }
 

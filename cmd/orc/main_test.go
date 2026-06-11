@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cengebretson/orc/internal/state"
 )
@@ -86,6 +87,38 @@ func TestRunDoctorTicketPrintsValidationReport(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("doctor output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestRunDoctorFixRemovesStaleLock(t *testing.T) {
+	resetCommandGlobals(t)
+	root := t.TempDir()
+	featureDir := filepath.Join(root, "features", "TICKET-1")
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte("not-a-pid\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Minute)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	globalWorkspace = root
+	doctorFix = true
+
+	// The bare temp workspace fails other doctor checks; only the lock
+	// repair is under test here.
+	out, _ := captureStdout(func() error {
+		return runDoctor(nil, nil)
+	})
+
+	if !strings.Contains(out, "stale lock removed") {
+		t.Fatalf("doctor --fix output missing removal notice:\n%s", out)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("lock should be gone, stat err = %v", err)
 	}
 }
 
@@ -364,6 +397,7 @@ func resetCommandGlobals(t *testing.T) {
 	t.Helper()
 
 	oldWorkspace := globalWorkspace
+	oldDoctorFix := doctorFix
 	oldStatusJSON := statusJSON
 	oldJITDry := jitDry
 	oldJITWorker := jitWorker
@@ -373,6 +407,7 @@ func resetCommandGlobals(t *testing.T) {
 	oldMarkStage := markStage
 	t.Cleanup(func() {
 		globalWorkspace = oldWorkspace
+		doctorFix = oldDoctorFix
 		statusJSON = oldStatusJSON
 		jitDry = oldJITDry
 		jitWorker = oldJITWorker
@@ -383,6 +418,7 @@ func resetCommandGlobals(t *testing.T) {
 	})
 
 	globalWorkspace = "."
+	doctorFix = false
 	statusJSON = false
 	jitDry = false
 	jitWorker = ""

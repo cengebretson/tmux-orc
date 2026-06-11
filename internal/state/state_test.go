@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
@@ -313,6 +314,56 @@ stage:
 	}
 
 	assertNoStateArtifacts(t, featureDir)
+}
+
+func TestClearStaleLockRemovesDeadPIDLock(t *testing.T) {
+	featureDir := t.TempDir()
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte("999999999\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := state.ClearStaleLock(featureDir)
+	if err != nil {
+		t.Fatalf("ClearStaleLock: %v", err)
+	}
+	if !removed {
+		t.Fatal("removed = false, want true")
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("lock should be gone, stat err = %v", err)
+	}
+}
+
+func TestClearStaleLockKeepsLiveLock(t *testing.T) {
+	featureDir := t.TempDir()
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := state.ClearStaleLock(featureDir)
+	if err != nil {
+		t.Fatalf("ClearStaleLock: %v", err)
+	}
+	if removed {
+		t.Fatal("removed = true, want false")
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("live lock should remain: %v", err)
+	}
+}
+
+func TestClearStaleLockNoLockIsNoOp(t *testing.T) {
+	featureDir := t.TempDir()
+
+	removed, err := state.ClearStaleLock(featureDir)
+	if err != nil {
+		t.Fatalf("ClearStaleLock: %v", err)
+	}
+	if removed {
+		t.Fatal("removed = true, want false")
+	}
 }
 
 func assertNoStateArtifacts(t *testing.T, featureDir string) {

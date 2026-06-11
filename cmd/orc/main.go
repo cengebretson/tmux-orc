@@ -89,6 +89,8 @@ var doctorCmd = &cobra.Command{
 	RunE:  runDoctor,
 }
 
+var doctorFix bool
+
 var nextCmd = &cobra.Command{
 	Use:   "next <ticket>",
 	Short: "Launch the next agent for a ticket — use --dry to preview without running",
@@ -236,6 +238,7 @@ func init() {
 	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Print what would be created without writing files")
 	initCmd.Flags().BoolVar(&initForce, "force", false, "Overwrite existing generated files")
 
+	doctorCmd.Flags().BoolVar(&doctorFix, "fix", false, "Remove provably-stale state locks (dead PID or old without a valid PID); live locks are never touched")
 	nextCmd.Flags().BoolVar(&nextJSON, "json", false, "Output as JSON")
 	nextCmd.Flags().BoolVar(&nextDry, "dry", false, "Print the launch command without executing it")
 	nextCmd.Flags().StringVar(&nextWorker, "worker", "", "Override the workflow's default worker (worker ID)")
@@ -404,7 +407,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	report := doctor.Run(root)
+	report := doctor.RunWithOptions(root, doctor.Options{Fix: doctorFix})
 	doctor.Print(report)
 	if !report.OK() {
 		return fmt.Errorf("doctor found problems")
