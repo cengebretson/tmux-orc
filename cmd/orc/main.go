@@ -399,6 +399,15 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		if doctorFix {
+			removed, err := state.ClearStaleLock(featureDir)
+			if err != nil {
+				return err
+			}
+			if removed {
+				fmt.Printf("✓ removed stale %s.lock\n\n", state.Filename)
+			}
+		}
 		report := validate.Run(root, featureDir)
 		validate.Print(report)
 		if !report.OK() {

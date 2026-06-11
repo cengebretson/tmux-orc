@@ -122,6 +122,34 @@ func TestRunDoctorFixRemovesStaleLock(t *testing.T) {
 	}
 }
 
+func TestRunDoctorTicketFixRemovesStaleLock(t *testing.T) {
+	resetCommandGlobals(t)
+	root := t.TempDir()
+	featureDir := filepath.Join(root, "features", "TEST-1")
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(featureDir, "STATE.yaml.lock")
+	if err := os.WriteFile(lockPath, []byte("999999999\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	globalWorkspace = root
+	doctorFix = true
+
+	// The bare feature dir fails validation; only the lock repair is
+	// under test here.
+	out, _ := captureStdout(func() error {
+		return runDoctor(nil, []string{"TEST-1"})
+	})
+
+	if !strings.Contains(out, "✓ removed stale STATE.yaml.lock") {
+		t.Fatalf("doctor <ticket> --fix output missing removal notice:\n%s", out)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("lock should be gone, stat err = %v", err)
+	}
+}
+
 func TestRunJITDryPrintsResolvedWorkerAndPrompt(t *testing.T) {
 	resetCommandGlobals(t)
 	globalWorkspace = fixtureWorkspace()
