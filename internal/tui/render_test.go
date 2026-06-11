@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/charmbracelet/lipgloss"
@@ -54,6 +55,28 @@ func TestDrawBoxLabeledWidthInvariant(t *testing.T) {
 	for i, line := range strings.Split(box, "\n") {
 		if w := lipgloss.Width(line); w != outerW {
 			t.Errorf("line %d width = %d, want %d: %q", i, w, outerW, line)
+		}
+	}
+}
+
+// ── health section ───────────────────────────────────────────────
+
+func TestRenderHealthLinesGroupsAndIcons(t *testing.T) {
+	m := Model{healthItems: []doctor.Check{
+		{Group: "workspace", Name: "AGENTS.md", Status: doctor.OK},
+		{Group: "workspace", Name: "features/", Status: doctor.Warning},
+		{Group: "tools", Name: "tmux", Status: doctor.OK},
+		{Group: "tools", Name: "codex", Status: doctor.Fail},
+	}}
+
+	plain := ansi.Strip(strings.Join(m.renderHealthLines(80), "\n"))
+
+	for _, want := range []string{
+		"workspace", "tools",
+		"✓ AGENTS.md", "⚠ features/", "✓ tmux", "✗ codex",
+	} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("health lines missing %q:\n%s", want, plain)
 		}
 	}
 }

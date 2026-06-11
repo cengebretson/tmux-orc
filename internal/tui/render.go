@@ -71,10 +71,6 @@ func padRight(s string, width int) string {
 	return s + strings.Repeat(" ", width-w)
 }
 
-// renderHealthLines renders health items grouped by their Group field.
-// Items with no group flow together on wrapped rows. Each new group gets a
-// header line and its items indented on their own wrapped rows below it.
-
 // wrapText wraps s to fit within maxW columns, breaking on word boundaries.
 func wrapText(s string, maxW int) string {
 	words := strings.Fields(s)

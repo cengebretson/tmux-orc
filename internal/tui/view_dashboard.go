@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cengebretson/orc/internal/config"
-	"github.com/cengebretson/orc/internal/health"
+	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -290,16 +290,15 @@ func (m Model) renderHealthLines(maxW int) []string {
 
 	for _, item := range m.healthItems {
 		var s lipgloss.Style
+		icon := "✓"
 		switch item.Status {
-		case health.OK:
+		case doctor.OK:
 			s = styleHealthOK
-		case health.Empty:
+		case doctor.Warning:
 			s = styleHealthWarn
+			icon = "⚠"
 		default:
 			s = styleHealthErr
-		}
-		icon := "✓"
-		if item.Status != health.OK {
 			icon = "✗"
 		}
 		part := s.Render(icon + " " + strings.TrimSpace(item.Name))

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/cengebretson/orc/internal/config"
-	"github.com/cengebretson/orc/internal/health"
+	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -62,7 +62,7 @@ func rainbowTick() tea.Cmd {
 
 type dataMsg struct {
 	features        []*featureRow
-	healthItems     []health.Result
+	healthItems     []doctor.Check
 	workflowNames   []string
 	workerNames     []string
 	allWorkers      []*workers.Worker
@@ -122,7 +122,7 @@ type Model struct {
 	root            string
 	view            viewState
 	features        []*featureRow
-	healthItems     []health.Result
+	healthItems     []doctor.Check
 	workflowNames   []string
 	workerNames     []string
 	allWorkers      []*workers.Worker

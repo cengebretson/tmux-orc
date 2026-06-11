@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
+	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/cengebretson/orc/internal/featurelist"
-	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,7 +16,7 @@ import (
 func loadData(root string) tea.Cmd {
 	return func() tea.Msg {
 		features := collectFeatures(root)
-		report := health.Run(root)
+		report := doctor.Run(root)
 
 		// build workflow chains from workflows.yaml
 		workflowCfg, _ := config.Load(root)
@@ -119,7 +119,7 @@ func loadData(root string) tea.Cmd {
 
 		return dataMsg{
 			features:        features,
-			healthItems:     report.Results,
+			healthItems:     report.Checks,
 			workflowNames:   wfNames,
 			workerNames:     workerNames,
 			allWorkers:      allWorkers,
