@@ -8,7 +8,6 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
+  settings:
+    errcheck:
+      check-type-assertions: true

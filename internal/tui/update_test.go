@@ -33,15 +33,25 @@ func keyMsg(s string) tea.KeyMsg {
 	}
 }
 
+// asModel asserts a tea.Model back to the concrete Model.
+func asModel(t *testing.T, tm tea.Model) Model {
+	t.Helper()
+	m, ok := tm.(Model)
+	if !ok {
+		t.Fatalf("model type = %T, want Model", tm)
+	}
+	return m
+}
+
 // press feeds a sequence of keys through handleKey and returns the final model.
 func press(t *testing.T, m Model, keys ...string) (Model, tea.Cmd) {
 	t.Helper()
 	var cmd tea.Cmd
 	var tm tea.Model = m
 	for _, k := range keys {
-		tm, cmd = tm.(Model).handleKey(keyMsg(k))
+		tm, cmd = asModel(t, tm).handleKey(keyMsg(k))
 	}
-	return tm.(Model), cmd
+	return asModel(t, tm), cmd
 }
 
 // testModel builds a dashboard model with three features and worker/workflow
@@ -279,7 +289,7 @@ func TestUpdateDataMsgClampsCursor(t *testing.T) {
 	m := testModel(t)
 	m.cursor = 2
 	tm, _ := m.Update(dataMsg{features: m.features[:1]})
-	got := tm.(Model)
+	got := asModel(t, tm)
 	if got.cursor != 0 {
 		t.Errorf("cursor = %d, want clamped to 0 after data shrank", got.cursor)
 	}
@@ -288,7 +298,7 @@ func TestUpdateDataMsgClampsCursor(t *testing.T) {
 func TestUpdateWindowSize(t *testing.T) {
 	m := testModel(t)
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 50})
-	got := tm.(Model)
+	got := asModel(t, tm)
 	if got.width != 120 || got.height != 50 {
 		t.Errorf("size = %dx%d, want 120x50", got.width, got.height)
 	}
@@ -313,7 +323,7 @@ func TestUpdateWindowSizeReflowsFileViewer(t *testing.T) {
 	wideLines := m.viewport.TotalLineCount()
 
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 48, Height: 40})
-	got := tm.(Model)
+	got := asModel(t, tm)
 	if got.viewport.TotalLineCount() <= wideLines {
 		t.Errorf("content lines = %d after shrinking from %d-wide render — viewer did not reflow",
 			got.viewport.TotalLineCount(), wideLines)
@@ -337,7 +347,7 @@ func TestUpdateWindowSizeReflowsWorkflowDetail(t *testing.T) {
 	wideLines := m.viewport.TotalLineCount()
 
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
-	got := tm.(Model)
+	got := asModel(t, tm)
 	if got.viewport.TotalLineCount() <= wideLines {
 		t.Errorf("content lines = %d after shrinking from %d — workflow detail did not reflow",
 			got.viewport.TotalLineCount(), wideLines)
