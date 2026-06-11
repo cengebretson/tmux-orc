@@ -7,17 +7,10 @@ below as a record.
 
 ## Open
 
-### CI (next up)
+### Release automation (later, when anyone else installs orc)
 
-No `.github/workflows`. The pre-commit hook is the only quality gate and it's
-opt-in (symlinked after clone), bypassable with `--no-verify`, and absent on
-other machines. This is the highest-leverage open item — everything else here
-is incremental.
-
-- [ ] Add a GitHub Actions workflow running `make check` (lint + test) on push/PR.
-      ~20 lines; pin the golangci-lint version to match local.
-- [ ] (Later, when anyone else installs orc) tags + release automation; version is
-      currently hardcoded to `dev` via ldflags.
+- [ ] Tags + release automation; version is currently hardcoded to `dev` via
+      ldflags. CI (below, done) is the prerequisite and now exists.
 
 ### TUI follow-ups (soft)
 
@@ -111,6 +104,19 @@ output dir, history entry on completion) plus refinements the spec lacked
 (`runtime.jit` visibility in status/TUI, `orc mark <ticket> jit` to close,
 concurrent-task blocking). The spec memory predated jit's implementation.
 
+### CI (done 2026-06-11)
+
+- [x] `.github/workflows/ci.yml` runs lint + test on push to main and on PRs.
+      golangci-lint pinned to v2.12.2 (matching local), Go version from
+      `go.mod`. Same gate as the pre-commit hook, no longer opt-in.
+
+### Pre-commit hook fmt check (done 2026-06-11)
+
+- [x] The gofmt check used `git diff --quiet` over the whole tree, so any
+      unstaged file (docs, scratch notes) blocked a commit even when
+      formatting was clean. Now keys off `gofmt -l` output directly — fails
+      only when Go files actually need reformatting, and names them.
+
 ### `orc doctor --fix` (done 2026-06-11)
 
 - [x] `--fix` removes provably-stale state locks — dead PID, or old without a
@@ -119,6 +125,9 @@ concurrent-task blocking). The spec memory predated jit's implementation.
       `removeStaleLock` logic). Live or ambiguous locks are reported, never
       touched. Covered by tests in `state`, `doctor`, and `cmd/orc`;
       README updated.
+- [x] (follow-up) `orc doctor <ticket> --fix` was silently a no-op — the flag
+      only applied in workspace mode. Ticket mode now clears that ticket's
+      stale lock before validation and prints what it removed.
 
 ### Small items
 
