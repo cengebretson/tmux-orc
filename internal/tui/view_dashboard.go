@@ -1,0 +1,635 @@
+package tui
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/cengebretson/orc/internal/config"
+	"github.com/cengebretson/orc/internal/health"
+	"github.com/charmbracelet/lipgloss"
+)
+
+func (m Model) View() string {
+	if m.width == 0 {
+		return ""
+	}
+	switch m.view {
+	case viewDetail:
+		return m.viewDetail()
+	case viewFile:
+		return m.viewFile()
+	case viewWorkflowDetail:
+		return m.viewWorkflowDetailPage()
+	case viewCharacterSheet:
+		if m.charSheetWorker != nil {
+			return renderCharacterSheet(m, m.charSheetWorker)
+		}
+		return m.viewDashboard()
+	default:
+		return m.viewDashboard()
+	}
+}
+
+// ── Dashboard view ────────────────────────────────────────────────
+
+func (m Model) viewDashboard() string {
+	outerW := m.width - 2
+
+	// ── Column widths ────────────────────────────────────────────────
+	const logoW = 30
+	const rightBoxOuter = logoW + 4 // border (2) + 1-space padding each side (2)
+	const logoGap = 1
+	useLogo := m.width > rightBoxOuter+logoGap+44
+
+	leftW := outerW
+	if useLogo {
+		leftW = outerW - rightBoxOuter - logoGap
+	}
+	leftInnerW := leftW - 2
+
+	// ── Header stats ─────────────────────────────────────────────────
+	since := time.Since(m.lastRefresh)
+	ago := since.Round(time.Second)
+	active, paused := 0, 0
+	for _, f := range m.features {
+		switch f.s.Status {
+		case "active":
+			active++
+		case "paused":
+			paused++
+		}
+	}
+	orcLabel := styleHeader.Render("orc")
+	if m.rainbowStep > 0 {
+		idx := (rainbowSteps - m.rainbowStep) % len(rainbowPalette)
+		c := lipgloss.Color(rainbowPalette[idx])
+		orcLabel = lipgloss.NewStyle().Foreground(c).Bold(true).Render("orc")
+	}
+	headerTitle := orcLabel + styleDim.Render("  workspace orchestrator")
+	statsLine := "  " +
+		styleSubtext.Render(fmt.Sprintf("%d features", len(m.features))) +
+		styleDim.Render("  ·  ") +
+		styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
+		styleDim.Render("  ·  ") +
+		styleStatusWaiting.Render(fmt.Sprintf("%d paused", paused)) +
+		stalenessStyle(since).Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
+
+	// ── Left column: header + sections ───────────────────────────────
+	var left strings.Builder
+	left.WriteString(drawBoxLabeled(headerTitle, []string{statsLine}, leftW) + "\n")
+
+	healthFocused := m.focusedPane == "section" && m.sectionFocus == "health"
+	left.WriteString(m.sectionBox("health", "1", "Health",
+		fmt.Sprintf("%d checks", len(m.healthItems)),
+		m.renderHealthLines(leftInnerW-4), leftW, healthFocused) + "\n")
+
+	wfFocused := m.focusedPane == "section" && m.sectionFocus == "workflows"
+	var wfContent []string
+	if wfFocused {
+		wfContent = renderNavigableList(m.sectionItems["workflows"], m.sectionCursor)
+	} else {
+		for _, pc := range m.workflows {
+			lines := renderRouteChain(pc.steps, pc.loops, leftInnerW-4)
+			if pc.name != "" {
+				wfContent = append(wfContent, styleDim.Render(pc.name+":"))
+			}
+			wfContent = append(wfContent, lines...)
+			wfContent = append(wfContent, "")
+		}
+		// trim trailing blank
+		for len(wfContent) > 0 && wfContent[len(wfContent)-1] == "" {
+			wfContent = wfContent[:len(wfContent)-1]
+		}
+	}
+	left.WriteString(m.sectionBox("workflows", "2", "Workflows",
+		fmt.Sprintf("%d", len(m.workflowNames)),
+		wfContent, leftW, wfFocused) + "\n")
+
+	wkFocused := m.focusedPane == "section" && m.sectionFocus == "workers"
+	var wkContent []string
+	if wkFocused {
+		wkContent = renderNavigableList(m.sectionItems["workers"], m.sectionCursor)
+	} else {
+		wkContent = renderNameList(leftInnerW-4, m.workerNames)
+	}
+	left.WriteString(m.sectionBox("workers", "3", "Workers",
+		fmt.Sprintf("%d", len(m.workerNames)),
+		wkContent, leftW, wkFocused) + "\n")
+
+	rtFocused := m.focusedPane == "section" && m.sectionFocus == "routes"
+	var rtContent []string
+	if rtFocused {
+		rtContent = renderNavigableList(m.sectionItems["routes"], m.sectionCursor)
+	} else {
+		rtContent = renderRepoList(m.repos, leftInnerW-4)
+	}
+	left.WriteString(m.sectionBox("routes", "4", "Routes",
+		fmt.Sprintf("%d repos", len(m.repos)),
+		rtContent, leftW, rtFocused))
+
+	// ── Top block: left column + right box (logo + quote) ───────────
+	var topBlock string
+	if useLogo {
+		leftStr := left.String()
+		leftHeight := lipgloss.Height(leftStr)
+
+		logoColor := lipgloss.Color(activeTheme.Palette.Surface1)
+		if m.rainbowStep > 0 {
+			// offset by half the palette so logo and header title use different colors
+			idx := (rainbowSteps - m.rainbowStep + len(rainbowPalette)/2) % len(rainbowPalette)
+			logoColor = lipgloss.Color(rainbowPalette[idx])
+		}
+		logoStyle := lipgloss.NewStyle().Foreground(logoColor)
+		quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.Palette.Overlay0)).Italic(true)
+
+		var rightLines []string
+		for _, l := range strings.Split(logo, "\n") {
+			rightLines = append(rightLines, " "+logoStyle.Render(l))
+		}
+		rightLines = append(rightLines, "")
+		if m.quote != "" {
+			for _, l := range strings.Split(wrapText(m.quote, logoW), "\n") {
+				centered := lipgloss.PlaceHorizontal(logoW, lipgloss.Center, quoteStyle.Render(l))
+				rightLines = append(rightLines, " "+centered)
+			}
+		}
+		targetLines := leftHeight - 2
+		if minContent := len(rightLines); targetLines < minContent {
+			targetLines = minContent
+		}
+		for len(rightLines) < targetLines {
+			rightLines = append(rightLines, "")
+		}
+		rightLines = rightLines[:targetLines]
+
+		rightBox := drawBoxLabeledWith("", rightLines, rightBoxOuter, activeTheme.Palette.Surface1)
+		topBlock = "\n" + lipgloss.JoinHorizontal(lipgloss.Top, leftStr, strings.Repeat(" ", logoGap), rightBox) + "\n"
+	} else {
+		topBlock = "\n" + left.String() + "\n"
+	}
+
+	// ── Features box (full width, height-capped with scrolling) ──────
+	// Remaining height = terminal - topBlock lines - help bar(1) - box borders(2) - table header(2)
+	topLines := strings.Count(topBlock, "\n")
+	maxDataRows := m.height - topLines - 1 - 4
+	if maxDataRows < 1 {
+		maxDataRows = 1
+	}
+
+	archiveToggle := styleDim.Render("  [a] show archived")
+	if m.showArchived {
+		archiveToggle = styleDim.Render("  [a] hide archived")
+	}
+
+	allRows := m.visibleFeatures()
+	total := len(allRows)
+
+	// Scroll window: keep cursor in view.
+	offset := 0
+	if m.cursor >= maxDataRows {
+		offset = m.cursor - maxDataRows + 1
+	}
+	if offset+maxDataRows > total {
+		offset = total - maxDataRows
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	end := offset + maxDataRows
+	if end > total {
+		end = total
+	}
+	visibleRows := allRows[offset:end]
+
+	var featuresTitle string
+	if m.searching {
+		query := m.search.Value()
+		matchCount := len(m.visibleFeatures())
+		var matchHint string
+		if query == "" {
+			matchHint = styleDim.Render("  type to filter  esc cancel")
+		} else {
+			noun := "matches"
+			if matchCount == 1 {
+				noun = "match"
+			}
+			matchHint = styleDim.Render(fmt.Sprintf("  %d %s  esc cancel", matchCount, noun))
+		}
+		featuresTitle = styleSection.Render("Features") + "  " + m.search.View() + matchHint
+	} else if m.search.Value() != "" {
+		noun := "matches"
+		if total == 1 {
+			noun = "match"
+		}
+		featuresTitle = styleSection.Render("Features") +
+			styleDim.Render("  /") + " " + styleStatusWaiting.Render(m.search.Value()) +
+			styleDim.Render(fmt.Sprintf("  %d %s  esc clear", total, noun))
+	} else {
+		featuresTitle = styleSection.Render("Features") + archiveToggle + styleDim.Render("  [/] search")
+		if total > maxDataRows {
+			featuresTitle += styleDim.Render(fmt.Sprintf("  %d–%d of %d", offset+1, end, total))
+		}
+	}
+
+	var tableLines []string
+	if total == 0 {
+		tableLines = []string{"  " + styleDim.Render("No features found. Run orc work <ticket> to start one.")}
+	} else {
+		tableLines = strings.Split(m.renderTable(visibleRows, outerW-2, m.cursor-offset), "\n")
+	}
+	featuresBorderColor := activeTheme.Palette.Surface1
+	if m.focusedPane == "features" {
+		featuresBorderColor = activeTheme.Palette.Mauve
+	}
+
+	var b strings.Builder
+	b.WriteString(topBlock)
+	b.WriteString(drawBoxLabeledWith(featuresTitle, tableLines, outerW, featuresBorderColor) + "\n")
+
+	// ── Help bar ─────────────────────────────────────────────────────
+	if !m.searching {
+		var helpItems []string
+		helpItems = append(helpItems,
+			helpItem("↑↓", "navigate"),
+			helpItem("enter", "open"),
+			helpItem("tab", "focus sections"),
+			helpItem("t", "attach"),
+			helpItem("1-4", "expand/collapse"),
+			helpItem("r", "refresh"),
+			helpItem("q", "quit"),
+		)
+		b.WriteString(styleHelp.Render(" " + strings.Join(helpItems, "  ")))
+	}
+
+	return b.String()
+}
+
+// drawBox renders a plain rounded box (no title in border).
+
+// renderHealthLines renders health items grouped by their Group field.
+// Items with no group flow together on wrapped rows. Each new group gets a
+// header line and its items indented on their own wrapped rows below it.
+func (m Model) renderHealthLines(maxW int) []string {
+	sep := styleDivider.Render("  ·  ")
+	sepW := lipgloss.Width(sep)
+	indent := "  "
+	indentW := 2
+
+	flushRow := func(rows *[]string, row string) {
+		if row != "" {
+			*rows = append(*rows, row)
+		}
+	}
+
+	var rows []string
+	row := ""
+	rowW := 0
+	currentGroup := ""
+
+	for _, item := range m.healthItems {
+		var s lipgloss.Style
+		switch item.Status {
+		case health.OK:
+			s = styleHealthOK
+		case health.Empty:
+			s = styleHealthWarn
+		default:
+			s = styleHealthErr
+		}
+		icon := "✓"
+		if item.Status != health.OK {
+			icon = "✗"
+		}
+		part := s.Render(icon + " " + strings.TrimSpace(item.Name))
+
+		// group boundary — flush current row and emit header
+		if item.Group != currentGroup {
+			flushRow(&rows, row)
+			row = ""
+			rowW = 0
+			currentGroup = item.Group
+			if currentGroup != "" {
+				rows = append(rows, styleDim.Render(currentGroup))
+			}
+		}
+
+		prefix := ""
+		prefixW := 0
+		if currentGroup != "" {
+			prefix = indent
+			prefixW = indentW
+		}
+
+		pW := lipgloss.Width(part)
+		if rowW > 0 && rowW+sepW+pW > maxW {
+			flushRow(&rows, row)
+			row = prefix
+			rowW = prefixW
+		}
+		if rowW > prefixW {
+			row += sep
+			rowW += sepW
+		} else if rowW == 0 {
+			row = prefix
+			rowW = prefixW
+		}
+		row += part
+		rowW += pW
+	}
+	flushRow(&rows, row)
+	return rows
+}
+
+// sectionBox renders a collapsible labeled box.
+// Collapsed: just the top+bottom border with title and summary in the border line.
+// Expanded: full box with content.
+func (m Model) sectionBox(key, keyStr, name, summary string, content []string, outerW int, focused bool) string {
+	innerW := outerW - 2
+	borderColor := activeTheme.Palette.Surface1
+	if focused {
+		borderColor = activeTheme.Palette.Mauve
+	}
+	bd := lipgloss.NewStyle().Foreground(lipgloss.Color(borderColor))
+	title := styleDim.Render(keyStr) + " " + styleSection.Render(name)
+
+	if !m.expanded[key] {
+		label := " " + title
+		if summary != "" {
+			label += styleDim.Render("  " + summary)
+		}
+		label += " "
+		labelW := lipgloss.Width(label)
+		dashRight := innerW - 1 - labelW
+		if dashRight < 0 {
+			dashRight = 0
+		}
+		top := bd.Render("╭─") + label + bd.Render(strings.Repeat("─", dashRight)+"╮")
+		bot := bd.Render("╰" + strings.Repeat("─", innerW) + "╯")
+		return strings.Join([]string{top, bot}, "\n")
+	}
+
+	var indented []string
+	for _, l := range content {
+		indented = append(indented, "  "+l)
+	}
+	return drawBoxLabeledWith(title, indented, outerW, borderColor)
+}
+
+// renderNavigableList renders a list of section items with a cursor indicator.
+func renderNavigableList(items []sectionItem, cursor int) []string {
+	var lines []string
+	for i, item := range items {
+		if i == cursor {
+			lines = append(lines, styleHealthOK.Render("▶")+"  "+styleSubtext.Render(item.label)+
+				styleDim.Render("  enter to view"))
+		} else {
+			lines = append(lines, "   "+styleDim.Render(item.label))
+		}
+	}
+	return lines
+}
+
+// renderNameList wraps a list of names with · separators to fit maxW.
+func renderNameList(maxW int, names []string) []string {
+	sep := styleDivider.Render("  ·  ")
+	sepW := lipgloss.Width(sep)
+
+	var rows []string
+	row := ""
+	rowW := 0
+	for _, name := range names {
+		chip := styleSubtext.Render(name)
+		chipW := lipgloss.Width(chip)
+		if rowW > 0 && rowW+sepW+chipW > maxW {
+			rows = append(rows, row)
+			row = ""
+			rowW = 0
+		}
+		if rowW > 0 {
+			row += sep
+			rowW += sepW
+		}
+		row += chip
+		rowW += chipW
+	}
+	if row != "" {
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// renderRepoList renders repos as "name — purpose" lines.
+func renderRepoList(repos []config.Repo, maxW int) []string {
+	if len(repos) == 0 {
+		return []string{styleDim.Render("No repos configured. Edit orc.yaml to add repos.")}
+	}
+	var lines []string
+	for _, r := range repos {
+		name := styleSubtext.Render(r.Name)
+		sep := styleDivider.Render("  —  ")
+		purpose := styleDim.Render(r.Purpose)
+		line := name + sep + purpose
+		if lipgloss.Width(line) > maxW {
+			purpose = styleDim.Render(truncate(r.Purpose, maxW-lipgloss.Width(name+sep)))
+			line = name + sep + purpose
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// renderRouteChain renders the workflow stage sequence with colored arrows and loop stage annotations.
+func renderRouteChain(chain []routeStep, loops []repairLoop, maxW int) []string {
+	if len(chain) == 0 {
+		return nil
+	}
+	sep := styleDivider.Render("  ")
+	sepW := lipgloss.Width(sep)
+
+	// build index: workflow name → x-offset in rendered row
+	chipOffsets := map[string]int{}
+
+	var rows []string
+	row := ""
+	rowW := 0
+	for i, step := range chain {
+		chip := styleSubtext.Render(step.name)
+		chipW := lipgloss.Width(chip)
+
+		var arrow string
+		var arrowW int
+		if i < len(chain)-1 {
+			if chain[i].advance == "manual" {
+				arrow = sep + styleStatusWaiting.Render("→") + sep
+			} else {
+				arrow = sep + styleHealthOK.Render("→") + sep
+			}
+			arrowW = sepW*2 + 1
+		}
+
+		needed := chipW + arrowW
+		if rowW > 0 && rowW+needed > maxW {
+			rows = append(rows, row)
+			row = ""
+			rowW = 0
+		}
+		chipOffsets[step.name] = rowW
+		row += chip
+		rowW += chipW
+		if arrow != "" {
+			row += arrow
+			rowW += arrowW
+		}
+	}
+	if row != "" {
+		rows = append(rows, row)
+	}
+
+	// loop stage annotations: ↺ name positioned under target chip
+	if len(loops) > 0 {
+		// group loops by target for layout
+		type loopAnnotation struct {
+			offset int
+			label  string
+		}
+		var annotations []loopAnnotation
+		for _, lp := range loops {
+			offset, ok := chipOffsets[lp.target]
+			if !ok {
+				continue
+			}
+			label := styleStatusWaiting.Render("↺ ") + styleSubtext.Render(lp.name)
+			annotations = append(annotations, loopAnnotation{offset: offset, label: label})
+		}
+		// sort by offset so we build the line left-to-right
+		sort.Slice(annotations, func(i, j int) bool {
+			return annotations[i].offset < annotations[j].offset
+		})
+		if len(annotations) > 0 {
+			loopLine := ""
+			loopW := 0
+			for _, ann := range annotations {
+				if ann.offset > loopW {
+					loopLine += strings.Repeat(" ", ann.offset-loopW)
+					loopW = ann.offset
+				}
+				connector := styleDivider.Render("└╴")
+				full := connector + ann.label
+				w := lipgloss.Width(full)
+				loopLine += full
+				loopW += w
+			}
+			rows = append(rows, loopLine)
+		}
+	}
+
+	return rows
+}
+
+func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
+	const (
+		wTicket = 12
+		wName   = 22
+		wStatus = 20
+		wTmux   = 6
+		wHealth = 2
+	)
+	// fixed overhead: leading space + static columns + separators (6 × "  ")
+	fixed := 1 + wTicket + wName + wStatus + wTmux + wHealth + 6*2
+	flex := w - fixed
+	if flex < 24 {
+		flex = 24
+	}
+	wWorkflow := flex / 2
+	wWorker := flex - wWorkflow
+
+	header := " " +
+		padRight(styleTableHeader.Render("Ticket"), wTicket) + "  " +
+		padRight(styleTableHeader.Render("Name"), wName) + "  " +
+		padRight(styleTableHeader.Render("Status"), wStatus) + "  " +
+		padRight(styleTableHeader.Render("Stage"), wWorkflow) + "  " +
+		padRight(styleTableHeader.Render("Worker"), wWorker) + "  " +
+		padRight(styleTableHeader.Render("Tmux"), wTmux) + "  " +
+		padRight("", wHealth)
+
+	div := " " + styleDivider.Render(strings.Repeat("─", w-1))
+
+	var lines []string
+	lines = append(lines, header, div)
+
+	for i, row := range rows {
+		s := row.s
+		selected := i == selectedIdx
+
+		icon := statusIcon(s.Status)
+		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
+		stageCell := row.workflow + "/" + s.Stage.Name + row.stageLoopLabel
+		if s.Runtime.JIT != nil {
+			stageCell += " + jit"
+		}
+
+		plainWorker := row.workerName
+		if plainWorker == "" {
+			plainWorker = "—"
+		}
+		plainTmux := "-"
+		if s.Runtime.Tmux != nil {
+			if row.tmuxLive {
+				plainTmux = "✓"
+			} else {
+				plainTmux = "✗"
+			}
+		}
+
+		plainHealth := "·"
+		if row.hasIssues {
+			plainHealth = "!"
+		}
+
+		if selected {
+			// Plain unstyled text so styleRowSelected background covers the full row
+			line := " " +
+				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
+				padRight(truncate(name, wName), wName) + "  " +
+				padRight(truncate(icon+" "+s.Status, wStatus), wStatus) + "  " +
+				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
+				padRight(truncate(plainWorker, wWorker), wWorker) + "  " +
+				padRight(plainTmux, wTmux) + "  " +
+				padRight(plainHealth, wHealth)
+			lines = append(lines, styleRowSelected.Width(w).Render(line))
+		} else {
+			statusCell := statusStyle(s.Status).Render(icon + " " + s.Status)
+			nameCell := styleDim.Render(truncate(name, wName))
+			workerCell := styleDim.Render(truncate(plainWorker, wWorker))
+			var tmuxCell string
+			if s.Runtime.Tmux != nil {
+				if row.tmuxLive {
+					tmuxCell = styleTmuxLive.Render(plainTmux)
+				} else {
+					tmuxCell = styleTmuxDead.Render(plainTmux)
+				}
+			} else {
+				tmuxCell = styleTmuxNone.Render(plainTmux)
+			}
+			var healthCell string
+			if row.hasIssues {
+				healthCell = styleHealthWarn.Render(plainHealth)
+			} else {
+				healthCell = styleHealthOK.Render(plainHealth)
+			}
+			line := " " +
+				padRight(truncate(s.Ticket, wTicket), wTicket) + "  " +
+				padRight(nameCell, wName) + "  " +
+				padRight(statusCell, wStatus) + "  " +
+				padRight(truncate(stageCell, wWorkflow), wWorkflow) + "  " +
+				padRight(workerCell, wWorker) + "  " +
+				padRight(tmuxCell, wTmux) + "  " +
+				padRight(healthCell, wHealth)
+			lines = append(lines, line)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
