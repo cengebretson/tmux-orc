@@ -41,7 +41,8 @@ orc/
     workflows.md                  workspace workflow configuration reference
   go.mod
   Makefile
-  plan.md                         active roadmap and future ideas
+  plan.md                         specced, up-next roadmap work
+  todo.md                         cleanup/hardening items and future ideas
 ```
 
 ## Dev Workflow
