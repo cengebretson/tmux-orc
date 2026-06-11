@@ -272,13 +272,16 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	const barW = 14
 
 	// ── portrait panel (right) ───────────────────────────────────────
+	// The image must fit the panel's content area (width minus Padding(0,2)),
+	// or lipgloss hard-wraps each pixel row into an extra mostly-blank line.
+	portraitCols := portraitPanelW - 4
 	var artBlock string
 	if imgData, ok := portraitImages[class]; ok {
-		portraitH := pngAspectHeight(imgData, portraitPanelW) / 2
+		portraitH := pngAspectHeight(imgData, portraitCols) / 2
 		if portraitH < 4 {
 			portraitH = 4
 		}
-		artBlock = renderPortrait(class, imgData, portraitPanelW, portraitH)
+		artBlock = renderPortrait(class, imgData, portraitCols, portraitH)
 	}
 	if artBlock == "" {
 		art := portraits[class]

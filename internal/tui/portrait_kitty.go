@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"image"
+	"image/draw"
+	"image/png"
 	"io"
 	"os"
 	"os/exec"
@@ -152,6 +156,61 @@ func kittyTransmit(w io.Writer, id int, png []byte, cols, rows int, wrap bool) e
 	return nil
 }
 
+// kittyDelete frees the image and any placements registered under id. Sent
+// before every retransmission: the id is stable per class, so without the
+// delete a resize would leave the previous placement (with the old c×r grid)
+// alive and the terminal could resolve placeholder cells against it.
+func kittyDelete(w io.Writer, id int, wrap bool) {
+	seq := fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", id)
+	if wrap {
+		seq = "\x1bPtmux;" + strings.ReplaceAll(seq, "\x1b", "\x1b\x1b") + "\x1b\\"
+	}
+	_, _ = io.WriteString(w, seq)
+}
+
+// padToPlacementAspect pads the PNG with transparent pixels so its aspect
+// ratio exactly matches a cols×rows cell rectangle. The terminal scales an
+// image to fit its placement preserving aspect ratio and centers the result,
+// so any mismatch floats the art toward the middle. Matching exactly makes
+// the image fill the placement: width padding is split evenly (art stays
+// horizontally centered) and height padding goes entirely below (art stays
+// top-aligned). Returns the input unchanged when it cannot decode or encode.
+func padToPlacementAspect(data []byte, cols, rows int) []byte {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data
+	}
+	cw, ch := cellPixelSize()
+	if cw <= 0 || ch <= 0 {
+		cw, ch = 1, 2
+	}
+	boxW, boxH := cols*cw, rows*ch
+	b := img.Bounds()
+	imgW, imgH := b.Dx(), b.Dy()
+	if imgW == 0 || imgH == 0 || boxW == 0 || boxH == 0 {
+		return data
+	}
+
+	var out *image.RGBA
+	if imgH*boxW >= imgW*boxH {
+		// image is relatively taller than the box — pad width evenly
+		newW := imgH * boxW / boxH
+		out = image.NewRGBA(image.Rect(0, 0, newW, imgH))
+		draw.Draw(out, image.Rect((newW-imgW)/2, 0, (newW-imgW)/2+imgW, imgH), img, b.Min, draw.Src)
+	} else {
+		// image is relatively wider than the box — pad height below only
+		newH := imgW * boxH / boxW
+		out = image.NewRGBA(image.Rect(0, 0, imgW, newH))
+		draw.Draw(out, image.Rect(0, 0, imgW, imgH), img, b.Min, draw.Src)
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, out); err != nil {
+		return data
+	}
+	return buf.Bytes()
+}
+
 // kittyPlaceholderGrid returns the cols×rows placeholder text that the
 // terminal replaces with the transmitted image. Each line carries its own
 // foreground SGR holding the image ID so Bubble Tea can repaint any line
@@ -181,7 +240,8 @@ func renderPortraitKitty(class string, png []byte, cols, rows int) string {
 	}
 	id := kittyImageID(class)
 	wrap := os.Getenv("TMUX") != ""
-	if err := kittyTransmit(os.Stdout, id, png, cols, rows, wrap); err != nil {
+	kittyDelete(os.Stdout, id, wrap)
+	if err := kittyTransmit(os.Stdout, id, padToPlacementAspect(png, cols, rows), cols, rows, wrap); err != nil {
 		return ""
 	}
 	return kittyPlaceholderGrid(id, cols, rows)

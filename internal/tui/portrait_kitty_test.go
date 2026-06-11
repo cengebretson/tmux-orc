@@ -3,6 +3,11 @@ package tui
 import (
 	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -109,6 +114,107 @@ func TestKittyPortraitSupportedTmuxPassthrough(t *testing.T) {
 	tmuxAllowsPassthrough = func() bool { return true }
 	if !kittyPortraitSupported() {
 		t.Error("not supported inside tmux with allow-passthrough on")
+	}
+}
+
+func TestKittyDelete(t *testing.T) {
+	var buf bytes.Buffer
+	kittyDelete(&buf, 7, false)
+	if got := buf.String(); got != "\x1b_Ga=d,d=I,i=7,q=2\x1b\\" {
+		t.Errorf("delete sequence = %q", got)
+	}
+
+	buf.Reset()
+	kittyDelete(&buf, 7, true)
+	out := buf.String()
+	if !strings.HasPrefix(out, "\x1bPtmux;") || !strings.Contains(out, "\x1b\x1b_Ga=d,d=I,i=7,q=2") {
+		t.Errorf("tmux-wrapped delete sequence = %q", out)
+	}
+}
+
+func encodeTestPNG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{R: 255, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestPadToPlacementAspect(t *testing.T) {
+	orig := cellPixelSize
+	defer func() { cellPixelSize = orig }()
+	cellPixelSize = func() (int, int) { return 10, 20 }
+
+	decode := func(data []byte) image.Image {
+		img, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return img
+	}
+
+	// Square image into a 10×10-cell box (100×200 px): image is relatively
+	// wider, so it gains transparent rows below — art stays at the top.
+	out := decode(padToPlacementAspect(encodeTestPNG(t, 100, 100), 10, 10))
+	if out.Bounds().Dx() != 100 || out.Bounds().Dy() != 200 {
+		t.Fatalf("bottom-pad dims = %dx%d, want 100x200", out.Bounds().Dx(), out.Bounds().Dy())
+	}
+	if _, _, _, a := out.At(50, 50).RGBA(); a == 0 {
+		t.Error("art region should stay opaque at the top")
+	}
+	if _, _, _, a := out.At(50, 150).RGBA(); a != 0 {
+		t.Error("padding below the art should be transparent")
+	}
+
+	// Tall image into a wide 30×10-cell box (300×200 px): image is relatively
+	// taller, so width padding is split evenly and the art stays centered.
+	out = decode(padToPlacementAspect(encodeTestPNG(t, 100, 400), 30, 10))
+	if out.Bounds().Dx() != 600 || out.Bounds().Dy() != 400 {
+		t.Fatalf("side-pad dims = %dx%d, want 600x400", out.Bounds().Dx(), out.Bounds().Dy())
+	}
+	if _, _, _, a := out.At(300, 200).RGBA(); a == 0 {
+		t.Error("art should remain centered horizontally")
+	}
+	if _, _, _, a := out.At(10, 200).RGBA(); a != 0 {
+		t.Error("left padding should be transparent")
+	}
+
+	// Garbage input is returned unchanged.
+	if got := padToPlacementAspect([]byte("not a png"), 4, 4); string(got) != "not a png" {
+		t.Error("undecodable input should pass through")
+	}
+}
+
+func TestRenderPortraitKittyDeletesBeforeRetransmit(t *testing.T) {
+	t.Setenv("TMUX", "")
+	pngData := encodeTestPNG(t, 8, 8)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	got := renderPortraitKitty("RESIZE-TEST", pngData, 4, 4)
+	os.Stdout = orig
+	_ = w.Close()
+	captured, _ := io.ReadAll(r)
+
+	if got == "" {
+		t.Fatal("renderPortraitKitty returned no grid")
+	}
+	out := string(captured)
+	del := strings.Index(out, "a=d,d=I")
+	tx := strings.Index(out, "a=T,U=1")
+	if del == -1 || tx == -1 || del > tx {
+		t.Errorf("expected delete before transmit, got delete@%d transmit@%d", del, tx)
 	}
 }
 
