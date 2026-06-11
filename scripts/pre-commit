@@ -9,9 +9,10 @@ if ! git diff --quiet go.mod go.sum; then
 fi
 
 echo "→ fmt"
-gofmt -l -w ./cmd ./internal
-if ! git diff --quiet; then
-  echo "gofmt reformatted files — stage the changes and re-commit"
+unformatted=$(gofmt -l ./cmd ./internal)
+if [ -n "$unformatted" ]; then
+  gofmt -w ./cmd ./internal
+  echo "gofmt reformatted: $unformatted — stage the changes and re-commit"
   exit 1
 fi
 
