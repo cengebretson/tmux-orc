@@ -24,7 +24,7 @@ tool grows, the state file needs an explicit ownership and compatibility model.
 
 - `internal/workspace/templates/features/_template/STATE.yaml` includes `schema_version`.
 - `internal/workspace/templates/ORC.md` explains state ownership rules.
-- `orc health <ticket>` reports actionable errors for invalid state.
+- `orc doctor <ticket>` reports actionable errors for invalid state.
 - Existing test fixtures still load successfully.
 
 ## ~~2. Formalize Workflow Semantics in `orc.yaml`~~ ✓ Done
@@ -50,7 +50,7 @@ enforce generic transition rules consistently.
 **Acceptance criteria:**
 
 - `README.md` or a dedicated `docs/workflows.md` contains a complete `orc.yaml` reference.
-- Invalid workflow config fails clearly in `orc doctor` or `orc health`.
+- Invalid workflow config fails clearly in `orc doctor`.
 - Tests cover missing workers, duplicate stages, and invalid loop targets.
 
 ## ~~3. Keep `runner.Compute` as the Single Next-Action Resolver~~ ✓ Done

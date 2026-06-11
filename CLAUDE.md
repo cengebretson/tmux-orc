@@ -71,7 +71,6 @@ Quick reference for dev/test use:
 ```bash
 ./orc init --dry-run
 ./orc init --workspace /tmp/test-ws --with-sample-workers
-./orc health --workspace /tmp/test-ws
 ./orc doctor --workspace /tmp/test-ws
 ./orc work STORY-123 --workspace /tmp/test-ws
 ./orc next STORY-123 --dry --workspace /tmp/test-ws

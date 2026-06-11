@@ -29,6 +29,7 @@ func TestRunStatusTicketPrintsDetail(t *testing.T) {
 		"Stage:     default · develop",
 		"Worker:  Bob (Developer) (codex)",
 		"Run `orc next` to launch.",
+		"⚠  state has problems — run `orc doctor STORY-123` for details",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("status output missing %q:\n%s", want, out)
@@ -66,15 +67,15 @@ func TestRunStatusJSONPrintsActiveAndArchived(t *testing.T) {
 	}
 }
 
-func TestRunHealthTicketPrintsValidationReport(t *testing.T) {
+func TestRunDoctorTicketPrintsValidationReport(t *testing.T) {
 	resetCommandGlobals(t)
 	globalWorkspace = fixtureWorkspace()
 
 	out, err := captureStdout(func() error {
-		return runHealth(nil, []string{"STORY-123"})
+		return runDoctor(nil, []string{"STORY-123"})
 	})
 	if err == nil || !strings.Contains(err.Error(), "validation failed") {
-		t.Fatalf("runHealth err = %v, want validation failed", err)
+		t.Fatalf("runDoctor err = %v, want validation failed", err)
 	}
 	for _, want := range []string{
 		"Ticket: STORY-123",
@@ -83,7 +84,7 @@ func TestRunHealthTicketPrintsValidationReport(t *testing.T) {
 		"Some checks failed",
 	} {
 		if !strings.Contains(out, want) {
-			t.Fatalf("health output missing %q:\n%s", want, out)
+			t.Fatalf("doctor output missing %q:\n%s", want, out)
 		}
 	}
 }

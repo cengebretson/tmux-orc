@@ -12,7 +12,6 @@ import (
 	"github.com/cengebretson/orc/internal/config"
 	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/cengebretson/orc/internal/featurelist"
-	"github.com/cengebretson/orc/internal/health"
 	"github.com/cengebretson/orc/internal/orchestrator"
 	"github.com/cengebretson/orc/internal/resume"
 	"github.com/cengebretson/orc/internal/runner"
@@ -55,6 +54,11 @@ var rootCmd = &cobra.Command{
 	Short:             "orc — agentic workspace orchestrator",
 	Long:              banner,
 	CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true},
+	// Runs after flag/arg validation, so usage still prints for misuse
+	// but not for errors returned by the command itself.
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		cmd.SilenceUsage = true
+	},
 }
 
 var versionCmd = &cobra.Command{
@@ -78,17 +82,10 @@ var (
 	initForce             bool
 )
 
-var healthCmd = &cobra.Command{
-	Use:   "health [ticket]",
-	Short: "Check workspace health, or validate a ticket's state when a ticket ID is given",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runHealth,
-}
-
 var doctorCmd = &cobra.Command{
-	Use:   "doctor",
-	Short: "Check workspace and local tool readiness",
-	Args:  cobra.NoArgs,
+	Use:   "doctor [ticket]",
+	Short: "Check workspace and local tool readiness, or validate a ticket's state when a ticket ID is given",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runDoctor,
 }
 
@@ -262,10 +259,9 @@ func init() {
 	archiveCmd.ValidArgsFunction = ticketCompleter([]string{"done"}, false)
 	deleteCmd.ValidArgsFunction = ticketCompleter([]string{"done", "archived"}, true)
 	jitCmd.ValidArgsFunction = ticketCompleter(nil, true)
-	healthCmd.ValidArgsFunction = ticketCompleter(nil, false)
+	doctorCmd.ValidArgsFunction = ticketCompleter(nil, false)
 
 	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(healthCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(nextCmd)
 	rootCmd.AddCommand(statusCmd)
@@ -389,7 +385,7 @@ func promptLine(prompt string) string {
 	return ""
 }
 
-func runHealth(cmd *cobra.Command, args []string) error {
+func runDoctor(cmd *cobra.Command, args []string) error {
 	root, err := resolveRoot(globalWorkspace)
 	if err != nil {
 		return err
@@ -406,17 +402,6 @@ func runHealth(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("validation failed")
 		}
 		return nil
-	}
-
-	report := health.Run(root)
-	health.Print(report)
-	return nil
-}
-
-func runDoctor(cmd *cobra.Command, args []string) error {
-	root, err := resolveRoot(globalWorkspace)
-	if err != nil {
-		return err
 	}
 
 	report := doctor.Run(root)
@@ -656,7 +641,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		if statusJSON {
 			return printJSON(t.State)
 		}
-		return printShow(root, t.FeatureDir, t.State)
+		if err := printShow(root, t.FeatureDir, t.State); err != nil {
+			return err
+		}
+		if !validate.Run(root, t.FeatureDir).OK() {
+			fmt.Printf("\n⚠  state has problems — run `orc doctor %s` for details\n", t.State.Ticket)
+		}
+		return nil
 	}
 
 	type row struct {
@@ -1382,7 +1373,7 @@ func resolveRoot(path string) (string, error) {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		// cobra already printed the error; just set the exit code
 		os.Exit(1)
 	}
 }

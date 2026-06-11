@@ -19,7 +19,7 @@ shared: pending
 claude: pending
 codex:  pending
 
-<!-- orc health checks these lines — do not remove them. -->
+<!-- orc doctor checks these lines — do not remove them. -->
 <!-- Change each to "complete" when that section is finished. -->
 
 ---
@@ -160,5 +160,5 @@ Reads ROUTER.md for ticket system details, then stages/intake.md for steps.
 When your section is complete:
 1. Update the Status block at the top — mark `shared: complete` if you completed it,
    and mark `claude: complete` or `codex: complete` for your agent section
-2. Tell the user to run `orc health` to verify the workspace is ready
+2. Tell the user to run `orc doctor` to verify the workspace is ready
 3. If both agents are configured, tell the user they can now run `orc work <ticket>`

@@ -1,7 +1,7 @@
 # orc.yaml — workspace configuration
 #
 # Single config file for repos, workflows, and workspace settings.
-# Run `orc health` to verify the workspace.
+# Run `orc doctor` to verify the workspace.
 # After editing, the TUI picks up changes on the next auto-refresh.
 
 # settings:

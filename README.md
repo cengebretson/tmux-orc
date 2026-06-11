@@ -122,16 +122,15 @@ The agent will ask about your ticket system (Jira, GitHub Issues, etc.), repos,
 and which Claude/Codex model to use for each stage. It creates worker files and
 updates `ROUTER.md` with the right ticket system retrieval instructions.
 
-### 3. Check health
+### 3. Check readiness
 
 ```bash
-orc health
 orc doctor
 ```
 
-`orc health` checks workspace files. `orc doctor` also checks local readiness:
-configured worker engines on your `PATH`, tmux availability, and any
-`STATE.yaml.lock` files that could affect ticket updates.
+`orc doctor` checks workspace files plus local readiness: configured worker
+engines on your `PATH`, tmux availability, and any `STATE.yaml.lock` files
+that could affect ticket updates.
 
 ### 4. Start working on a ticket
 
@@ -311,9 +310,8 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
   - `--with-sample-workers` — include sample worker files
   - `--dry-run` — preview without writing
   - `--force` — overwrite existing files
-- `orc health` — check workspace filesystem health
-  - `orc health <ticket>` — validate a ticket's `STATE.yaml`: workflow, stage, worker, next action, repos, and worktrees
 - `orc doctor` — check workspace health plus `orc.yaml`, local tools, worker engines, tmux, and state locks
+  - `orc doctor <ticket>` — validate a ticket's `STATE.yaml`: workflow, stage, worker, next action, repos, and worktrees
 - `orc status` — show all features and their current workflow/stage
   - `orc status <ticket>` — show full details for a specific ticket
   - `--json` — output as JSON for scripting

@@ -131,7 +131,7 @@ Workspace configuration should satisfy these rules:
 `orc` validates this configuration in the paths that would otherwise route work:
 
 - `orc doctor` reports invalid config under the `config` check.
-- `orc health <ticket>` validates workspace config along with that ticket's `STATE.yaml`.
+- `orc doctor <ticket>` validates workspace config along with that ticket's `STATE.yaml`.
 - `orc next <ticket>` refuses to launch when the workspace config is invalid.
 - `orc mark <ticket> next` refuses to advance when the workspace config is invalid.
 
