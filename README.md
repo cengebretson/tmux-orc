@@ -57,16 +57,19 @@ a file and run a shell command. No SDK dependency, no lock-in.
 
 ## Install
 
+Download a binary from the [releases page](https://github.com/cengebretson/orc/releases),
+or install with Go:
+
 ```bash
 go install github.com/cengebretson/orc/cmd/orc@latest
 ```
 
-Or build from source:
+Or build from source (`make build` stamps the version from the latest git tag):
 
 ```bash
 git clone git@github.com:cengebretson/orc.git
 cd orc
-go build -o orc ./cmd/orc/...
+make build
 ```
 
 ## Dependencies

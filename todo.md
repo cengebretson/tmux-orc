@@ -7,11 +7,6 @@ below as a record.
 
 ## Open
 
-### Release automation (later, when anyone else installs orc)
-
-- [ ] Tags + release automation; version is currently hardcoded to `dev` via
-      ldflags. CI (below, done) is the prerequisite and now exists.
-
 ### TUI follow-ups (soft)
 
 - [ ] (folded into roadmap) `handleKey` (354 lines) is still one function
@@ -103,6 +98,13 @@ decision in the adhoc spec (archive-aware lookup, no stage/status change, per-ru
 output dir, history entry on completion) plus refinements the spec lacked
 (`runtime.jit` visibility in status/TUI, `orc mark <ticket> jit` to close,
 concurrent-task blocking). The spec memory predated jit's implementation.
+
+### Release automation (done 2026-06-11)
+
+- [x] Tags + releases: `make build` stamps the version from `git describe
+      --tags` (was hardcoded `dev`); `.goreleaser.yaml` builds darwin/linux ×
+      amd64/arm64 archives; `.github/workflows/release.yml` tests and
+      publishes a GitHub release on any `v*` tag push. First tag: `v0.1.0`.
 
 ### CI (done 2026-06-11)
 
