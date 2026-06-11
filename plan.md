@@ -49,6 +49,25 @@ Template variables available in `command`:
 
 ---
 
+### TUI: left/right stage navigation on workflow + stage views
+
+The feature detail page already cycles its markdown files with `left`/`right`
+(`h`/`l`), including inside the file viewer. Bring the same navigation to the
+workflow side:
+
+- **Stage file viewer** (opened with `enter` from a workflow detail page):
+  `left`/`right` should jump to the previous/next stage's `.md` in pipeline
+  order, updating the `step N of M` title — mirror of the `viewerReturn ==
+  viewDetail` branch in `viewFile` (`internal/tui/update.go`), driving
+  `wfDetailCursor` instead of `fileIdx`.
+- **Workflow detail page**: `left`/`right` as an alias for the existing
+  `up`/`down` stage cursor movement (steps render as a horizontal chain, so
+  horizontal keys are the natural ask).
+
+**Effort:** Small.
+
+---
+
 ## Future ideas
 
 Lower priority — worth revisiting once the core is solid.

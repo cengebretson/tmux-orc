@@ -3,10 +3,12 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -289,5 +291,55 @@ func TestUpdateWindowSize(t *testing.T) {
 	got := tm.(Model)
 	if got.width != 120 || got.height != 50 {
 		t.Errorf("size = %dx%d, want 120x50", got.width, got.height)
+	}
+}
+
+func TestUpdateWindowSizeReflowsFileViewer(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ROUTER.md")
+	long := "word " // a paragraph that must re-wrap when the width changes
+	if err := os.WriteFile(path, []byte(strings.Repeat(long, 60)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := testModel(t)
+	m.view = viewFile
+	m.viewerPath = path
+	m.viewport = viewport.New(m.width-4, m.height-6)
+	wide, err := renderFile(path, m.width-4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.viewport.SetContent(wide)
+	wideLines := m.viewport.TotalLineCount()
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 48, Height: 40})
+	got := tm.(Model)
+	if got.viewport.TotalLineCount() <= wideLines {
+		t.Errorf("content lines = %d after shrinking from %d-wide render — viewer did not reflow",
+			got.viewport.TotalLineCount(), wideLines)
+	}
+}
+
+func TestUpdateWindowSizeReflowsWorkflowDetail(t *testing.T) {
+	m := testModel(t)
+	// a route chain long enough that it fits one row at width 100 but must
+	// wrap onto more rows at width 60
+	var steps []routeStep
+	for _, n := range []string{"intake", "develop", "code-review", "qa-automation", "pr-open", "evidence"} {
+		steps = append(steps, routeStep{name: n, advance: "auto"})
+	}
+	m.workflows = []workflowChain{{name: "default", steps: steps}}
+	m.view = viewWorkflowDetail
+	m.wfDetailName = "default"
+	m.root = t.TempDir()
+	m.viewport = viewport.New(m.width-4, m.height-6)
+	m.viewport.SetContent(renderWorkflowDetail("default", m.workflows, nil, filepath.Join(m.root, "stages"), m.features, 0, m.width-4))
+	wideLines := m.viewport.TotalLineCount()
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 40})
+	got := tm.(Model)
+	if got.viewport.TotalLineCount() <= wideLines {
+		t.Errorf("content lines = %d after shrinking from %d — workflow detail did not reflow",
+			got.viewport.TotalLineCount(), wideLines)
 	}
 }

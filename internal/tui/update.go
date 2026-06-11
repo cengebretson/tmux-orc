@@ -20,7 +20,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.viewport.Width = msg.Width - 4
 		m.viewport.Height = msg.Height - 6
-		if m.view == viewCharacterSheet {
+		// viewport-backed views hold content pre-rendered at the old width;
+		// rebuild it (the dashboard and detail views render from m.width live)
+		switch m.view {
+		case viewFile:
+			m.reRenderViewerFile()
+		case viewWorkflowDetail:
+			m.reRenderWorkflowDetail()
+		case viewCharacterSheet:
 			return m, tea.ClearScreen
 		}
 		return m, nil
@@ -270,6 +277,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.viewerTitle = f.label
 						m.viewerContext = sectionLabel(m.sectionFocus)
 						m.viewerReturn = viewDashboard
+						m.viewerPath = f.path
+						m.viewerIsWorker = true
 						m.view = viewFile
 					case "workflows":
 						m.wfDetailName = f.label
@@ -288,6 +297,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.viewerTitle = f.label
 						m.viewerContext = sectionLabel(m.sectionFocus)
 						m.viewerReturn = viewDashboard
+						m.viewerPath = f.path
+						m.viewerIsWorker = false
 						m.view = viewFile
 					}
 				}
@@ -332,6 +343,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.viewerTitle = f.label
 				m.viewerContext = m.detail.s.Ticket
 				m.viewerReturn = viewDetail
+				m.viewerPath = f.path
+				m.viewerIsWorker = false
 				m.view = viewFile
 			}
 		}
@@ -355,8 +368,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			stageName, advance, stepNum, total := wfDetailSelectedStage(m.wfDetailName, m.wfDetailCursor, m.workflows)
 			if stageName != "" {
-				stagesDir := filepath.Join(m.root, "stages")
-				content, err := renderFile(filepath.Join(stagesDir, stageName+".md"), m.width-4)
+				stagePath := filepath.Join(m.root, "stages", stageName+".md")
+				content, err := renderFile(stagePath, m.width-4)
 				if err != nil {
 					content = styleHealthErr.Render("could not read: " + err.Error())
 				}
@@ -370,6 +383,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.viewerTitle = fmt.Sprintf("%s · step %d of %d · %s · %d %s", stageName, stepNum, total, advance, wfCount, wfWord)
 				m.viewerContext = m.wfDetailName
 				m.viewerReturn = viewWorkflowDetail
+				m.viewerPath = stagePath
+				m.viewerIsWorker = false
 				m.view = viewFile
 			}
 		default:
@@ -456,6 +471,28 @@ func (m *Model) loadViewerFile() {
 	m.viewport.SetContent(content)
 	m.viewport.SetYOffset(0)
 	m.viewerTitle = f.label
+	m.viewerPath = f.path
+}
+
+// reRenderViewerFile rebuilds the file viewer content at the current viewport
+// width, preserving the scroll position. Called on window resize.
+func (m *Model) reRenderViewerFile() {
+	if m.viewerPath == "" {
+		return
+	}
+	var content string
+	var err error
+	if m.viewerIsWorker {
+		content, err = renderWorkerFile(m.viewerPath, m.features, m.viewport.Width)
+	} else {
+		content, err = renderFile(m.viewerPath, m.viewport.Width)
+	}
+	if err != nil {
+		content = styleHealthErr.Render("could not read: " + err.Error())
+	}
+	yOff := m.viewport.YOffset
+	m.viewport.SetContent(content)
+	m.viewport.SetYOffset(yOff)
 }
 
 // ── Commands ──────────────────────────────────────────────────────

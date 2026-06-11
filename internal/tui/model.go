@@ -152,10 +152,12 @@ type Model struct {
 	fileIdx     int
 
 	// file viewer
-	viewport      viewport.Model
-	viewerTitle   string
-	viewerContext string // label shown in file viewer title bar
-	viewerReturn  viewState
+	viewport       viewport.Model
+	viewerTitle    string
+	viewerContext  string // label shown in file viewer title bar
+	viewerReturn   viewState
+	viewerPath     string // file backing the viewer — re-rendered on resize
+	viewerIsWorker bool   // render viewerPath via renderWorkerFile
 
 	// search
 	search    textinput.Model
