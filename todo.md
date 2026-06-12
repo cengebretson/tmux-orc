@@ -9,10 +9,6 @@ below as a record.
 
 ### TUI follow-ups (soft)
 
-- [ ] (folded into roadmap) `handleKey` (354 lines) is still one function
-      inside `update.go`. The left/right stage-navigation roadmap item in
-      `plan.md` is the surgery that justifies the per-view split — do the
-      split as part of that work, not as a separate pass.
 - [ ] (optional) View composition (`viewDashboard`/`viewDetail`) remains
       untested; golden-file snapshot tests are the cheapest way in if it ever
       matters.
@@ -98,6 +94,18 @@ decision in the adhoc spec (archive-aware lookup, no stage/status change, per-ru
 output dir, history entry on completion) plus refinements the spec lacked
 (`runtime.jit` visibility in status/TUI, `orc mark <ticket> jit` to close,
 concurrent-task blocking). The spec memory predated jit's implementation.
+
+### `handleKey` per-view split (done 2026-06-11)
+
+- [x] The 354-line `handleKey` is now a 15-line dispatcher over five per-view
+      handlers (`handleDashboardKey`, `handleDetailKey`,
+      `handleWorkflowDetailKey`, `handleFileKey`, `handleCharacterSheetKey`).
+      Repetition extracted along the way: `toggleSection` (was four copies),
+      `cycleSectionFocus`/`focusSection` (tab cycling), `openViewer` (was four
+      copies of the file-viewer setup), `openSectionItem`. Behavior-preserving
+      — the full `update_test.go` suite passes unchanged; coverage 54.1% →
+      55.5%. The left/right stage-navigation roadmap item now lands in small
+      focused handlers instead of a monolith.
 
 ### Release automation (done 2026-06-11)
 
