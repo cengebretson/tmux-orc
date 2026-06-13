@@ -358,12 +358,12 @@ func (m Model) handleWorkflowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc", "b":
 		m.view = viewDashboard
-	case "up", "k":
+	case "up", "k", "left", "h":
 		if m.wfDetailCursor > 0 {
 			m.wfDetailCursor--
 			m.reRenderWorkflowDetailAndScroll()
 		}
-	case "down", "j":
+	case "down", "j", "right", "l":
 		if m.wfDetailCursor < wfDetailTotal(m.wfDetailName, m.workflows)-1 {
 			m.wfDetailCursor++
 			m.reRenderWorkflowDetailAndScroll()
@@ -376,12 +376,7 @@ func (m Model) handleWorkflowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				content = styleHealthErr.Render("could not read: " + err.Error())
 			}
-			wfCount := stageWorkflowCount(m.workflows, stageName)
-			wfWord := "workflows"
-			if wfCount == 1 {
-				wfWord = "workflow"
-			}
-			title := fmt.Sprintf("%s · step %d of %d · %s · %d %s", stageName, stepNum, total, advance, wfCount, wfWord)
+			title := stageViewerTitle(stageName, advance, stepNum, total, m.workflows)
 			m.openViewer(content, title, m.wfDetailName, viewWorkflowDetail, stagePath, false)
 		}
 	default:
@@ -398,18 +393,34 @@ func (m Model) handleFileKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc", "b":
 		if m.viewerReturn == viewWorkflowDetail {
-			m.reRenderWorkflowDetail()
+			m.reRenderWorkflowDetailAndScroll()
 		}
 		m.view = m.viewerReturn
 	case "left", "h":
-		if m.viewerReturn == viewDetail && m.fileIdx > 0 {
-			m.fileIdx--
-			m.loadViewerFile()
+		switch m.viewerReturn {
+		case viewDetail:
+			if m.fileIdx > 0 {
+				m.fileIdx--
+				m.loadViewerFile()
+			}
+		case viewWorkflowDetail:
+			if m.wfDetailCursor > 0 {
+				m.wfDetailCursor--
+				m.loadViewerStage()
+			}
 		}
 	case "right", "l":
-		if m.viewerReturn == viewDetail && m.fileIdx < len(m.detailFiles)-1 {
-			m.fileIdx++
-			m.loadViewerFile()
+		switch m.viewerReturn {
+		case viewDetail:
+			if m.fileIdx < len(m.detailFiles)-1 {
+				m.fileIdx++
+				m.loadViewerFile()
+			}
+		case viewWorkflowDetail:
+			if m.wfDetailCursor < wfDetailTotal(m.wfDetailName, m.workflows)-1 {
+				m.wfDetailCursor++
+				m.loadViewerStage()
+			}
 		}
 	case "!":
 		if m.charSheetWorker != nil {
@@ -458,6 +469,35 @@ func (m *Model) reRenderWorkflowDetailAndScroll() {
 	} else if targetLine >= curY+viewH {
 		m.viewport.SetYOffset(targetLine - viewH + 1)
 	}
+}
+
+// stageViewerTitle builds the "stage · step N of M · advance · K workflows"
+// title shown when a stage file is open in the viewer.
+func stageViewerTitle(stageName, advance string, stepNum, total int, chains []workflowChain) string {
+	wfCount := stageWorkflowCount(chains, stageName)
+	wfWord := "workflows"
+	if wfCount == 1 {
+		wfWord = "workflow"
+	}
+	return fmt.Sprintf("%s · step %d of %d · %s · %d %s", stageName, stepNum, total, advance, wfCount, wfWord)
+}
+
+// loadViewerStage loads the stage at m.wfDetailCursor (in pipeline order) into
+// the viewport for viewFile, rebuilding the "step N of M" title.
+func (m *Model) loadViewerStage() {
+	stageName, advance, stepNum, total := wfDetailSelectedStage(m.wfDetailName, m.wfDetailCursor, m.workflows)
+	if stageName == "" {
+		return
+	}
+	stagePath := filepath.Join(m.root, "stages", stageName+".md")
+	content, err := renderFile(stagePath, m.viewport.Width)
+	if err != nil {
+		content = styleHealthErr.Render("could not read: " + err.Error())
+	}
+	m.viewport.SetContent(content)
+	m.viewport.SetYOffset(0)
+	m.viewerTitle = stageViewerTitle(stageName, advance, stepNum, total, m.workflows)
+	m.viewerPath = stagePath
 }
 
 // loadViewerFile loads m.detailFiles[m.fileIdx] into the viewport for viewFile.

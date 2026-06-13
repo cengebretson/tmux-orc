@@ -28,6 +28,10 @@ func keyMsg(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		return tea.KeyMsg{Type: tea.KeyDown}
+	case "left":
+		return tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		return tea.KeyMsg{Type: tea.KeyRight}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -257,6 +261,80 @@ func TestHandleKeyWorkflowDrillIn(t *testing.T) {
 	m, _ = press(t, m, "esc")
 	if m.view != viewDashboard {
 		t.Errorf("esc should return to dashboard, got %v", m.view)
+	}
+}
+
+func TestHandleKeyWorkflowDetailLeftRightAliases(t *testing.T) {
+	m := testModel(t)
+	m, _ = press(t, m, "tab", "tab", "enter") // drill into workflows/default
+
+	// chain has 2 steps + 1 repair step → cursor clamps at 2
+	m, _ = press(t, m, "right", "l", "right")
+	if m.wfDetailCursor != 2 {
+		t.Errorf("wfDetailCursor = %d, want clamped at 2", m.wfDetailCursor)
+	}
+	m, _ = press(t, m, "left", "h", "left")
+	if m.wfDetailCursor != 0 {
+		t.Errorf("wfDetailCursor = %d, want clamped at 0", m.wfDetailCursor)
+	}
+}
+
+func TestHandleKeyStageViewerLeftRight(t *testing.T) {
+	m := testModel(t)
+	m.root = t.TempDir()
+	stagesDir := filepath.Join(m.root, "stages")
+	if err := os.MkdirAll(stagesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"develop", "code-review", "pr-repair"} {
+		if err := os.WriteFile(filepath.Join(stagesDir, name+".md"), []byte("# "+name), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	m, _ = press(t, m, "tab", "tab", "enter") // drill into workflows/default
+	m, _ = press(t, m, "enter")               // open stage 0 in the viewer
+	if m.view != viewFile {
+		t.Fatalf("view = %v, want viewFile", m.view)
+	}
+	if !strings.Contains(m.viewerTitle, "develop · step 1 of 3") {
+		t.Fatalf("viewerTitle = %q, want develop step 1 of 3", m.viewerTitle)
+	}
+
+	// right walks pipeline order, updating cursor, title, and path
+	m, _ = press(t, m, "right")
+	if m.wfDetailCursor != 1 {
+		t.Errorf("wfDetailCursor = %d, want 1", m.wfDetailCursor)
+	}
+	if !strings.Contains(m.viewerTitle, "code-review · step 2 of 3") {
+		t.Errorf("viewerTitle = %q, want code-review step 2 of 3", m.viewerTitle)
+	}
+	if want := filepath.Join(stagesDir, "code-review.md"); m.viewerPath != want {
+		t.Errorf("viewerPath = %q, want %q", m.viewerPath, want)
+	}
+
+	// continues into repair steps and clamps at the end
+	m, _ = press(t, m, "l", "right")
+	if m.wfDetailCursor != 2 {
+		t.Errorf("wfDetailCursor = %d, want clamped at 2", m.wfDetailCursor)
+	}
+	if !strings.Contains(m.viewerTitle, "pr-repair · step 3 of 3") {
+		t.Errorf("viewerTitle = %q, want pr-repair step 3 of 3", m.viewerTitle)
+	}
+
+	// left walks back and clamps at the start
+	m, _ = press(t, m, "left", "h", "left")
+	if m.wfDetailCursor != 0 {
+		t.Errorf("wfDetailCursor = %d, want clamped at 0", m.wfDetailCursor)
+	}
+
+	// esc returns to the workflow detail page with the cursor where we left it
+	m, _ = press(t, m, "right", "esc")
+	if m.view != viewWorkflowDetail {
+		t.Fatalf("esc should return to workflow detail, got %v", m.view)
+	}
+	if m.wfDetailCursor != 1 {
+		t.Errorf("wfDetailCursor = %d after esc, want 1", m.wfDetailCursor)
 	}
 }
 
