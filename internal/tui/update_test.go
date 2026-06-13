@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/cengebretson/orc/internal/state"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func keyMsg(s string) tea.KeyMsg {
@@ -231,6 +233,38 @@ func TestHandleKeyWorkerFileViewer(t *testing.T) {
 	if m.view != viewFile {
 		t.Fatalf("esc should return to file viewer, got %v", m.view)
 	}
+	m, _ = press(t, m, "esc")
+	if m.view != viewDashboard {
+		t.Errorf("esc should return to dashboard, got %v", m.view)
+	}
+}
+
+func TestHandleKeyHealthDrillInOpensReport(t *testing.T) {
+	m := testModel(t)
+	m.healthItems = []doctor.Check{
+		{Group: "workspace", Name: "AGENTS.md", Status: doctor.OK},
+		{Group: "workspace", Name: "worktrees/", Status: doctor.Warning, Detail: "not created yet"},
+	}
+
+	// tab focuses the first navigable section (always health); enter drills in
+	m, _ = press(t, m, "tab")
+	if m.sectionFocus != "health" {
+		t.Fatalf("tab should focus health, got %q", m.sectionFocus)
+	}
+	m, _ = press(t, m, "enter")
+	if m.view != viewFile {
+		t.Fatalf("view = %v, want viewFile", m.view)
+	}
+	if m.viewerTitle != "doctor report" {
+		t.Errorf("viewerTitle = %q, want \"doctor report\"", m.viewerTitle)
+	}
+	if m.viewerReturn != viewDashboard {
+		t.Errorf("viewerReturn = %v, want viewDashboard", m.viewerReturn)
+	}
+	if body := ansi.Strip(m.viewport.View()); !strings.Contains(body, "not created yet") {
+		t.Errorf("report viewport missing check detail:\n%s", body)
+	}
+
 	m, _ = press(t, m, "esc")
 	if m.view != viewDashboard {
 		t.Errorf("esc should return to dashboard, got %v", m.view)

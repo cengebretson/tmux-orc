@@ -82,6 +82,56 @@ func TestRenderHealthLinesGroupsAndIcons(t *testing.T) {
 	}
 }
 
+func TestRenderHealthReport(t *testing.T) {
+	checks := []doctor.Check{
+		{Group: "workspace", Name: "AGENTS.md", Status: doctor.OK},
+		{Group: "workspace", Name: "worktrees/", Status: doctor.Warning, Detail: "not created yet"},
+		{Group: "config", Name: "orc.yaml", Status: doctor.OK, Detail: "valid"},
+		{Group: "tools", Name: "codex", Status: doctor.Fail, Detail: "not found on PATH"},
+	}
+	plain := ansi.Strip(renderHealthReport(checks, 80))
+
+	for _, want := range []string{
+		"workspace", "config", "tools",
+		"✓", "⚠", "✗",
+		"AGENTS.md", "worktrees/", "not created yet",
+		"orc.yaml", "valid", "codex", "not found on PATH",
+	} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("health report missing %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestRenderHealthReportEmpty(t *testing.T) {
+	if got := ansi.Strip(renderHealthReport(nil, 80)); !strings.Contains(got, "No health checks") {
+		t.Errorf("empty report = %q", got)
+	}
+}
+
+// Non-OK checks get an explanatory line (name + detail) on the expanded
+// dashboard; OK checks do not clutter it.
+func TestHealthIssueLines(t *testing.T) {
+	m := Model{healthItems: []doctor.Check{
+		{Group: "workspace", Name: "AGENTS.md", Status: doctor.OK},
+		{Group: "workspace", Name: "worktrees/", Status: doctor.Warning, Detail: "not created yet"},
+		{Group: "tools", Name: "codex", Status: doctor.Fail, Detail: "not found on PATH"},
+	}}
+	lines := m.healthIssueLines(80)
+	if len(lines) != 2 {
+		t.Fatalf("issue lines = %d, want 2 (non-OK only)", len(lines))
+	}
+	plain := ansi.Strip(strings.Join(lines, "\n"))
+	for _, want := range []string{"worktrees/", "not created yet", "codex", "not found on PATH"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("issue lines missing %q:\n%s", want, plain)
+		}
+	}
+	if strings.Contains(plain, "AGENTS.md") {
+		t.Errorf("OK check should not appear in issue lines:\n%s", plain)
+	}
+}
+
 // ── route chain ──────────────────────────────────────────────────
 
 func TestRenderRouteChain(t *testing.T) {

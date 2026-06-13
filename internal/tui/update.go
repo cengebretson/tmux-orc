@@ -285,6 +285,12 @@ func (m *Model) toggleSection(name string) {
 // openSectionItem opens the focused section's selected item: a worker file,
 // a workflow detail page, or a plain file view.
 func (m *Model) openSectionItem() {
+	// Health has no list items — it drills straight into the full doctor report.
+	if m.sectionFocus == "health" {
+		content := renderHealthReport(m.healthItems, m.width-4)
+		m.openViewer(content, "doctor report", "Health", viewDashboard, "", false)
+		return
+	}
 	items := m.sectionItems[m.sectionFocus]
 	if m.sectionCursor >= len(items) {
 		return

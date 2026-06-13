@@ -89,9 +89,17 @@ func (m Model) viewDashboard() string {
 	left.WriteString(drawBoxLabeled(headerTitle, []string{statsLine}, leftW) + "\n")
 
 	healthFocused := m.focusedPane == "section" && m.sectionFocus == "health"
+	healthContent := m.renderHealthLines(leftInnerW - 4)
+	if issues := m.healthIssueLines(leftInnerW - 4); len(issues) > 0 {
+		healthContent = append(healthContent, "")
+		healthContent = append(healthContent, issues...)
+	}
+	if healthFocused {
+		healthContent = append(healthContent, "", styleDim.Render("enter to view full report"))
+	}
 	left.WriteString(m.sectionBox("health", "1", "Health",
 		fmt.Sprintf("%d checks", len(m.healthItems)),
-		m.renderHealthLines(leftInnerW-4), leftW, healthFocused) + "\n")
+		healthContent, leftW, healthFocused) + "\n")
 
 	wfFocused := m.focusedPane == "section" && m.sectionFocus == "workflows"
 	var wfContent []string
@@ -276,6 +284,19 @@ func (m Model) viewDashboard() string {
 
 // drawBox renders a plain rounded box (no title in border).
 
+// healthIconStyle maps a check status to its glyph and color, shared by the
+// dashboard health overview, the inline issue lines, and the full report.
+func healthIconStyle(s doctor.Status) (string, lipgloss.Style) {
+	switch s {
+	case doctor.OK:
+		return "✓", styleHealthOK
+	case doctor.Warning:
+		return "⚠", styleHealthWarn
+	default:
+		return "✗", styleHealthErr
+	}
+}
+
 // renderHealthLines renders health items grouped by their Group field.
 // Items with no group flow together on wrapped rows. Each new group gets a
 // header line and its items indented on their own wrapped rows below it.
@@ -297,18 +318,7 @@ func (m Model) renderHealthLines(maxW int) []string {
 	currentGroup := ""
 
 	for _, item := range m.healthItems {
-		var s lipgloss.Style
-		icon := "✓"
-		switch item.Status {
-		case doctor.OK:
-			s = styleHealthOK
-		case doctor.Warning:
-			s = styleHealthWarn
-			icon = "⚠"
-		default:
-			s = styleHealthErr
-			icon = "✗"
-		}
+		icon, s := healthIconStyle(item.Status)
 		part := s.Render(icon + " " + strings.TrimSpace(item.Name))
 
 		// group boundary — flush current row and emit header
@@ -347,6 +357,61 @@ func (m Model) renderHealthLines(maxW int) []string {
 	}
 	flushRow(&rows, row)
 	return rows
+}
+
+// healthIssueLines returns one explanatory line per non-OK check — icon, name,
+// and the doctor detail — so the expanded dashboard explains problems instead of
+// just flagging them. OK checks stay in the compact wrapped overview.
+func (m Model) healthIssueLines(maxW int) []string {
+	var lines []string
+	for _, c := range m.healthItems {
+		if c.Status == doctor.OK {
+			continue
+		}
+		icon, st := healthIconStyle(c.Status)
+		head := icon + " " + strings.TrimSpace(c.Name)
+		line := st.Render(head)
+		if c.Detail != "" {
+			budget := maxW - lipgloss.Width(head) - 3
+			if budget > 1 {
+				line += styleDim.Render(" — " + truncate(c.Detail, budget))
+			}
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// renderHealthReport renders the full doctor report — every check with its
+// group, status icon, name, and detail — for the Health drill-in viewer. This
+// mirrors `orc doctor` output, styled with the active theme.
+func renderHealthReport(checks []doctor.Check, width int) string {
+	if len(checks) == 0 {
+		return styleDim.Render("No health checks.")
+	}
+	nameW := 0
+	for _, c := range checks {
+		if w := lipgloss.Width(c.Name); w > nameW {
+			nameW = w
+		}
+	}
+	var b strings.Builder
+	currentGroup := "\x00" // sentinel so the first group prints even when ""
+	for _, c := range checks {
+		if c.Group != currentGroup {
+			currentGroup = c.Group
+			if currentGroup != "" {
+				b.WriteString(" " + styleSection.Render(currentGroup) + "\n")
+			}
+		}
+		icon, st := healthIconStyle(c.Status)
+		line := "   " + st.Render(icon) + "  " + styleSubtext.Render(padRight(c.Name, nameW))
+		if c.Detail != "" {
+			line += "  " + styleDim.Render(c.Detail)
+		}
+		b.WriteString(line + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // sectionBox renders a collapsible labeled box.
