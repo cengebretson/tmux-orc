@@ -17,10 +17,33 @@ import (
 )
 
 // ── Detail view ───────────────────────────────────────────────────
+
+// viewDetail renders the chrome — the title bar and help line — around the
+// scrollable detail body, which lives in the viewport so long tickets stay
+// usable on short terminals.
 func (m Model) viewDetail() string {
 	if m.detail == nil {
 		return ""
 	}
+	outerW := m.width - 2
+	var b strings.Builder
+	b.WriteString("\n" + drawBox(styleDetailTitle.Render(" "+m.detail.s.Slug+" "), nil, outerW) + "\n")
+	b.WriteString(m.viewport.View())
+	help := strings.Join([]string{
+		helpItem("tab/←→", "cycle files"),
+		helpItem("↑↓/pgup/pgdn", "scroll"),
+		helpItem("enter", "view file"),
+		helpItem("t", "attach"),
+		helpItem("esc", "back"),
+		helpItem("q", "quit"),
+	}, "  ")
+	b.WriteString("\n" + styleHelp.Render(" "+help))
+	return b.String()
+}
+
+// renderDetailBody renders the scrollable body of the detail view — the State,
+// Repos, Timing, History, and Files boxes — for the viewport.
+func (m Model) renderDetailBody() string {
 	s := m.detail.s
 	summary := ticketview.Build(m.root, m.detail.featureDir, s, ticketview.Options{
 		TmuxAvailable: func() bool { return true },
@@ -31,11 +54,11 @@ func (m Model) viewDetail() string {
 			return "tmux attach -t " + session + ":" + window
 		},
 	})
-	outerW := m.width - 2
+	// The body renders inside the viewport (width m.width-4), so build the boxes
+	// to that width — the title bar in viewDetail keeps the full m.width-2.
+	outerW := m.width - 4
 	innerW := outerW - 2
 	var b strings.Builder
-
-	b.WriteString("\n" + drawBox(styleDetailTitle.Render(" "+s.Slug+" "), nil, outerW) + "\n")
 
 	// State fields
 	var stateLines []string
@@ -192,16 +215,7 @@ func (m Model) viewDetail() string {
 		b.WriteString(drawBox(styleSection.Render(" Files "), fileLines, outerW) + "\n")
 	}
 
-	help := strings.Join([]string{
-		helpItem("tab/←→", "cycle files"),
-		helpItem("enter", "view file"),
-		helpItem("t", "attach"),
-		helpItem("esc", "back"),
-		helpItem("q", "quit"),
-	}, "  ")
-	b.WriteString(styleHelp.Render(" " + help))
-
-	return b.String()
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // ── File viewer ───────────────────────────────────────────────────

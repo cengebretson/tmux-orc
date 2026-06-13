@@ -25,6 +25,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.view {
 		case viewFile:
 			m.reRenderViewerFile()
+		case viewDetail:
+			m.reRenderDetail()
 		case viewWorkflowDetail:
 			m.reRenderWorkflowDetail()
 		case viewCharacterSheet:
@@ -221,6 +223,9 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.detail = row
 				m.detailFiles = buildFileList(m.detail.featureDir, m.detail.s)
 				m.fileIdx = 0
+				m.viewport = viewport.New(m.width-4, m.height-6)
+				m.viewport.SetContent(m.renderDetailBody())
+				m.detailScroll = 0
 				m.view = viewDetail
 			}
 		}
@@ -357,10 +362,12 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab", "right", "l":
 		if m.fileIdx < len(m.detailFiles)-1 {
 			m.fileIdx++
+			m.reRenderDetail() // refresh the selected file chip
 		}
 	case "shift+tab", "left", "h":
 		if m.fileIdx > 0 {
 			m.fileIdx--
+			m.reRenderDetail()
 		}
 	case "t":
 		if m.detail.s.Runtime.Tmux != nil && m.detail.tmuxLive {
@@ -369,8 +376,13 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.fileIdx < len(m.detailFiles) {
 			f := m.detailFiles[m.fileIdx]
+			m.detailScroll = m.viewport.YOffset // restore on return from the file viewer
 			m.openViewer(fileRenderer(f.path), f.label, m.detail.s.Ticket, viewDetail)
 		}
+	default:
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -411,8 +423,14 @@ func (m Model) handleFileKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "esc", "b":
-		if m.viewerReturn == viewWorkflowDetail {
+		switch m.viewerReturn {
+		case viewWorkflowDetail:
 			m.reRenderWorkflowDetailAndScroll()
+		case viewDetail:
+			// the viewport holds file content — rebuild the detail body and
+			// restore the scroll position we left from.
+			m.viewport.SetContent(m.renderDetailBody())
+			m.viewport.SetYOffset(m.detailScroll)
 		}
 		m.view = m.viewerReturn
 	case "left", "h":
@@ -522,6 +540,17 @@ func (m *Model) loadViewerFile() {
 	m.viewport.SetContent(m.viewerRender(m.viewport.Width))
 	m.viewport.SetYOffset(0)
 	m.viewerTitle = f.label
+}
+
+// reRenderDetail rebuilds the detail body into the viewport at the current
+// width, preserving the scroll position. Called on resize and file-chip change.
+func (m *Model) reRenderDetail() {
+	if m.detail == nil {
+		return
+	}
+	off := m.viewport.YOffset
+	m.viewport.SetContent(m.renderDetailBody())
+	m.viewport.SetYOffset(off)
 }
 
 // reRenderViewerFile rebuilds the file viewer content at the current viewport

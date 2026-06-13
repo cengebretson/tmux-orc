@@ -256,7 +256,7 @@ func TestViewDetailShowsTimingSection(t *testing.T) {
 	m.detail = row
 	m.detailFiles = nil
 
-	out := m.viewDetail()
+	out := m.renderDetailBody()
 	if !strings.Contains(out, "Timing") {
 		t.Fatalf("detail view missing Timing section:\n%s", out)
 	}
@@ -302,7 +302,7 @@ func TestViewDetailNarrowWidthDoesNotPanic(t *testing.T) {
 	m.height = 40
 	m.detail = row
 
-	_ = m.viewDetail() // must not panic
+	_ = m.renderDetailBody() // must not panic
 }
 
 // ── workflow detail ──────────────────────────────────────────────

@@ -156,9 +156,10 @@ type Model struct {
 	sectionItems  map[string][]sectionItem
 
 	// detail
-	detail      *featureRow
-	detailFiles []detailFile
-	fileIdx     int
+	detail       *featureRow
+	detailFiles  []detailFile
+	fileIdx      int
+	detailScroll int // saved viewport offset, restored when returning from a file
 
 	// file viewer
 	viewport      viewport.Model
