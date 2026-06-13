@@ -2,10 +2,33 @@ package tui
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
+
+// renderBrokenFeature builds the file-viewer content for a feature whose
+// STATE.yaml could not be parsed: the parse error followed by the raw file so
+// the user can spot the problem (bad indentation, a stray field) without
+// leaving the TUI.
+func renderBrokenFeature(row *featureRow) string {
+	var b strings.Builder
+	b.WriteString(styleHealthErr.Render("⚠ STATE.yaml could not be parsed") + "\n\n")
+	if row.loadErr != nil {
+		b.WriteString(styleDim.Render("error: ") + row.loadErr.Error() + "\n")
+	}
+	b.WriteString(styleDim.Render("path:  ") + filepath.Join(row.featureDir, "STATE.yaml") + "\n\n")
+
+	raw, err := os.ReadFile(filepath.Join(row.featureDir, "STATE.yaml"))
+	if err != nil {
+		b.WriteString(styleHealthErr.Render("could not read file: " + err.Error()))
+		return b.String()
+	}
+	b.WriteString(styleDivider.Render(strings.Repeat("─", 40)) + "\n")
+	b.WriteString(string(raw))
+	return b.String()
+}
 
 // drawBox renders a plain rounded box (no title in border).
 func drawBox(title string, contentLines []string, outerW int) string {

@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
@@ -137,6 +138,13 @@ func collectFeatures(root string) []*featureRow {
 	rows := make([]*featureRow, 0, len(features))
 	for _, f := range features {
 		if f.LoadError != nil {
+			// Surface broken tickets instead of hiding them — a row with no
+			// parsed state renders as a "broken" entry the user can act on.
+			rows = append(rows, &featureRow{
+				featureDir: f.FeatureDir,
+				loadErr:    f.LoadError,
+				hasIssues:  true,
+			})
 			continue
 		}
 		rows = append(rows, &featureRow{
@@ -152,24 +160,74 @@ func collectFeatures(root string) []*featureRow {
 	return rows
 }
 
+// buildFileList collects the files shown in a feature's detail view: the
+// top-level context docs followed by each stage's output files. Stage outputs
+// are discovered by scanning the feature dir's subfolders rather than assuming
+// fixed stage names — each stage writes to a subfolder matching its name, which
+// is policy in orc.yaml, not something the TUI should hardcode. Subfolders are
+// ordered by the ticket's own stage history (pipeline order), with any
+// remaining folders appended alphabetically.
 func buildFileList(featureDir string, s *state.State) []detailFile {
-	candidates := []detailFile{
+	topLevel := []detailFile{
 		{"TICKET.md", filepath.Join(featureDir, "TICKET.md")},
 		{"SPEC.md", filepath.Join(featureDir, "SPEC.md")},
 		{"PLAN.md", filepath.Join(featureDir, "PLAN.md")},
 		{"DECISIONS.md", filepath.Join(featureDir, "DECISIONS.md")},
-		{"impl/QA_HANDOFF.md", filepath.Join(featureDir, "impl", "QA_HANDOFF.md")},
-		{"impl/REVIEW.md", filepath.Join(featureDir, "impl", "REVIEW.md")},
-		{"impl/PR.md", filepath.Join(featureDir, "impl", "PR.md")},
-		{"qa/QA_PLAN.md", filepath.Join(featureDir, "qa", "QA_PLAN.md")},
-		{"qa/QA_RESULT.md", filepath.Join(featureDir, "qa", "QA_RESULT.md")},
 	}
 	core := map[string]bool{"TICKET.md": true, "SPEC.md": true, "PLAN.md": true}
 	var out []detailFile
-	for _, f := range candidates {
+	for _, f := range topLevel {
 		if fileExists(f.path) || core[f.label] {
 			out = append(out, f)
 		}
 	}
+
+	for _, dir := range orderedStageDirs(featureDir, s) {
+		matches, _ := filepath.Glob(filepath.Join(featureDir, dir, "*.md"))
+		sort.Strings(matches)
+		for _, p := range matches {
+			out = append(out, detailFile{label: dir + "/" + filepath.Base(p), path: p})
+		}
+	}
 	return out
+}
+
+// orderedStageDirs returns the feature dir's stage subfolders in pipeline order:
+// those the ticket has visited (per history, then the current stage) first, then
+// any other present folders alphabetically. Hidden and `_`-prefixed folders are
+// skipped.
+func orderedStageDirs(featureDir string, s *state.State) []string {
+	present := map[string]bool{}
+	if entries, err := os.ReadDir(featureDir); err == nil {
+		for _, e := range entries {
+			name := e.Name()
+			if e.IsDir() && !strings.HasPrefix(name, ".") && !strings.HasPrefix(name, "_") {
+				present[name] = true
+			}
+		}
+	}
+
+	var ordered []string
+	seen := map[string]bool{}
+	add := func(name string) {
+		if present[name] && !seen[name] {
+			ordered = append(ordered, name)
+			seen[name] = true
+		}
+	}
+	if s != nil {
+		for _, h := range s.History {
+			add(h.Stage)
+		}
+		add(s.Stage.Name)
+	}
+
+	var rest []string
+	for name := range present {
+		if !seen[name] {
+			rest = append(rest, name)
+		}
+	}
+	sort.Strings(rest)
+	return append(ordered, rest...)
 }

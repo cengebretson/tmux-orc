@@ -559,8 +559,13 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 	lines = append(lines, header, div)
 
 	for i, row := range rows {
-		s := row.s
 		selected := i == selectedIdx
+
+		if row.s == nil {
+			lines = append(lines, brokenRow(row, w, wTicket, selected))
+			continue
+		}
+		s := row.s
 
 		icon := statusIcon(s.Status)
 		name := strings.TrimPrefix(s.Slug, s.Ticket+"-")
@@ -631,4 +636,31 @@ func (m Model) renderTable(rows []*featureRow, w int, selectedIdx int) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// brokenRow renders a feature whose STATE.yaml could not be parsed: ticket from
+// the directory name, a red "broken" status, and the parse error in the stage
+// column. The "!" health marker flags it like any other issue.
+func brokenRow(row *featureRow, w, wTicket int, selected bool) string {
+	ticket := truncate(row.ticketID(), wTicket)
+	reason := "unreadable STATE.yaml"
+	if row.loadErr != nil {
+		reason = row.loadErr.Error()
+	}
+	const marker = "⚠ broken — "
+	// width left for the reason after the leading space, ticket col, separator,
+	// and the marker
+	reasonW := w - (1 + wTicket + 2 + lipgloss.Width(marker))
+	if reasonW < 0 {
+		reasonW = 0
+	}
+	reason = truncate(reason, reasonW)
+
+	if selected {
+		line := " " + padRight(ticket, wTicket) + "  " + marker + reason
+		return styleRowSelected.Width(w).Render(line)
+	}
+	return " " +
+		padRight(styleHealthErr.Render(ticket), wTicket) + "  " +
+		styleHealthErr.Render("⚠ broken") + styleDim.Render(" — "+reason)
 }

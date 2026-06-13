@@ -190,7 +190,7 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			rows := m.visibleFeatures()
 			if m.cursor < len(rows) {
 				row := rows[m.cursor]
-				if row.s.Runtime.Tmux != nil && row.tmuxLive {
+				if row.s != nil && row.s.Runtime.Tmux != nil && row.tmuxLive {
 					return m, attachTmux(row.s.Runtime.Tmux.Session, row.s.Stage.Name)
 				}
 			}
@@ -213,7 +213,13 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			rows := m.visibleFeatures()
 			if m.cursor < len(rows) {
-				m.detail = rows[m.cursor]
+				row := rows[m.cursor]
+				if row.s == nil {
+					content := renderBrokenFeature(row)
+					m.openViewer(content, row.ticketID(), "broken", viewDashboard, "", false)
+					return m, nil
+				}
+				m.detail = row
 				m.detailFiles = buildFileList(m.detail.featureDir, m.detail.s)
 				m.fileIdx = 0
 				m.view = viewDetail

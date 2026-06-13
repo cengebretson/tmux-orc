@@ -2,6 +2,7 @@ package tui
 
 import (
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -114,6 +115,16 @@ type featureRow struct {
 	workerName     string
 	tmuxLive       bool
 	hasIssues      bool
+	loadErr        error // non-nil when STATE.yaml could not be parsed; s is nil
+}
+
+// ticketID returns the ticket for display. Broken rows have no parsed state, so
+// fall back to the feature directory name.
+func (f *featureRow) ticketID() string {
+	if f.s != nil && f.s.Ticket != "" {
+		return f.s.Ticket
+	}
+	return filepath.Base(f.featureDir)
 }
 
 // ── model ─────────────────────────────────────────────────────────
@@ -249,11 +260,16 @@ func (m Model) visibleFeatures() []*featureRow {
 	query := strings.ToLower(strings.TrimSpace(m.search.Value()))
 	var out []*featureRow
 	for _, f := range m.features {
-		if f.s.Status == "archived" && !m.showArchived {
+		// Broken rows (unparseable state) always show — they need attention and
+		// we can't tell whether they're archived.
+		if f.s != nil && f.s.Status == "archived" && !m.showArchived {
 			continue
 		}
 		if query != "" {
-			haystack := strings.ToLower(f.s.Ticket + " " + f.s.Slug)
+			haystack := strings.ToLower(f.ticketID())
+			if f.s != nil {
+				haystack = strings.ToLower(f.s.Ticket + " " + f.s.Slug)
+			}
 			if !strings.Contains(haystack, query) {
 				continue
 			}
