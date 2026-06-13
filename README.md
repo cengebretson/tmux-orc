@@ -336,6 +336,12 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
   - `--dry` — preview the resolved worker and prompt without launching
   - `--tmux` — send to the ticket's existing tmux session instead of foreground
 - `orc attach <ticket>` — attach to the tmux session for a ticket
+  - A convenience over plain `tmux attach`: it reads the real session name from
+    `STATE.yaml` (the session is named after the slug, not always the ticket ID,
+    and it can be overridden), drops you on the *current stage's* window, and
+    picks `switch-client` vs `attach-session` so it works whether or not you're
+    already inside tmux — avoiding the "sessions should be nested" error and
+    `tmux ls` guesswork. The TUI's `t` key does the same from the dashboard.
 - `orc archive <ticket>` — archive a completed feature, remove worktrees
 - `orc delete <ticket>` — permanently delete a feature folder (only allowed when status is `done` or `archived`)
 - `orc tui` — open the interactive dashboard
