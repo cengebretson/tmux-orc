@@ -180,6 +180,26 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case "pgdown", "ctrl+f":
+		if m.focusedPane != "section" {
+			m.moveFeatureCursor(m.featuresPageSize())
+		}
+	case "pgup", "ctrl+b":
+		if m.focusedPane != "section" {
+			m.moveFeatureCursor(-m.featuresPageSize())
+		}
+	case "g", "home":
+		if m.focusedPane != "section" {
+			m.cursor = 0
+		}
+	case "G", "end":
+		if m.focusedPane != "section" {
+			m.cursor = len(m.visibleFeatures()) - 1
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+		}
+
 	case "a":
 		if m.focusedPane == "features" {
 			m.showArchived = !m.showArchived
@@ -232,6 +252,30 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// featuresPageSize approximates one screenful of feature rows for pgup/pgdn.
+// The exact visible-row count depends on which sections are expanded, but the
+// render's scroll window keeps the cursor visible regardless, so an estimate is
+// fine.
+func (m Model) featuresPageSize() int {
+	p := m.height - 8
+	if p < 1 {
+		p = 1
+	}
+	return p
+}
+
+// moveFeatureCursor shifts the features cursor by delta, clamped to the list.
+func (m *Model) moveFeatureCursor(delta int) {
+	n := len(m.visibleFeatures())
+	m.cursor += delta
+	if m.cursor > n-1 {
+		m.cursor = n - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
 }
 
 // cycleSectionFocus moves focus through the navigable sections with tab /

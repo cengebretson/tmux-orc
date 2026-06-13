@@ -30,6 +30,10 @@ func keyMsg(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		return tea.KeyMsg{Type: tea.KeyDown}
+	case "pgup":
+		return tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyMsg{Type: tea.KeyPgDown}
 	case "left":
 		return tea.KeyMsg{Type: tea.KeyLeft}
 	case "right":
@@ -184,6 +188,36 @@ func TestHandleKeySectionToggleCollapseReturnsFocus(t *testing.T) {
 	}
 	if m.focusedPane != "features" {
 		t.Errorf("collapsing the focused section should return focus to features, got %q", m.focusedPane)
+	}
+}
+
+func TestHandleKeyFeaturesPageAndJump(t *testing.T) {
+	m := testModel(t) // 3 features, height 40 → page size 32
+
+	m, _ = press(t, m, "G")
+	if m.cursor != 2 {
+		t.Errorf("G: cursor = %d, want last row 2", m.cursor)
+	}
+	m, _ = press(t, m, "g")
+	if m.cursor != 0 {
+		t.Errorf("g: cursor = %d, want 0", m.cursor)
+	}
+	m, _ = press(t, m, "pgdown")
+	if m.cursor != 2 {
+		t.Errorf("pgdown: cursor = %d, want clamped to 2", m.cursor)
+	}
+	m, _ = press(t, m, "pgup")
+	if m.cursor != 0 {
+		t.Errorf("pgup: cursor = %d, want clamped to 0", m.cursor)
+	}
+
+	// jump keys are inert while a section is focused
+	m, _ = press(t, m, "tab", "G")
+	if m.focusedPane != "section" {
+		t.Fatalf("tab should focus a section")
+	}
+	if m.cursor != 0 {
+		t.Errorf("G in section pane should not move the feature cursor, got %d", m.cursor)
 	}
 }
 

@@ -82,6 +82,38 @@ func TestRenderHealthLinesGroupsAndIcons(t *testing.T) {
 	}
 }
 
+func TestHealthSummaryExtra(t *testing.T) {
+	m := Model{healthItems: []doctor.Check{
+		{Name: "a", Status: doctor.OK},
+		{Name: "b", Status: doctor.Warning},
+		{Name: "c", Status: doctor.Fail},
+		{Name: "d", Status: doctor.Warning},
+	}}
+	got := ansi.Strip(m.healthSummaryExtra())
+	if !strings.Contains(got, "1 ✗") || !strings.Contains(got, "2 ⚠") {
+		t.Errorf("summary extra = %q, want \"1 ✗\" and \"2 ⚠\"", got)
+	}
+
+	clean := Model{healthItems: []doctor.Check{{Name: "a", Status: doctor.OK}}}
+	if got := clean.healthSummaryExtra(); got != "" {
+		t.Errorf("all-OK summary extra = %q, want empty", got)
+	}
+}
+
+// Health is collapsed by default, so the issue badge must show in the summary
+// line without expanding the section.
+func TestDashboardCollapsedHealthShowsIssueCount(t *testing.T) {
+	m := testModel(t)
+	m.healthItems = []doctor.Check{
+		{Group: "workspace", Name: "AGENTS.md", Status: doctor.OK},
+		{Group: "workspace", Name: "worktrees/", Status: doctor.Warning, Detail: "not created yet"},
+	}
+	out := ansi.Strip(m.viewDashboard())
+	if !strings.Contains(out, "1 ⚠") {
+		t.Errorf("collapsed health summary should show the issue badge:\n%s", out)
+	}
+}
+
 func TestRenderHealthReport(t *testing.T) {
 	checks := []doctor.Check{
 		{Group: "workspace", Name: "AGENTS.md", Status: doctor.OK},

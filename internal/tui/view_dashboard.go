@@ -97,9 +97,14 @@ func (m Model) viewDashboard() string {
 	if healthFocused {
 		healthContent = append(healthContent, "", styleDim.Render("enter to view full report"))
 	}
+	// Surface the issue count in the collapsed summary so problems are visible
+	// even when the section is collapsed (the default).
+	healthSummary := styleDim.Render(fmt.Sprintf("%d checks", len(m.healthItems)))
+	if extra := m.healthSummaryExtra(); extra != "" {
+		healthSummary += styleDim.Render("  ·  ") + extra
+	}
 	left.WriteString(m.sectionBox("health", "1", "Health",
-		fmt.Sprintf("%d checks", len(m.healthItems)),
-		healthContent, leftW, healthFocused) + "\n")
+		healthSummary, healthContent, leftW, healthFocused) + "\n")
 
 	wfFocused := m.focusedPane == "section" && m.sectionFocus == "workflows"
 	var wfContent []string
@@ -120,7 +125,7 @@ func (m Model) viewDashboard() string {
 		}
 	}
 	left.WriteString(m.sectionBox("workflows", "2", "Workflows",
-		fmt.Sprintf("%d", len(m.workflows)),
+		styleDim.Render(fmt.Sprintf("%d", len(m.workflows))),
 		wfContent, leftW, wfFocused) + "\n")
 
 	wkFocused := m.focusedPane == "section" && m.sectionFocus == "workers"
@@ -131,7 +136,7 @@ func (m Model) viewDashboard() string {
 		wkContent = renderNameList(leftInnerW-4, m.workerNames)
 	}
 	left.WriteString(m.sectionBox("workers", "3", "Workers",
-		fmt.Sprintf("%d", len(m.workerNames)),
+		styleDim.Render(fmt.Sprintf("%d", len(m.workerNames))),
 		wkContent, leftW, wkFocused) + "\n")
 
 	rtFocused := m.focusedPane == "section" && m.sectionFocus == "routes"
@@ -142,7 +147,7 @@ func (m Model) viewDashboard() string {
 		rtContent = renderRepoList(m.repos, leftInnerW-4)
 	}
 	left.WriteString(m.sectionBox("routes", "4", "Routes",
-		fmt.Sprintf("%d repos", len(m.repos)),
+		styleDim.Render(fmt.Sprintf("%d repos", len(m.repos))),
 		rtContent, leftW, rtFocused))
 
 	// ── Top block: left column + right box (logo + quote) ───────────
@@ -359,6 +364,28 @@ func (m Model) renderHealthLines(maxW int) []string {
 	return rows
 }
 
+// healthSummaryExtra renders a compact "N ✗  M ⚠" badge of non-OK checks for
+// the collapsed Health summary, or "" when everything is healthy.
+func (m Model) healthSummaryExtra() string {
+	warns, fails := 0, 0
+	for _, c := range m.healthItems {
+		switch c.Status {
+		case doctor.Warning:
+			warns++
+		case doctor.Fail:
+			fails++
+		}
+	}
+	var parts []string
+	if fails > 0 {
+		parts = append(parts, styleHealthErr.Render(fmt.Sprintf("%d ✗", fails)))
+	}
+	if warns > 0 {
+		parts = append(parts, styleHealthWarn.Render(fmt.Sprintf("%d ⚠", warns)))
+	}
+	return strings.Join(parts, styleDim.Render("  "))
+}
+
 // healthIssueLines returns one explanatory line per non-OK check — icon, name,
 // and the doctor detail — so the expanded dashboard explains problems instead of
 // just flagging them. OK checks stay in the compact wrapped overview.
@@ -447,7 +474,7 @@ func (m Model) sectionBox(key, keyStr, name, summary string, content []string, o
 	if !m.expanded[key] {
 		label := " " + title
 		if summary != "" {
-			label += styleDim.Render("  " + summary)
+			label += "  " + summary // caller styles the summary
 		}
 		label += " "
 		labelW := lipgloss.Width(label)
