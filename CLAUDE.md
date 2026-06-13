@@ -21,6 +21,7 @@ orc/
     config/                       orc.yaml parsing — repos, workflows, loop stages, settings
     doctor/                       workspace + local tool readiness checks
     featurelist/                  shared feature collection for CLI status and TUI rows
+    report/                       time-in-stage derivation from STATE.yaml history
     health/                       workspace filesystem health checks
     orchestrator/                 launch, transition, and archive services
     runner/                       next-action resolution — worker, prompt, launch args
@@ -41,8 +42,7 @@ orc/
     workflows.md                  workspace workflow configuration reference
   go.mod
   Makefile
-  plan.md                         specced, up-next roadmap work
-  todo.md                         cleanup/hardening items and future ideas
+  plan.md                         roadmap — up-next work, future ideas, cleanup, done record
 ```
 
 ## Dev Workflow
