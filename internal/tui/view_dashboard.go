@@ -52,8 +52,12 @@ func (m Model) viewDashboard() string {
 	// ── Header stats ─────────────────────────────────────────────────
 	since := time.Since(m.lastRefresh)
 	ago := since.Round(time.Second)
-	active, paused := 0, 0
+	active, paused, broken := 0, 0, 0
 	for _, f := range m.features {
+		if f.s == nil {
+			broken++
+			continue
+		}
 		switch f.s.Status {
 		case "active":
 			active++
@@ -73,8 +77,12 @@ func (m Model) viewDashboard() string {
 		styleDim.Render("  ·  ") +
 		styleHealthOK.Render(fmt.Sprintf("%d active", active)) +
 		styleDim.Render("  ·  ") +
-		styleStatusWaiting.Render(fmt.Sprintf("%d paused", paused)) +
-		stalenessStyle(since).Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
+		styleStatusWaiting.Render(fmt.Sprintf("%d paused", paused))
+	if broken > 0 {
+		statsLine += styleDim.Render("  ·  ") +
+			styleHealthErr.Render(fmt.Sprintf("⚠ %d broken", broken))
+	}
+	statsLine += stalenessStyle(since).Render(fmt.Sprintf("  ·  ↺ %s ago", ago))
 
 	// ── Left column: header + sections ───────────────────────────────
 	var left strings.Builder
@@ -104,7 +112,7 @@ func (m Model) viewDashboard() string {
 		}
 	}
 	left.WriteString(m.sectionBox("workflows", "2", "Workflows",
-		fmt.Sprintf("%d", len(m.workflowNames)),
+		fmt.Sprintf("%d", len(m.workflows)),
 		wfContent, leftW, wfFocused) + "\n")
 
 	wkFocused := m.focusedPane == "section" && m.sectionFocus == "workers"

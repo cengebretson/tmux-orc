@@ -22,7 +22,6 @@ func loadData(root string) tea.Cmd {
 		// build workflow chains from workflows.yaml
 		workflowCfg, _ := config.Load(root)
 		var chains []workflowChain
-		allStages := map[string]bool{}
 		for _, wfName := range workflowCfg.Names() {
 			stages := workflowCfg.StageNames(wfName)
 			var steps []routeStep
@@ -31,7 +30,6 @@ func loadData(root string) tea.Cmd {
 				sc, _ := workflowCfg.StageConfig(wfName, stageName)
 				steps = append(steps, routeStep{name: stageName, advance: sc.Advance, workerID: sc.Worker})
 				inThisChain[stageName] = true
-				allStages[stageName] = true
 			}
 			// loop stages — derived from Loop blocks on pipeline stages
 			var loops []repairLoop
@@ -62,12 +60,6 @@ func loadData(root string) tea.Cmd {
 			}
 			chains = []workflowChain{{name: "", steps: steps}}
 		}
-		// collect all stage names for display
-		var wfNames []string
-		for stageName := range allStages {
-			wfNames = append(wfNames, stageName)
-		}
-
 		// worker names
 		allWorkers, _ := workers.Load(filepath.Join(root, "workers"))
 		var workerNames []string
@@ -121,7 +113,6 @@ func loadData(root string) tea.Cmd {
 		return dataMsg{
 			features:        features,
 			healthItems:     report.Checks,
-			workflowNames:   wfNames,
 			workerNames:     workerNames,
 			allWorkers:      allWorkers,
 			workflows:       chains,

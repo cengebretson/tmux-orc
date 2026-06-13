@@ -13,5 +13,5 @@ next_action:
 history:
   - at: "2026-05-31T07:45:00-05:00"
     stage: intake
-    owner: fred-documentor
+    worker: fred-documentor
     result: regression confirmed — login 500 on cold start, root cause identified as null session store

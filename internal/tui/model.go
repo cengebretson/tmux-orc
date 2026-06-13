@@ -64,7 +64,6 @@ func rainbowTick() tea.Cmd {
 type dataMsg struct {
 	features        []*featureRow
 	healthItems     []doctor.Check
-	workflowNames   []string
 	workerNames     []string
 	allWorkers      []*workers.Worker
 	workflows       []workflowChain
@@ -134,7 +133,6 @@ type Model struct {
 	view            viewState
 	features        []*featureRow
 	healthItems     []doctor.Check
-	workflowNames   []string
 	workerNames     []string
 	allWorkers      []*workers.Worker
 	workflows       []workflowChain

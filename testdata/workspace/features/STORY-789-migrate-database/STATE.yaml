@@ -17,17 +17,17 @@ next_action:
 history:
   - at: "2026-05-26T09:00:00-05:00"
     stage: intake
-    owner: fred-documentor
+    worker: fred-documentor
     result: ticket loaded, migration scope documented
   - at: "2026-05-27T13:00:00-05:00"
     stage: develop
-    owner: bob-developer
+    worker: bob-developer
     result: migration scripts written, tests passing locally
   - at: "2026-05-28T10:15:00-05:00"
     stage: pr-open
-    owner: bob-developer
+    worker: bob-developer
     result: PR opened, CI failing on staging deploy step
   - at: "2026-05-30T11:00:00-05:00"
     stage: pr-repair
-    owner: bob-developer
+    worker: bob-developer
     result: blocked — staging environment unavailable

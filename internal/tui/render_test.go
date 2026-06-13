@@ -219,6 +219,42 @@ func TestViewDetailShowsTimingSection(t *testing.T) {
 	}
 }
 
+// Every canonical status (state validStatuses) needs a distinct icon — none may
+// fall through to the generic "·" default, which is reserved for unknown values.
+func TestStatusIconCoversCanonicalStatuses(t *testing.T) {
+	for _, status := range []string{"pending", "ready", "active", "paused", "done", "archived"} {
+		if got := statusIcon(status); got == "·" {
+			t.Errorf("statusIcon(%q) fell through to the default dot", status)
+		}
+	}
+}
+
+func TestTruncateNonPositiveMax(t *testing.T) {
+	if got := truncate("hello", 0); got != "" {
+		t.Errorf("truncate(_, 0) = %q, want empty", got)
+	}
+	if got := truncate("hello", -5); got != "" {
+		t.Errorf("truncate(_, negative) = %q, want empty", got)
+	}
+}
+
+// At narrow widths innerW-72 (the History result column budget) goes negative.
+// viewDetail must not panic slicing the result text.
+func TestViewDetailNarrowWidthDoesNotPanic(t *testing.T) {
+	row := testRow("STORY-1", "active", "develop")
+	row.featureDir = t.TempDir()
+	row.s.History = []state.HistoryEntry{
+		{At: "2026-06-01T09:00:00Z", Stage: "intake", Worker: "agent", Result: "a fairly long result string that would overflow a narrow column"},
+	}
+
+	m := New("")
+	m.width = 50 // innerW = 46 → history result budget innerW-72 = -26
+	m.height = 40
+	m.detail = row
+
+	_ = m.viewDetail() // must not panic
+}
+
 // ── workflow detail ──────────────────────────────────────────────
 
 func testChains() []workflowChain {

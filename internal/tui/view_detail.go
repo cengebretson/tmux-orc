@@ -403,6 +403,9 @@ func renderWorkerFile(path string, features []*featureRow, width int) (string, e
 		// Active stories for this worker
 		var activeRows []string
 		for _, row := range features {
+			if row.s == nil {
+				continue
+			}
 			if row.s.Stage.Worker == w.ID && row.s.Status != "archived" {
 				ticket := styleSubtext.Render(padRight(row.s.Ticket, 14))
 				wf := row.s.Workflow
@@ -455,6 +458,9 @@ func renderWorkflowDetail(name string, chains []workflowChain, allWorkers []*wor
 	stageCounts := map[string]int{}
 	for _, row := range features {
 		s := row.s
+		if s == nil {
+			continue
+		}
 		wf := s.Workflow
 		if wf == "" {
 			wf = "default"

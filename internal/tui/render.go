@@ -120,6 +120,9 @@ func fileExists(path string) bool {
 }
 
 func truncate(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
 	if len(s) <= max {
 		return s
 	}

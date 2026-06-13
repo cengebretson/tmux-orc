@@ -303,6 +303,36 @@ func TestRunJITDryPrintsResolvedWorkerAndPrompt(t *testing.T) {
 	}
 }
 
+func TestRunNextDryDoesNotMutatePendingState(t *testing.T) {
+	resetCommandGlobals(t)
+	// Copy the fixture so a mutation bug can't corrupt the real testdata.
+	globalWorkspace = mutableFixtureWorkspace(t)
+	nextDry = true
+
+	before := loadTicketState(t, globalWorkspace, "FEAT-001")
+	if before.Status != "pending" {
+		t.Fatalf("fixture precondition: FEAT-001 status = %q, want pending", before.Status)
+	}
+
+	out, err := captureStdout(func() error {
+		return runNext(nil, []string{"FEAT-001"})
+	})
+	if err != nil {
+		t.Fatalf("runNext --dry: %v", err)
+	}
+	if !strings.Contains(out, "Would run:") {
+		t.Fatalf("dry output missing preview:\n%s", out)
+	}
+
+	after := loadTicketState(t, globalWorkspace, "FEAT-001")
+	if after.Status != "pending" {
+		t.Errorf("--dry mutated status: %q, want pending", after.Status)
+	}
+	if len(after.History) != len(before.History) {
+		t.Errorf("--dry appended history: %d entries, want %d", len(after.History), len(before.History))
+	}
+}
+
 func TestRunMarkPauseUpdatesCopiedFixture(t *testing.T) {
 	resetCommandGlobals(t)
 	globalWorkspace = mutableFixtureWorkspace(t)
@@ -553,6 +583,9 @@ func resetCommandGlobals(t *testing.T) {
 	oldWorkspace := globalWorkspace
 	oldDoctorFix := doctorFix
 	oldStatusJSON := statusJSON
+	oldNextDry := nextDry
+	oldNextWorker := nextWorker
+	oldNextJSON := nextJSON
 	oldJITDry := jitDry
 	oldJITWorker := jitWorker
 	oldJITTmux := jitTmux
@@ -565,6 +598,9 @@ func resetCommandGlobals(t *testing.T) {
 		globalWorkspace = oldWorkspace
 		doctorFix = oldDoctorFix
 		statusJSON = oldStatusJSON
+		nextDry = oldNextDry
+		nextWorker = oldNextWorker
+		nextJSON = oldNextJSON
 		jitDry = oldJITDry
 		jitWorker = oldJITWorker
 		jitTmux = oldJITTmux
@@ -578,6 +614,9 @@ func resetCommandGlobals(t *testing.T) {
 	globalWorkspace = "."
 	doctorFix = false
 	statusJSON = false
+	nextDry = false
+	nextWorker = ""
+	nextJSON = false
 	jitDry = false
 	jitWorker = ""
 	jitTmux = false

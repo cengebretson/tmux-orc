@@ -20,13 +20,13 @@ next_action:
 history:
   - at: "2026-05-28T09:00:00-05:00"
     stage: intake
-    owner: fred-documentor
+    worker: fred-documentor
     result: ticket context loaded, SPEC.md and PLAN.md written
   - at: "2026-05-29T14:22:00-05:00"
     stage: develop
-    owner: bob-developer
+    worker: bob-developer
     result: waiting_for_human — auth scope unclear, need product decision on refresh token TTL
   - at: "2026-05-30T09:10:00-05:00"
     stage: develop
-    owner: bob-developer
+    worker: bob-developer
     result: resumed after human clarified TTL should be 7 days

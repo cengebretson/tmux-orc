@@ -485,8 +485,12 @@ func runNext(cmd *cobra.Command, args []string) error {
 
 	switch s.Status {
 	case "pending":
-		if err := state.Start(featureDir); err != nil {
-			return err
+		// --dry must not mutate state; starting the ticket (pending → active +
+		// a "started" history entry) is a real write, so skip it when previewing.
+		if !nextDry {
+			if err := state.Start(featureDir); err != nil {
+				return err
+			}
 		}
 
 	case "active":

@@ -207,7 +207,7 @@ func renderCharacterSheet(m Model, w *workers.Worker) string {
 	type questEntry struct{ f *featureRow }
 	var quests []questEntry
 	for _, f := range m.features {
-		if f.workerName != displayName && f.workerName != w.ID {
+		if f.s == nil || (f.workerName != displayName && f.workerName != w.ID) {
 			continue
 		}
 		quests = append(quests, questEntry{f})

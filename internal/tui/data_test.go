@@ -49,6 +49,46 @@ func TestBrokenRowSurfaced(t *testing.T) {
 	}
 }
 
+// A broken row (nil state) lands in m.features alongside healthy ones. Every
+// consumer that ranges over m.features must skip it instead of dereferencing
+// row.s — otherwise a single unparseable STATE.yaml crashes the dashboard, the
+// workflow detail page, and the worker file viewer.
+func TestBrokenRowDoesNotPanicConsumers(t *testing.T) {
+	broken := &featureRow{
+		featureDir: "/ws/features/STORY-9-busted",
+		loadErr:    errors.New("yaml: bad"),
+		hasIssues:  true,
+	}
+	healthy := testRow("STORY-1", "active", "develop")
+	healthy.s.Stage.Worker = "bob"
+	rows := []*featureRow{broken, healthy}
+
+	// Dashboard header counts active/paused over all features.
+	m := New("/ws")
+	m.width, m.height = 120, 40
+	m.features = rows
+	_ = m.viewDashboard()
+
+	// Workflow detail counts tickets per stage over all features.
+	stagesDir := t.TempDir()
+	_ = renderWorkflowDetail("default", testChains(), nil, stagesDir, rows, 0, 100)
+
+	// Worker file lists active stories over all features.
+	path := filepath.Join(t.TempDir(), "bob.md")
+	if err := os.WriteFile(path, []byte("---\nid: bob\nname: Bob\n---\n# Role\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := renderWorkerFile(path, rows, 80); err != nil {
+		t.Fatalf("renderWorkerFile: %v", err)
+	}
+
+	// The header flags broken tickets so they aren't missed when scrolled out of
+	// a long list.
+	if dash := m.viewDashboard(); !strings.Contains(dash, "1 broken") {
+		t.Errorf("dashboard header missing broken count:\n%s", dash)
+	}
+}
+
 func TestBuildFileList(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite := func(rel string) {

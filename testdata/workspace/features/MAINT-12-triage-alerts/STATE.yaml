@@ -8,5 +8,5 @@ stage:
 history:
   - at: "2026-06-05T10:00:00-05:00"
     stage: intake
-    owner: fred-documentor
+    worker: fred-documentor
     result: ticket loaded, alert noise inventory written
