@@ -57,32 +57,19 @@ expansion is kept as sugar for the same five values:
 
 ---
 
-### Per-run log capture — `orc logs` / `orc tail`
-
-The design principles name logging as the prerequisite for background
-execution ("Background execution comes after logging and recovery are
-solid"), and no command covers it today. Capture every launched agent's
-transcript into the stage's output folder so runs are reviewable after the
-fact.
-
-- **tmux mode**: after session create in `internal/orchestrator/launch.go`,
-  run `tmux pipe-pane -o 'cat >> <featureDir>/<stage>/run-<timestamp>.log'`
-  so the full pane transcript streams to disk.
-- **direct mode**: tee the launched process's stdout/stderr to the same path.
-- Record the active log path under `runtime` in `STATE.yaml` (same pattern as
-  `runtime.tmux.session`) so `status` and the TUI can surface it.
-- `orc logs <ticket>` prints the most recent log (`--stage` to pick a stage);
-  `orc tail <ticket>` follows the active run's log.
-- Logs live inside the feature folder, so `orc archive` preserves them for
-  free — evidence collection without extra plumbing.
-
-**Effort:** Medium.
-
----
-
 ## Future ideas
 
 Lower priority — worth revisiting once the core is solid.
+
+- **Per-run log capture** (`orc logs` / `orc tail`) — stream each launched
+  agent's raw transcript to `<featureDir>/<stage>/run-<timestamp>.log` (tmux
+  `pipe-pane`, or tee in foreground), record the path under `runtime`, expose
+  it via two commands. *Deliberately deferred:* orc's durable record is the
+  curated handoff — `DECISIONS.md`, `STATE.yaml` history, per-stage output —
+  which is meant to be read; a raw transcript is process noise nobody parses.
+  Its only real payoff is post-mortem debugging of an *unattended* run that
+  failed, so it's contingent on background execution actually existing. Build
+  it as the debug surface for background mode, not before.
 
 - **Workspace packs** — share workers/workflows across a team. `orc pack
   push/pull/diff` — copy workers, stages, RULES.md to/from a git repo;
