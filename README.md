@@ -320,6 +320,10 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
 - `orc status` — show all features and their current workflow/stage
   - `orc status <ticket>` — show full details for a specific ticket
   - `--json` — output as JSON for scripting
+- `orc report` — time-in-stage across all tickets (avg/median active time, visit counts), derived from history
+  - `orc report <ticket>` — per-stage breakdown for one ticket with total cycle time
+  - `--archived` — include archived tickets in the aggregate (no-arg) report
+  - `--json` — output as JSON for scripting
 - `orc work <ticket>` — create the feature folder for a ticket
   - `--workflow <name>` — use a named workflow instead of the configured default
   - `--tmux` — also enable a tmux session for this ticket

@@ -68,6 +68,132 @@ func TestRunStatusJSONPrintsActiveAndArchived(t *testing.T) {
 	}
 }
 
+// writeTimedTicket creates features/<slug>/STATE.yaml with a known history:
+// 2h in intake, then develop with a 12h pause inside a 20h span (→ 8h active),
+// closed as done. Durations are independent of wall-clock time.
+func writeTimedTicket(t *testing.T, root, ticket string) {
+	t.Helper()
+	base := time.Date(2026, 6, 1, 9, 0, 0, 0, time.UTC)
+	at := func(h float64) string {
+		return base.Add(time.Duration(h * float64(time.Hour))).Format(time.RFC3339)
+	}
+	featureDir := filepath.Join(root, "features", ticket)
+	if err := os.MkdirAll(featureDir, 0o755); err != nil {
+		t.Fatalf("mkdir feature: %v", err)
+	}
+	s := &state.State{
+		Ticket: ticket,
+		Slug:   ticket,
+		Status: "done",
+		Stage:  state.Stage{Name: "code-review"},
+		History: []state.HistoryEntry{
+			{At: at(0), Stage: "intake", Worker: "agent", Result: "feature context created by orc work"},
+			{At: at(2), Stage: "intake", Worker: "agent", Result: "intake done"},
+			{At: at(8), Stage: "develop", Worker: "bob", Result: "paused — waiting on review"},
+			{At: at(20), Stage: "develop", Worker: "bob", Result: "resumed"},
+			{At: at(22), Stage: "develop", Worker: "bob", Result: "ready for review"},
+		},
+	}
+	if err := state.Create(featureDir, s); err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+}
+
+func TestRunReportTicketPrintsStageTimings(t *testing.T) {
+	resetCommandGlobals(t)
+	root := filepath.Join(t.TempDir(), "workspace")
+	writeTimedTicket(t, root, "TIME-1")
+	globalWorkspace = root
+
+	out, err := captureStdout(func() error {
+		return runReport(nil, []string{"TIME-1"})
+	})
+	if err != nil {
+		t.Fatalf("runReport: %v", err)
+	}
+
+	for _, want := range []string{
+		"TIME-1 · complete",
+		"intake",
+		"develop",
+		"Total",
+		"8h", // develop active = 20h wall − 12h paused
+		"20h",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("report output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunReportTicketJSONShape(t *testing.T) {
+	resetCommandGlobals(t)
+	root := filepath.Join(t.TempDir(), "workspace")
+	writeTimedTicket(t, root, "TIME-1")
+	globalWorkspace = root
+	reportJSON = true
+
+	out, err := captureStdout(func() error {
+		return runReport(nil, []string{"TIME-1"})
+	})
+	if err != nil {
+		t.Fatalf("runReport --json: %v", err)
+	}
+
+	var payload struct {
+		Ticket string `json:"ticket"`
+		Open   bool   `json:"open"`
+		Stages []struct {
+			Stage         string `json:"stage"`
+			ActiveSeconds int64  `json:"active_seconds"`
+			WallSeconds   int64  `json:"wall_seconds"`
+			Visits        int    `json:"visits"`
+		} `json:"stages"`
+		TotalActiveSeconds int64 `json:"total_active_seconds"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("unmarshal report json: %v\n%s", err, out)
+	}
+	if payload.Ticket != "TIME-1" || payload.Open {
+		t.Fatalf("ticket=%q open=%v, want TIME-1 and not open", payload.Ticket, payload.Open)
+	}
+	var dev int64
+	for _, st := range payload.Stages {
+		if st.Stage == "develop" {
+			dev = st.ActiveSeconds
+		}
+	}
+	if want := int64((8 * time.Hour).Seconds()); dev != want {
+		t.Fatalf("develop active_seconds = %d, want %d", dev, want)
+	}
+	if want := int64((10 * time.Hour).Seconds()); payload.TotalActiveSeconds != want {
+		t.Fatalf("total_active_seconds = %d, want %d", payload.TotalActiveSeconds, want)
+	}
+}
+
+func TestRunReportAggregateAcrossTickets(t *testing.T) {
+	resetCommandGlobals(t)
+	root := filepath.Join(t.TempDir(), "workspace")
+	writeTimedTicket(t, root, "TIME-1")
+	writeTimedTicket(t, root, "TIME-2")
+	globalWorkspace = root
+
+	out, err := captureStdout(func() error {
+		return runReport(nil, nil)
+	})
+	if err != nil {
+		t.Fatalf("runReport aggregate: %v", err)
+	}
+	if !strings.Contains(out, "across 2 ticket(s)") {
+		t.Fatalf("aggregate header missing ticket count:\n%s", out)
+	}
+	for _, want := range []string{"intake", "develop", "Avg active"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("aggregate output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestRunDoctorTicketPrintsValidationReport(t *testing.T) {
 	resetCommandGlobals(t)
 	globalWorkspace = fixtureWorkspace()
@@ -433,6 +559,8 @@ func resetCommandGlobals(t *testing.T) {
 	oldMarkWorker := markWorker
 	oldMarkResult := markResult
 	oldMarkStage := markStage
+	oldReportJSON := reportJSON
+	oldReportArchived := reportArchived
 	t.Cleanup(func() {
 		globalWorkspace = oldWorkspace
 		doctorFix = oldDoctorFix
@@ -443,6 +571,8 @@ func resetCommandGlobals(t *testing.T) {
 		markWorker = oldMarkWorker
 		markResult = oldMarkResult
 		markStage = oldMarkStage
+		reportJSON = oldReportJSON
+		reportArchived = oldReportArchived
 	})
 
 	globalWorkspace = "."
@@ -454,6 +584,8 @@ func resetCommandGlobals(t *testing.T) {
 	markWorker = ""
 	markResult = ""
 	markStage = ""
+	reportJSON = false
+	reportArchived = false
 }
 
 func captureStdout(fn func() error) (string, error) {

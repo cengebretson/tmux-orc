@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cengebretson/orc/internal/doctor"
 	"github.com/cengebretson/orc/internal/state"
@@ -184,6 +185,37 @@ func TestRenderTable(t *testing.T) {
 	}
 	if !strings.Contains(out, "default/develop") {
 		t.Error("stage cell should render workflow/stage")
+	}
+}
+
+func TestViewDetailShowsTimingSection(t *testing.T) {
+	row := testRow("STORY-1", "active", "develop")
+	row.featureDir = t.TempDir()
+	base := time.Date(2026, 6, 1, 9, 0, 0, 0, time.UTC)
+	at := func(h float64) string {
+		return base.Add(time.Duration(h * float64(time.Hour))).Format(time.RFC3339)
+	}
+	row.s.History = []state.HistoryEntry{
+		{At: at(0), Stage: "intake", Worker: "agent", Result: "created"},
+		{At: at(2), Stage: "intake", Worker: "agent", Result: "intake done"}, // 2h in intake
+	}
+
+	m := New("")
+	m.width = 120
+	m.height = 50
+	m.detail = row
+	m.detailFiles = nil
+
+	out := m.viewDetail()
+	if !strings.Contains(out, "Timing") {
+		t.Fatalf("detail view missing Timing section:\n%s", out)
+	}
+	if !strings.Contains(out, "intake") {
+		t.Fatalf("Timing section missing the intake stage:\n%s", out)
+	}
+	// develop is the open current stage measured to now → a "current" marker.
+	if !strings.Contains(out, "current") {
+		t.Fatalf("Timing section missing current-stage marker:\n%s", out)
 	}
 }
 

@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/cengebretson/orc/internal/report"
 	"github.com/cengebretson/orc/internal/ticketview"
 	"github.com/cengebretson/orc/internal/workers"
 	"github.com/charmbracelet/glamour"
@@ -115,6 +117,36 @@ func (m Model) viewDetail() string {
 		b.WriteString(drawBox(styleSection.Render(" Repos "), repoLines, outerW) + "\n")
 	}
 
+	// Timing — per-stage durations derived from history
+	if rep := report.Compute(s, time.Now()); len(rep.Stages) > 0 {
+		var timingLines []string
+		timingLines = append(timingLines, fmt.Sprintf(" %s  %-10s  %-10s  %s",
+			styleDetailLabel.Render(padRight("stage", 18)),
+			styleDetailLabel.Render("active"),
+			styleDetailLabel.Render("wall"),
+			styleDetailLabel.Render("visits")))
+		for _, st := range rep.Stages {
+			marker := ""
+			if rep.Open && st.Stage == s.Stage.Name {
+				marker = styleHealthOK.Render("  ← current")
+			}
+			timingLines = append(timingLines, fmt.Sprintf(" %s  %-10s  %-10s  %-6d%s",
+				styleSubtext.Render(padRight(truncate(st.Stage, 18), 18)),
+				report.Humanize(st.Active),
+				styleDim.Render(report.Humanize(st.Wall)),
+				st.Visits, marker))
+		}
+		totalLabel := "total"
+		if rep.Open {
+			totalLabel = "total so far"
+		}
+		timingLines = append(timingLines, fmt.Sprintf(" %s  %-10s  %s",
+			styleDetailLabel.Render(padRight(totalLabel, 18)),
+			report.Humanize(rep.Active),
+			styleDim.Render(report.Humanize(rep.Wall))))
+		b.WriteString(drawBox(styleSection.Render(" Timing "), timingLines, outerW) + "\n")
+	}
+
 	// History
 	if len(s.History) > 0 {
 		var histLines []string
@@ -185,8 +217,11 @@ func (m Model) viewFile() string {
 	helpItems := []string{
 		helpItem("↑↓/pgup/pgdn", "scroll"),
 	}
-	if m.viewerReturn == viewDetail {
+	switch m.viewerReturn {
+	case viewDetail:
 		helpItems = append(helpItems, helpItem("←→", "prev/next file"))
+	case viewWorkflowDetail:
+		helpItems = append(helpItems, helpItem("←→", "prev/next stage"))
 	}
 	helpItems = append(helpItems,
 		helpItem("esc", "back"),
@@ -208,7 +243,7 @@ func (m Model) viewWorkflowDetailPage() string {
 	b.WriteString("\n" + drawBox(title, nil, outerW) + "\n")
 	b.WriteString(m.viewport.View())
 	help := strings.Join([]string{
-		helpItem("↑↓", "select stage"),
+		helpItem("↑↓/←→", "select stage"),
 		helpItem("pgup/pgdn", "scroll"),
 		helpItem("enter", "view stage"),
 		helpItem("esc", "back"),
