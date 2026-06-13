@@ -161,12 +161,13 @@ type Model struct {
 	fileIdx     int
 
 	// file viewer
-	viewport       viewport.Model
-	viewerTitle    string
-	viewerContext  string // label shown in file viewer title bar
-	viewerReturn   viewState
-	viewerPath     string // file backing the viewer — re-rendered on resize
-	viewerIsWorker bool   // render viewerPath via renderWorkerFile
+	viewport      viewport.Model
+	viewerTitle   string
+	viewerContext string // label shown in file viewer title bar
+	viewerReturn  viewState
+	// viewerRender regenerates the viewer's content at a given width so the file
+	// viewer re-flows on resize. Set for every viewFile, file-backed or synthetic.
+	viewerRender func(width int) string
 
 	// search
 	search    textinput.Model

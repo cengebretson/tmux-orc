@@ -343,9 +343,6 @@ func TestHandleKeyStageViewerLeftRight(t *testing.T) {
 	if !strings.Contains(m.viewerTitle, "code-review · step 2 of 3") {
 		t.Errorf("viewerTitle = %q, want code-review step 2 of 3", m.viewerTitle)
 	}
-	if want := filepath.Join(stagesDir, "code-review.md"); m.viewerPath != want {
-		t.Errorf("viewerPath = %q, want %q", m.viewerPath, want)
-	}
 
 	// continues into repair steps and clamps at the end
 	m, _ = press(t, m, "l", "right")
@@ -425,7 +422,7 @@ func TestUpdateWindowSizeReflowsFileViewer(t *testing.T) {
 
 	m := testModel(t)
 	m.view = viewFile
-	m.viewerPath = path
+	m.viewerRender = fileRenderer(path)
 	m.viewport = viewport.New(m.width-4, m.height-6)
 	wide, err := renderFile(path, m.width-4)
 	if err != nil {
@@ -438,6 +435,31 @@ func TestUpdateWindowSizeReflowsFileViewer(t *testing.T) {
 	got := asModel(t, tm)
 	if got.viewport.TotalLineCount() <= wideLines {
 		t.Errorf("content lines = %d after shrinking from %d-wide render — viewer did not reflow",
+			got.viewport.TotalLineCount(), wideLines)
+	}
+}
+
+// Synthetic viewers (no backing file) must also re-flow on resize: the health
+// report wraps long check details to the viewport width.
+func TestUpdateWindowSizeReflowsHealthReport(t *testing.T) {
+	m := testModel(t)
+	m.view = viewFile
+	m.healthItems = []doctor.Check{{
+		Group:  "config",
+		Name:   "orc.yaml",
+		Status: doctor.Fail,
+		Detail: strings.Repeat("a long validation failure message ", 8),
+	}}
+	checks := m.healthItems
+	m.viewerRender = func(w int) string { return renderHealthReport(checks, w) }
+	m.viewport = viewport.New(m.width-4, m.height-6)
+	m.viewport.SetContent(m.viewerRender(m.width - 4))
+	wideLines := m.viewport.TotalLineCount()
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 40})
+	got := asModel(t, tm)
+	if got.viewport.TotalLineCount() <= wideLines {
+		t.Errorf("health report lines = %d after shrink from %d — synthetic viewer did not reflow",
 			got.viewport.TotalLineCount(), wideLines)
 	}
 }

@@ -389,12 +389,22 @@ func renderHealthReport(checks []doctor.Check, width int) string {
 	if len(checks) == 0 {
 		return styleDim.Render("No health checks.")
 	}
+	if width < 20 {
+		width = 20
+	}
 	nameW := 0
 	for _, c := range checks {
 		if w := lipgloss.Width(c.Name); w > nameW {
 			nameW = w
 		}
 	}
+	// Column where the detail text begins: "   " + icon + "  " + name + "  ".
+	detailCol := 3 + 1 + 2 + nameW + 2
+	detailW := width - detailCol
+	if detailW < 8 {
+		detailW = 8
+	}
+
 	var b strings.Builder
 	currentGroup := "\x00" // sentinel so the first group prints even when ""
 	for _, c := range checks {
@@ -405,11 +415,19 @@ func renderHealthReport(checks []doctor.Check, width int) string {
 			}
 		}
 		icon, st := healthIconStyle(c.Status)
-		line := "   " + st.Render(icon) + "  " + styleSubtext.Render(padRight(c.Name, nameW))
-		if c.Detail != "" {
-			line += "  " + styleDim.Render(c.Detail)
+		prefix := "   " + st.Render(icon) + "  " + styleSubtext.Render(padRight(c.Name, nameW)) + "  "
+		if c.Detail == "" {
+			b.WriteString(strings.TrimRight(prefix, " ") + "\n")
+			continue
 		}
-		b.WriteString(line + "\n")
+		// Wrap long details to fit the width; continuation lines align under
+		// the detail column so the report re-flows cleanly on resize.
+		wrapped := strings.Split(wrapText(c.Detail, detailW), "\n")
+		b.WriteString(prefix + styleDim.Render(wrapped[0]) + "\n")
+		indent := strings.Repeat(" ", detailCol)
+		for _, cont := range wrapped[1:] {
+			b.WriteString(indent + styleDim.Render(cont) + "\n")
+		}
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

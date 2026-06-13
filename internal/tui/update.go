@@ -214,8 +214,8 @@ func (m Model) handleDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(rows) {
 				row := rows[m.cursor]
 				if row.s == nil {
-					content := renderBrokenFeature(row)
-					m.openViewer(content, row.ticketID(), "broken", viewDashboard, "", false)
+					m.openViewer(func(int) string { return renderBrokenFeature(row) },
+						row.ticketID(), "broken", viewDashboard)
 					return m, nil
 				}
 				m.detail = row
@@ -287,8 +287,9 @@ func (m *Model) toggleSection(name string) {
 func (m *Model) openSectionItem() {
 	// Health has no list items — it drills straight into the full doctor report.
 	if m.sectionFocus == "health" {
-		content := renderHealthReport(m.healthItems, m.width-4)
-		m.openViewer(content, "doctor report", "Health", viewDashboard, "", false)
+		checks := m.healthItems
+		m.openViewer(func(w int) string { return renderHealthReport(checks, w) },
+			"doctor report", "Health", viewDashboard)
 		return
 	}
 	items := m.sectionItems[m.sectionFocus]
@@ -298,12 +299,8 @@ func (m *Model) openSectionItem() {
 	f := items[m.sectionCursor]
 	switch m.sectionFocus {
 	case "workers":
-		content, err := renderWorkerFile(f.path, m.features, m.width-4)
-		if err != nil {
-			content = styleHealthErr.Render("could not read: " + err.Error())
-		}
 		m.charSheetWorker = workerForPath(f.path, m.allWorkers)
-		m.openViewer(content, f.label, sectionLabel(m.sectionFocus), viewDashboard, f.path, true)
+		m.openViewer(workerRenderer(f.path, m.features), f.label, sectionLabel(m.sectionFocus), viewDashboard)
 	case "workflows":
 		m.wfDetailName = f.label
 		m.wfDetailCursor = 0
@@ -312,24 +309,43 @@ func (m *Model) openSectionItem() {
 		m.viewport.SetContent(content)
 		m.view = viewWorkflowDetail
 	default:
-		content, err := renderFile(f.path, m.width-4)
-		if err != nil {
-			content = styleHealthErr.Render("could not read: " + err.Error())
-		}
-		m.openViewer(content, f.label, sectionLabel(m.sectionFocus), viewDashboard, f.path, false)
+		m.openViewer(fileRenderer(f.path), f.label, sectionLabel(m.sectionFocus), viewDashboard)
 	}
 }
 
-// openViewer switches to the file viewer with pre-rendered content.
-func (m *Model) openViewer(content, title, context string, returnView viewState, path string, isWorker bool) {
+// openViewer switches to the file viewer, rendering content via render at the
+// current width. render is retained so the viewer re-flows on resize.
+func (m *Model) openViewer(render func(width int) string, title, context string, returnView viewState) {
 	m.viewport = viewport.New(m.width-4, m.height-6)
-	m.viewport.SetContent(content)
+	m.viewport.SetContent(render(m.width - 4))
 	m.viewerTitle = title
 	m.viewerContext = context
 	m.viewerReturn = returnView
-	m.viewerPath = path
-	m.viewerIsWorker = isWorker
+	m.viewerRender = render
 	m.view = viewFile
+}
+
+// fileRenderer returns a width-aware renderer for a markdown file path.
+func fileRenderer(path string) func(int) string {
+	return func(w int) string {
+		c, err := renderFile(path, w)
+		if err != nil {
+			return styleHealthErr.Render("could not read file: " + err.Error())
+		}
+		return c
+	}
+}
+
+// workerRenderer returns a width-aware renderer for a worker .md file. The
+// feature list is captured at open time to resolve the worker's active stories.
+func workerRenderer(path string, features []*featureRow) func(int) string {
+	return func(w int) string {
+		c, err := renderWorkerFile(path, features, w)
+		if err != nil {
+			return styleHealthErr.Render("could not read: " + err.Error())
+		}
+		return c
+	}
 }
 
 func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -353,11 +369,7 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.fileIdx < len(m.detailFiles) {
 			f := m.detailFiles[m.fileIdx]
-			content, err := renderFile(f.path, m.width-4)
-			if err != nil {
-				content = styleHealthErr.Render("could not read file: " + err.Error())
-			}
-			m.openViewer(content, f.label, m.detail.s.Ticket, viewDetail, f.path, false)
+			m.openViewer(fileRenderer(f.path), f.label, m.detail.s.Ticket, viewDetail)
 		}
 	}
 	return m, nil
@@ -383,12 +395,8 @@ func (m Model) handleWorkflowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		stageName, advance, stepNum, total := wfDetailSelectedStage(m.wfDetailName, m.wfDetailCursor, m.workflows)
 		if stageName != "" {
 			stagePath := filepath.Join(m.root, "stages", stageName+".md")
-			content, err := renderFile(stagePath, m.width-4)
-			if err != nil {
-				content = styleHealthErr.Render("could not read: " + err.Error())
-			}
 			title := stageViewerTitle(stageName, advance, stepNum, total, m.workflows)
-			m.openViewer(content, title, m.wfDetailName, viewWorkflowDetail, stagePath, false)
+			m.openViewer(fileRenderer(stagePath), title, m.wfDetailName, viewWorkflowDetail)
 		}
 	default:
 		var cmd tea.Cmd
@@ -501,47 +509,29 @@ func (m *Model) loadViewerStage() {
 		return
 	}
 	stagePath := filepath.Join(m.root, "stages", stageName+".md")
-	content, err := renderFile(stagePath, m.viewport.Width)
-	if err != nil {
-		content = styleHealthErr.Render("could not read: " + err.Error())
-	}
-	m.viewport.SetContent(content)
+	m.viewerRender = fileRenderer(stagePath)
+	m.viewport.SetContent(m.viewerRender(m.viewport.Width))
 	m.viewport.SetYOffset(0)
 	m.viewerTitle = stageViewerTitle(stageName, advance, stepNum, total, m.workflows)
-	m.viewerPath = stagePath
 }
 
 // loadViewerFile loads m.detailFiles[m.fileIdx] into the viewport for viewFile.
 func (m *Model) loadViewerFile() {
 	f := m.detailFiles[m.fileIdx]
-	content, err := renderFile(f.path, m.viewport.Width)
-	if err != nil {
-		content = styleHealthErr.Render("could not read file: " + err.Error())
-	}
-	m.viewport.SetContent(content)
+	m.viewerRender = fileRenderer(f.path)
+	m.viewport.SetContent(m.viewerRender(m.viewport.Width))
 	m.viewport.SetYOffset(0)
 	m.viewerTitle = f.label
-	m.viewerPath = f.path
 }
 
 // reRenderViewerFile rebuilds the file viewer content at the current viewport
 // width, preserving the scroll position. Called on window resize.
 func (m *Model) reRenderViewerFile() {
-	if m.viewerPath == "" {
+	if m.viewerRender == nil {
 		return
 	}
-	var content string
-	var err error
-	if m.viewerIsWorker {
-		content, err = renderWorkerFile(m.viewerPath, m.features, m.viewport.Width)
-	} else {
-		content, err = renderFile(m.viewerPath, m.viewport.Width)
-	}
-	if err != nil {
-		content = styleHealthErr.Render("could not read: " + err.Error())
-	}
 	yOff := m.viewport.YOffset
-	m.viewport.SetContent(content)
+	m.viewport.SetContent(m.viewerRender(m.viewport.Width))
 	m.viewport.SetYOffset(yOff)
 }
 
