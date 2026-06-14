@@ -2,11 +2,9 @@
 id: fred-documentor
 name: Fred (Document)
 engine: claude
-kind: agent
 model: claude-sonnet-4-6
 args:
   effort: medium
-default_tmux_window: claude
 ---
 
 # Fred (Document)

@@ -2,7 +2,6 @@
 id: zach-reviewer
 name: Zach (Ninja)
 engine: claude
-kind: agent
 model: claude-sonnet-4-6
 args:
   effort: medium

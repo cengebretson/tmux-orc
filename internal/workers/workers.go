@@ -14,12 +14,9 @@ type Worker struct {
 	ID     string `yaml:"id"`
 	Name   string `yaml:"name"`
 	Engine string `yaml:"engine"` // claude | codex | cursor
-	Kind   string `yaml:"kind"`
 	Model  string `yaml:"model"`
 
 	Args map[string]string `yaml:"args"` // extra flags: --key value (claude) or -c key=value (codex)
-
-	DefaultTmuxWindow string `yaml:"default_tmux_window"`
 
 	FilePath string `yaml:"-"` // set at load time, not in frontmatter
 }

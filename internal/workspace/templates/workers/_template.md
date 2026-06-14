@@ -2,11 +2,9 @@
 id: worker-id
 name: Worker Display Name
 engine: claude
-kind: agent
 model: claude-sonnet-4-6
 args:
   effort: medium
-default_tmux_window: claude
 ---
 
 # Worker Display Name

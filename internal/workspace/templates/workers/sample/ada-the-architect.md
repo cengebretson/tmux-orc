@@ -2,11 +2,9 @@
 id: ada-architect
 name: Ada the Architect
 engine: claude
-kind: agent
 model: claude-opus-4-8
 args:
   effort: high
-default_tmux_window: claude
 ---
 
 # Ada the Architect

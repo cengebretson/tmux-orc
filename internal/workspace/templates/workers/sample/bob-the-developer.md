@@ -2,12 +2,10 @@
 id: bob-developer
 name: Bob (Developer)
 engine: codex
-kind: agent
 model: gpt-5.5
 args:
   reasoning_effort: high
   service_tier: medium
-default_tmux_window: app-codex
 ---
 
 # Bob (Developer)
