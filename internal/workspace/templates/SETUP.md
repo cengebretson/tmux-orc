@@ -35,6 +35,11 @@ codex:  pending
 
 Do not re-run sections already marked complete.
 
+**Ask one section's questions at a time, batched.** Each section below lists all
+of its questions together — ask them in a single message, wait for the user's
+answers, then make every file edit for that section before moving to the next.
+Do not drip questions out one at a time across many turns.
+
 ---
 
 ## Shared Section 1: Ticket System
@@ -43,9 +48,15 @@ The ticket system is described in two files, each owning a different concern.
 Fill each field in its designated file and do not duplicate values between them —
 `ROUTER.md` is the source of truth for *how to retrieve* a ticket.
 
-**Ask the user:**
-> What system do you use for tickets or stories?
-> (1) Jira  (2) GitHub Issues  (3) Linear  (4) Local markdown files  (5) None / manual
+**Ask the user (all at once):**
+> 1. What system do you use for tickets or stories?
+>    (Jira / GitHub Issues / Linear / local markdown files / none)
+> 2. The exact command to retrieve a ticket by ID — or say "propose one" and I'll
+>    suggest one based on your system for you to confirm.
+> 3. Any authentication requirements? (env var, API key location)
+> 4. Project / team keys?
+> 5. Ticket URL format?
+> 6. The MCP server name you gave this system, if any?
 
 **Update `ROUTER.md` (retrieval — the source of truth):**
 - The exact command to retrieve a ticket by ID. **Do not guess this.** If you
@@ -66,18 +77,16 @@ Fill each field in its designated file and do not duplicate values between them 
 
 ## Shared Section 2: Source Control
 
-**Ask the user:**
-> What source control system do you use?
-> (1) GitHub  (2) GitLab  (3) Bitbucket  (4) Other / none
-
-**Then ask, and record each in the Source Control section of `TOOLS.md`:**
-> 1. Org / repo (e.g. myorg/myrepo)
-> 2. Default branch (e.g. main)
-> 3. PR target branch (e.g. main, or a release branch)
-> 4. The MCP server name you gave source control, if any
+**Ask the user (all at once):**
+> 1. What source control system do you use?
+>    (GitHub / GitLab / Bitbucket / other / none)
+> 2. Org / repo? (e.g. myorg/myrepo)
+> 3. Default branch? (e.g. main)
+> 4. PR target branch? (e.g. main, or a release branch)
+> 5. The MCP server name you gave source control, if any?
 
 **Update `TOOLS.md`:**
-- Fill in the platform name and the four fields above
+- Fill in the platform name and the four fields above in the Source Control section
 - Note: MCP servers are configured at the user level, not per-workspace —
   record only the name
 
@@ -88,10 +97,8 @@ Fill each field in its designated file and do not duplicate values between them 
 Repos live wherever they are on the filesystem. Worktrees for ticket work are
 always created inside this workspace under `worktrees/`.
 
-**Ask the user:**
-> How many code repositories does this workspace orchestrate?
-
-**For each repo ask:**
+**Ask the user (all at once):**
+> How many code repositories does this workspace orchestrate, and for each one:
 > 1. Short name (e.g. "my-app", "qa-suite")
 > 2. Full path on the filesystem (e.g. /Users/me/projects/my-app)
 > 3. Purpose (one line)
@@ -130,38 +137,33 @@ Claude / Codex sections):
 
 ## Shared Section 5: Team Conventions and Approval Policy
 
-**Ask the user:**
-> Any team conventions agents should follow? (PR size, commit message style,
-> review norms, branch naming, anything else)
+**Ask the user (all at once):**
+> 1. Any team conventions agents should follow? (PR size, commit message style,
+>    review norms, branch naming, anything else)
+> 2. `RULES.md` requires human approval for opening PRs, triggering CI, writing to
+>    the ticket system, and posting external comments. Do those defaults match your
+>    team's policy, or should any be loosened or tightened?
 
-**Update `AGENTS.md`:**
-- Record the answers under the `## Team Conventions` heading at the bottom
-
-**Review `RULES.md` with the user:**
-- `RULES.md` defines what requires human approval (opening PRs, triggering CI,
-  writing to the ticket system, posting external comments).
-- Confirm the defaults match the team's policy and adjust if needed.
+**Then:**
+- Record the conventions under the `## Team Conventions` heading at the bottom of
+  `AGENTS.md`
+- Adjust `RULES.md` if the user wanted any approval defaults changed
 
 ---
 
 ## Claude Section
 
-**Ask the user:**
-> Do you want to use Claude in this workspace? (yes / no / already configured)
+**Ask the user (all at once):**
+> 1. Do you want to use Claude in this workspace? (yes / no / already configured)
+> 2. If yes — which Claude model should Claude-run workers use?
+>    (claude-opus-4-8 / claude-sonnet-4-6 / claude-haiku-4-5-20251001)
+> 3. Which MCP servers from ~/.claude/mcp.json should workers use? (names only —
+>    they are already installed at the user level)
 
 - If **no** — mark `claude: complete` and skip this section.
 - If **already configured** — verify each Claude worker has `engine: claude` and a
   valid `model:`, confirm the `TOOLS.md` Claude MCP line is filled in, then mark
   `claude: complete`.
-
-**Ask:**
-> Which Claude model should Claude-run workers use?
-> (1) claude-opus-4-8  (2) claude-sonnet-4-6  (3) claude-haiku-4-5-20251001
-
-**Ask:**
-> Do you have MCP servers configured in ~/.claude/mcp.json?
-> List the names of any you want agents in this workspace to use.
-> (These are already installed at the user level — we just need the names.)
 
 **Then:**
 - For each worker you want Claude to run, set `engine: claude` and
@@ -175,20 +177,15 @@ Claude / Codex sections):
 
 ## Codex Section
 
-**Ask the user:**
-> Do you want to use Codex in this workspace? (yes / no / already configured)
+**Ask the user (all at once):**
+> 1. Do you want to use Codex in this workspace? (yes / no / already configured)
+> 2. If yes — which Codex model should Codex-run workers use? (or default)
+> 3. Which MCP servers or tools configured for Codex should workers use? (names only)
 
 - If **no** — mark `codex: complete` and skip this section.
 - If **already configured** — verify each Codex worker has `engine: codex` and a
   valid `model:` (or a deliberate default), confirm the `TOOLS.md` Codex MCP line
   is filled in, then mark `codex: complete`.
-
-**Ask:**
-> Which Codex model should Codex-run workers use? (press enter for default)
-
-**Ask:**
-> Do you have MCP servers or tools configured for Codex?
-> List the names of any you want agents in this workspace to use.
 
 **Then:**
 - For each worker you want Codex to run, set `engine: codex` and
