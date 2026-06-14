@@ -141,13 +141,32 @@ The one real change is to `internal/workspace/init.go`:
   the first pack's workflow if unset. A `gopkg.in/yaml.v3` round-trip replacing
   one `WriteFile`. Dry-run printer, force handling, and runtime-dir creation are
   untouched.
-- **Conflict + closure checks at init** (refuse to silently clobber on merge):
-  duplicate worker `id` across selected packs → error; duplicate workflow name →
-  error; closure check — every `worker:` named in a pack's `workflow.yaml` exists
-  in its `workers/`, every stage name resolves to a `stages/*.md`. Fold the same
-  closure check into `orc doctor` so a hand-edited installed workspace is caught
-  too; `doctor` is also the cross-engine enforcement point (warn if a worker's
-  `engine` is not in the pack's declared `engines`).
+- **Conflict + closure checks at init.** Collision rules differ by name kind —
+  the principle is that for anything semantically load-bearing a collision is an
+  error, never a silent winner, because a silent winner means one pack's workflow
+  runs with another pack's policy. Precedence and rules:
+  - **Existing on-disk files win over fresh pack content**, unless `--force` —
+    the existing skip-if-exists behavior (init.go:116) is the local-override
+    layer (user edits beat packs).
+  - **`_base/` vs packs: no overlap by construction** — base owns structural
+    files, packs own `workers/` + `workflow.yaml` + `stages/`, so a pack can
+    never shadow `RULES.md` etc. (Pack-level overrides of base files are the
+    Future-ideas `overrides/` layer, deliberately out of v1.)
+  - **Pack vs pack:** duplicate worker `id` → **hard error**; duplicate workflow
+    name → **hard error**; duplicate stage file (e.g. two packs both shipping
+    `stages/develop.md`) → **content-equal dedups silently, divergent content is
+    a hard error** naming both packs and the file. Stage names are generic and
+    reuse is expected, so erroring on identical files would kill mixability;
+    erroring only on divergence catches the real "runs with someone else's
+    policy" case.
+  - **Ordered `--pack a --pack b` last-wins is rejected** — invisible precedence
+    is a footgun; force explicit resolution instead. An opt-in override flag can
+    come later, not as the default.
+  - **Closure check** — every `worker:` named in a pack's `workflow.yaml` exists
+    in its `workers/`, every stage name resolves to a `stages/*.md`. Fold the
+    same closure check into `orc doctor` so a hand-edited installed workspace is
+    caught too; `doctor` is also the cross-engine enforcement point (warn if a
+    worker's `engine` is not in the pack's declared `engines`).
 
 Explicitly **not** in scope: network, registry, remote fetch. Packs stay
 `//go:embed`-ed; `orc init --pack go-backend` is fully offline. The directory
