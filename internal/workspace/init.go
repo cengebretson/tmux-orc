@@ -53,6 +53,13 @@ func collectEntries(opts InitOptions) ([]fileEntry, error) {
 			return nil
 		}
 
+		// The embed uses all:templates (required to include _-prefixed dirs like
+		// _template), which also pulls in dotfiles such as .DS_Store. Never
+		// scaffold OS junk into a workspace.
+		if d.Name() == ".DS_Store" {
+			return nil
+		}
+
 		isSample := strings.HasPrefix(path, "templates/workers/sample/")
 		if isSample && !opts.WithSampleWorkers {
 			return nil
