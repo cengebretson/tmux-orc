@@ -57,6 +57,123 @@ expansion is kept as sugar for the same five values:
 
 ---
 
+### Workspace packs (embedded)
+
+Ship curated bundles of policy files so `orc init` can scaffold a ready-to-run
+workflow instead of the single hardcoded default. Embedded and offline first;
+the on-disk format is `tar`-able so a remote registry is a later additive step,
+not a reshape.
+
+#### What a pack is
+
+The scaffold splits into two groups. **Structural** files never travel — they
+define the workspace contract and are identical everywhere: `AGENTS.md`,
+`CLAUDE.md`, `RULES.md`, `ORC.md`, `ROUTER.md`, `TOOLS.md`, `SETUP.md`,
+`features/_template/`, `workers/_template.md`, `.gitignore`.
+
+**Policy** is the pack — the three entangled things that must travel together:
+a workflow block, every worker its stages route to (`worker: bob-developer`),
+and every stage file those stages read (`stages/develop.md`). A pack is exactly
+the closure of "a workflow + its workers + its stage files." Shipping less than
+the full triple produces broken half-installs (a stage pointing at a worker or
+`stages/*.md` that does not exist).
+
+Workers travel well; workflows are entangled with the user's repos and stage
+conventions, so a pack's workflow is a starting template the user edits, never a
+turnkey config.
+
+#### Template layout
+
+```
+templates/
+  _base/                      # always installed (structural group)
+    AGENTS.md CLAUDE.md RULES.md ORC.md ROUTER.md TOOLS.md SETUP.md
+    orc.yaml                  # settings + repos stub + EMPTY workflows:
+    features/README.md features/_template/*
+    workers/_template.md
+  packs/
+    default/                  # today's sample workflow, promoted to a real pack
+      pack.yaml
+      workers/*.md            # bob, zach, brian, fred, ada
+      workflow.yaml           # ONE workflows: block (current orc.yaml lines 41-66)
+      stages/*.md             # intake develop code-review pr-open pr-repair qa-automation
+    go-backend/
+      pack.yaml workers/ workflow.yaml stages/
+```
+
+`pack.yaml` manifest — enables versioning, mixing, and cross-engine enforcement:
+
+```yaml
+name: default
+description: General feature workflow — intake → develop → PR → QA
+schema: 1                     # worker/workflow frontmatter schema version
+engines: [claude, codex]      # declares cross-engine support (hard requirement)
+provides:
+  workflow: default
+  workers: [bob-developer, zach-reviewer, brian-qa, fred-documentor, ada-architect]
+  stages:  [intake, develop, code-review, pr-open, pr-repair, qa-automation]
+```
+
+#### CLI surface
+
+```
+orc init --pack default       # default when --pack omitted (back-compat)
+orc init --pack go-backend    # repeatable: --pack go-backend --pack playwright-qa
+orc init --list-packs         # name + description + engines, read from each pack.yaml
+```
+
+`--with-sample-workers` becomes a deprecated alias for `--pack default` (print a
+deprecation line, keep it working) — preserves existing `cmd/orc/main_test.go`
+invocations and keeps the `--with-sample-workers` output byte-identical.
+
+#### Implementation notes
+
+The one real change is to `internal/workspace/init.go`:
+
+- **`collectEntries`** (currently a flat `WalkDir` that copies bytes 1:1 with a
+  single `sample/` special case, init.go:48-74): walk `_base/` always; walk
+  `packs/<name>/{workers,stages}/` only for selected packs, flattening into
+  `workers/` and `stages/` (generalizes the existing `sample/` flatten at
+  init.go:67-69).
+- **`orc.yaml` stops being copied verbatim** — it is now assembled. Start from
+  `_base/orc.yaml` (empty `workflows:`), splice each selected pack's
+  `workflow.yaml` block under `workflows:`, set `settings.default_workflow` to
+  the first pack's workflow if unset. A `gopkg.in/yaml.v3` round-trip replacing
+  one `WriteFile`. Dry-run printer, force handling, and runtime-dir creation are
+  untouched.
+- **Conflict + closure checks at init** (refuse to silently clobber on merge):
+  duplicate worker `id` across selected packs → error; duplicate workflow name →
+  error; closure check — every `worker:` named in a pack's `workflow.yaml` exists
+  in its `workers/`, every stage name resolves to a `stages/*.md`. Fold the same
+  closure check into `orc doctor` so a hand-edited installed workspace is caught
+  too; `doctor` is also the cross-engine enforcement point (warn if a worker's
+  `engine` is not in the pack's declared `engines`).
+
+Explicitly **not** in scope: network, registry, remote fetch. Packs stay
+`//go:embed`-ed; `orc init --pack go-backend` is fully offline. The directory
+format (`pack.yaml` + `workers/` + `workflow.yaml` + `stages/`) is `tar`-able so
+`orc init --pack ./some-dir/` or a remote registry is an additive change to
+*where packs are read from*, not a format reshape.
+
+#### Migration (one pass)
+
+1. `git mv` structural files into `templates/_base/`; sample workers + current
+   workflow + stages into `templates/packs/default/`.
+2. Move the `workflows:` block out of `_base/orc.yaml` into
+   `packs/default/workflow.yaml`.
+3. Add `pack.yaml` to `default/`.
+4. Rewrite `collectEntries` for base-always + selected-packs; add the orc.yaml
+   assembler.
+5. `--with-sample-workers` → alias; add `--pack` / `--list-packs`.
+
+Blast radius: one Go file (`init.go`) plus a template reshuffle. The
+`--with-sample-workers` output stays byte-identical, so existing tests pin the
+behavior.
+
+**Effort:** Medium.
+
+---
+
 ## Future ideas
 
 Lower priority — worth revisiting once the core is solid.
@@ -71,9 +188,12 @@ Lower priority — worth revisiting once the core is solid.
   failed, so it's contingent on background execution actually existing. Build
   it as the debug surface for background mode, not before.
 
-- **Workspace packs** — share workers/workflows across a team. `orc pack
-  push/pull/diff` — copy workers, stages, RULES.md to/from a git repo;
-  two-layer model with `overrides/` for local customization.
+- **Workspace packs — remote/team distribution** — once embedded packs land (Up
+  next), grow into sharing across a team: `orc pack push/pull/diff` against a git
+  repo, `orc init --pack ./dir/` or a URL, a two-layer model with `overrides/`
+  for local customization, and a trust/lint story (`orc doctor` validates a
+  fetched pack's schema + engines). The embedded format is deliberately
+  `tar`-able so this is additive — *where* packs are read from, not a reshape.
 - **Per-worker cost attribution** — build on `orc report`: history entries
   carry `worker`, worker definitions carry model/cost tier; roll stage
   durations up into per-worker time and estimated cost.
