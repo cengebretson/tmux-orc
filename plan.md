@@ -117,10 +117,19 @@ provides:
 #### CLI surface
 
 ```
-orc init --pack default       # default when --pack omitted
+orc init                      # assumes --pack default (interactive: prompts "Which pack? [default]")
 orc init --pack go-backend    # repeatable: --pack go-backend --pack playwright-qa
+orc init --pack none          # _base/ only — empty workflows:, author your own
 orc init --list-packs         # name + description + engines, read from each pack.yaml
 ```
+
+When `--pack` is omitted, `default` is assumed (and is the pre-filled answer in
+the interactive prompt). This also fixes a latent bug in today's no-flag init:
+the base scaffold currently writes an `orc.yaml` whose `default` workflow routes
+to workers it does not install (closure-broken out of the box). Because a pack
+ships workflow + workers + stages as one closed set, the assumed default is
+always runnable. `--pack none` is the explicit opt-out for authoring from a
+clean base.
 
 `--with-sample-workers` is **removed**, not aliased. It is a 0.x flag with no
 external contract to honor, and `--pack default` fully subsumes it. Removal also
