@@ -48,8 +48,11 @@ Fill each field in its designated file and do not duplicate values between them 
 > (1) Jira  (2) GitHub Issues  (3) Linear  (4) Local markdown files  (5) None / manual
 
 **Update `ROUTER.md` (retrieval — the source of truth):**
-- The exact command to retrieve a ticket by ID
-- Any authentication requirements (env var, API key location)
+- The exact command to retrieve a ticket by ID. **Do not guess this.** If you
+  don't already know the user's exact command, propose one and ask them to
+  confirm or correct it before writing it (e.g. for GitHub Issues you can
+  propose `gh issue view <id>`; for Jira/Linear/custom setups, ask).
+- Any authentication requirements (env var, API key location) — ask the user
 
 **Update `TOOLS.md` (identity and access):**
 - System name
@@ -202,5 +205,8 @@ Claude / Codex sections):
 When your section is complete:
 1. Update the Status block at the top — mark `shared: complete` if you completed it,
    and mark `claude: complete` or `codex: complete` for your agent section
-2. Tell the user to run `orc doctor` to verify the workspace is ready
+2. Run `orc doctor` yourself and read the output. If it reports any problems
+   (missing workers, unresolved files, an incomplete SETUP), fix them and run it
+   again. Do not declare setup done until `orc doctor` is clean — then show the
+   user the result.
 3. If both agents are configured, tell the user they can now run `orc work <ticket>`
