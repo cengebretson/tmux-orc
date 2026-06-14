@@ -16,7 +16,7 @@ stage_counts:
 next_action:
   worker: bob-developer
   prompt: Implement JWT auth middleware per SPEC.md — token validation and refresh flow are the priority
-  cwd: ../../worktrees/my-app/STORY-123-add-user-auth
+  cwd: worktrees/my-app/STORY-123-add-user-auth
 history:
   - at: "2026-05-28T09:00:00-05:00"
     stage: intake

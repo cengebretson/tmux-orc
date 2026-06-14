@@ -182,10 +182,10 @@ func Run(root, featureDir string) *Report {
 	} else if len(s.Repos) > 0 {
 		r.Checks = append(r.Checks, ok("STATE.yaml.repos"))
 		if s.NextAction.CWD != "" {
-			r.Checks = append(r.Checks, okd("STATE.yaml.next_action.cwd", s.ResolveCWD(root, featureDir)))
+			r.Checks = append(r.Checks, okd("STATE.yaml.next_action.cwd", s.ResolveCWD(root)))
 		}
 	} else if s.NextAction.CWD != "" {
-		r.Checks = append(r.Checks, okd("STATE.yaml.next_action.cwd", s.ResolveCWD(root, featureDir)))
+		r.Checks = append(r.Checks, okd("STATE.yaml.next_action.cwd", s.ResolveCWD(root)))
 	}
 
 	// Repo worktrees exist.

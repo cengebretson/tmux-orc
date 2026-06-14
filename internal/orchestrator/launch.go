@@ -130,7 +130,16 @@ func (l Launcher) Launch(opts LaunchOptions) (*LaunchResult, error) {
 				tmuxReady = true
 			}
 		} else if opts.State.Runtime.Tmux == nil {
-			if err := l.CreateSession(session, opts.FeatureDir, stageNamesForTicket(opts.Root, opts.State)); err != nil {
+			// No runtime recorded. A session named for the slug may still exist —
+			// e.g. a prior launch created it but could not persist runtime. Adopt
+			// it rather than re-creating (which would fail as a duplicate and
+			// needlessly drop to foreground).
+			if l.SessionExists(session) {
+				if err := l.SetRuntime(opts.FeatureDir, session); err != nil {
+					result.addFallback(opts, fmt.Sprintf("warning: could not write runtime to STATE.yaml: %v", err))
+				}
+				tmuxReady = true
+			} else if err := l.CreateSession(session, opts.FeatureDir, stageNamesForTicket(opts.Root, opts.State)); err != nil {
 				result.addFallback(opts, fmt.Sprintf("tmux session create failed (%v)", err))
 			} else if err := l.SetRuntime(opts.FeatureDir, session); err != nil {
 				result.addFallback(opts, fmt.Sprintf("warning: could not write runtime to STATE.yaml: %v", err))

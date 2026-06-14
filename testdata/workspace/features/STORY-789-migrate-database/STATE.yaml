@@ -13,7 +13,7 @@ blocker:
 next_action:
   worker: human
   prompt: Staging is down. Unblock when environment is restored and CI is green.
-  cwd: ../../worktrees/my-app/STORY-789-migrate-database
+  cwd: worktrees/my-app/STORY-789-migrate-database
 history:
   - at: "2026-05-26T09:00:00-05:00"
     stage: intake

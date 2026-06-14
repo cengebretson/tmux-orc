@@ -9,7 +9,7 @@ stage:
 next_action:
   worker: bob-developer
   prompt: Fix 500 on POST /auth/login — stack trace in TICKET.md points to null session store on cold start
-  cwd: ../../worktrees/my-app/HOT-42-login-500-error
+  cwd: worktrees/my-app/HOT-42-login-500-error
 history:
   - at: "2026-05-31T07:45:00-05:00"
     stage: intake

@@ -62,7 +62,7 @@ func Compute(root, featureDir, workerOverride string) (*Plan, error) {
 		return nil, err
 	}
 
-	cwd := s.ResolveCWD(root, featureDir)
+	cwd := s.ResolveCWD(root)
 	prompt := buildPrompt(s, nextStage, stageCfg.Advance, loopDef, isLoopStage)
 
 	plan := &Plan{

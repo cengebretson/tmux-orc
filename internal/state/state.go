@@ -650,9 +650,12 @@ func ValidateRepos(s *State, workspaceRoot string) error {
 	return nil
 }
 
-// ResolveCWD returns an absolute path for the next action cwd,
-// resolving relative paths against the feature directory.
-func (s *State) ResolveCWD(workspaceRoot, featureDir string) string {
+// ResolveCWD returns an absolute path for the next action cwd, resolving
+// relative paths against the workspace root. Worktrees live under
+// workspaceRoot/worktrees, so a relative cwd is workspace-relative — this keeps
+// resolution consistent with the "." default (which maps to the workspace root)
+// and with ValidateRepos, which also anchors cwd at the workspace root.
+func (s *State) ResolveCWD(workspaceRoot string) string {
 	cwd := s.NextAction.CWD
 	if cwd == "" || cwd == "." {
 		return workspaceRoot
@@ -660,5 +663,5 @@ func (s *State) ResolveCWD(workspaceRoot, featureDir string) string {
 	if filepath.IsAbs(cwd) {
 		return cwd
 	}
-	return filepath.Clean(filepath.Join(featureDir, cwd))
+	return filepath.Clean(filepath.Join(workspaceRoot, cwd))
 }

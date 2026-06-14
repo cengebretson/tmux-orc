@@ -83,6 +83,64 @@ func TestLauncherLaunchesInTmux(t *testing.T) {
 	}
 }
 
+func TestLauncherAdoptsExistingSessionWhenRuntimeUnset(t *testing.T) {
+	// A prior launch created the session but failed to persist runtime, so
+	// STATE.yaml has no runtime.tmux yet the session is live. The next launch
+	// must adopt it (and re-persist runtime), not re-create it.
+	s := &state.State{
+		Slug:  "TICKET-1",
+		Stage: state.Stage{Name: "develop"},
+	}
+	plan := &runner.Plan{
+		CWD:        "/workspace",
+		LaunchArgv: []string{"codex", "do it"},
+		Worker:     &workers.Worker{Name: "Dev", Engine: "codex"},
+	}
+
+	var setRuntime []string
+	var sent []string
+	launcher := Launcher{
+		TmuxAvailable: func() bool { return true },
+		SessionExists: func(session string) bool { return session == "TICKET-1" },
+		CreateSession: func(slug, featureDir string, workflows []string) error {
+			t.Fatal("should adopt existing session, not create a new one")
+			return nil
+		},
+		SetRuntime: func(featureDir, tmuxSession string) error {
+			setRuntime = []string{featureDir, tmuxSession}
+			return nil
+		},
+		SendCommand: func(session, window, featureDir, runDir string, argv []string) error {
+			sent = []string{session, window, runDir}
+			return nil
+		},
+		AppendHistory: func(featureDir, stage, workerID, result string) error { return nil },
+		RunForeground: func(opts LaunchOptions) error {
+			t.Fatal("foreground should not run")
+			return nil
+		},
+		AttachHint: func(session, window string) string { return session + ":" + window },
+	}
+
+	result, err := launcher.Launch(LaunchOptions{
+		FeatureDir: "/feature",
+		State:      s,
+		Plan:       plan,
+	})
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	if result.Mode != LaunchModeTmux {
+		t.Fatalf("Mode = %q, want %q", result.Mode, LaunchModeTmux)
+	}
+	if !reflect.DeepEqual(setRuntime, []string{"/feature", "TICKET-1"}) {
+		t.Errorf("setRuntime = %#v, want runtime re-persisted for adopted session", setRuntime)
+	}
+	if !reflect.DeepEqual(sent, []string{"TICKET-1", "develop", "/workspace"}) {
+		t.Errorf("sent = %#v", sent)
+	}
+}
+
 func TestLauncherFallsBackToForegroundWhenTmuxCreateFails(t *testing.T) {
 	s := &state.State{
 		Slug:  "TICKET-1",

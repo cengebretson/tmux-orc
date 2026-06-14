@@ -161,7 +161,7 @@ func TestResolveCWD_Dot(t *testing.T) {
 	featureDir := filepath.Join(ws, "features", "STORY-456-export-api")
 	s, _ := state.Load(featureDir)
 
-	cwd := s.ResolveCWD(ws, featureDir)
+	cwd := s.ResolveCWD(ws)
 	if cwd != ws {
 		t.Errorf("cwd = %q, want workspace root %q", cwd, ws)
 	}
@@ -172,11 +172,20 @@ func TestResolveCWD_Relative(t *testing.T) {
 	featureDir := filepath.Join(ws, "features", "STORY-123-add-user-auth")
 	s, _ := state.Load(featureDir)
 
-	cwd := s.ResolveCWD(ws, featureDir)
-	// cwd in fixture is ../../worktrees/my-app/STORY-123-add-user-auth
-	// resolved from featureDir that should produce a path ending in worktrees/...
-	if cwd == "" || cwd == "." {
-		t.Errorf("expected resolved path, got %q", cwd)
+	// cwd in fixture is the workspace-relative "worktrees/my-app/STORY-123-add-user-auth";
+	// it must resolve against the workspace root, not the feature dir.
+	cwd := s.ResolveCWD(ws)
+	want := filepath.Join(ws, "worktrees", "my-app", "STORY-123-add-user-auth")
+	if cwd != want {
+		t.Errorf("cwd = %q, want %q", cwd, want)
+	}
+}
+
+func TestResolveCWD_Absolute(t *testing.T) {
+	abs := filepath.Join(t.TempDir(), "some", "worktree")
+	s := &state.State{NextAction: state.NextAction{CWD: abs}}
+	if got := s.ResolveCWD("/unused/workspace"); got != abs {
+		t.Errorf("cwd = %q, want absolute path passed through %q", got, abs)
 	}
 }
 
