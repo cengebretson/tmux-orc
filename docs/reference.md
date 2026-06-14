@@ -40,7 +40,8 @@ my-workspace/
     pr-open.md       preflight checks, open PR, handoff for review
     pr-repair.md     fix CI failures, review feedback, conflicts
     qa-automation.md implement and run automated tests
-    # plain markdown — no frontmatter; flow control lives in orc.yaml
+    # provided by the installed pack (default shown); plain markdown —
+    # no frontmatter, flow control lives in orc.yaml
 
   orc.yaml           workspace config — repos, workflows, loop stages, settings
   ORC.md             agent state contract — read at session start
