@@ -117,14 +117,22 @@ provides:
 #### CLI surface
 
 ```
-orc init --pack default       # default when --pack omitted (back-compat)
+orc init --pack default       # default when --pack omitted
 orc init --pack go-backend    # repeatable: --pack go-backend --pack playwright-qa
 orc init --list-packs         # name + description + engines, read from each pack.yaml
 ```
 
-`--with-sample-workers` becomes a deprecated alias for `--pack default` (print a
-deprecation line, keep it working) — preserves existing `cmd/orc/main_test.go`
-invocations and keeps the `--with-sample-workers` output byte-identical.
+`--with-sample-workers` is **removed**, not aliased. It is a 0.x flag with no
+external contract to honor, and `--pack default` fully subsumes it. Removal also
+reshapes its interactive prompt: the boolean `Include sample workers? [y/N]`
+(cmd/orc/main.go:373-376) becomes a pack chooser (`Which pack? [default]`),
+which is the better UX anyway. The output oracle survives the flag's death —
+`init_sample.manifest` (the 27-file scaffold) stays the source of truth and
+`--pack default` must reproduce it byte-for-byte; only the test *invocation*
+changes from `WithSampleWorkers: true` to the pack API. Code/doc touch points:
+`InitOptions.WithSampleWorkers` + the `isSample` gating in init.go, the flag/
+prompt/opts wiring in main.go, `TestInit_WithSampleWorkers`, and the README /
+`docs/reference.md` / `CLAUDE.md` mentions.
 
 #### Implementation notes
 
@@ -183,11 +191,13 @@ format (`pack.yaml` + `workers/` + `workflow.yaml` + `stages/`) is `tar`-able so
 3. Add `pack.yaml` to `default/`.
 4. Rewrite `collectEntries` for base-always + selected-packs; add the orc.yaml
    assembler.
-5. `--with-sample-workers` → alias; add `--pack` / `--list-packs`.
+5. Remove `--with-sample-workers` and its `[y/N]` prompt; add `--pack` /
+   `--list-packs` and the pack chooser.
 
-Blast radius: one Go file (`init.go`) plus a template reshuffle. The
-`--with-sample-workers` output stays byte-identical, so existing tests pin the
-behavior.
+Blast radius: `init.go` + the flag/prompt wiring in `cmd/orc/main.go` + a
+template reshuffle. The `--pack default` output must stay byte-identical to
+today's `--with-sample-workers` scaffold (pinned by `init_sample.manifest`), so
+the golden test catches any drift even though the flag name is gone.
 
 **Effort:** Medium.
 
