@@ -57,7 +57,24 @@ expansion is kept as sugar for the same five values:
 
 ---
 
-### Workspace packs (embedded)
+### Workspace packs (embedded) — ✅ shipped 2026-06-14
+
+> Shipped in commit 216335c (mechanism) plus a CI closure guard. The detail
+> below is retained as the as-built record — it matches what was built, with
+> these notes:
+> - **orc.yaml assembly is text-based, not a yaml round-trip.** A round-trip
+>   would drop the base file's comments and reformat it, so a single-pack
+>   install would no longer reproduce the hand-written orc.yaml byte-for-byte.
+>   The first pack carries the `workflows:` header verbatim; later packs
+>   contribute their indented body. Byte-fidelity is pinned by
+>   `init_default.manifest`.
+> - **Post-install closure was already enforced** by `orc doctor`'s
+>   pre-existing "workflow refs" check (worker-id→file, stage→file, loop refs).
+>   `TestEmbeddedPacks_ClosureComplete` runs that exact check against every
+>   embedded pack at CI time, so a pack-authoring mistake fails `make test`.
+> - **Deferred** until a second pack exists: multi-pack conflict detection
+>   (duplicate workflow name / worker id; divergent same-name stage file). Only
+>   a duplicate worker *filename* is guarded today. Untestable without pack #2.
 
 Ship curated bundles of policy files so `orc init` can scaffold a ready-to-run
 workflow instead of the single hardcoded default. Embedded and offline first;
@@ -226,8 +243,8 @@ Lower priority — worth revisiting once the core is solid.
   failed, so it's contingent on background execution actually existing. Build
   it as the debug surface for background mode, not before.
 
-- **Workspace packs — remote/team distribution** — once embedded packs land (Up
-  next), grow into sharing across a team: `orc pack push/pull/diff` against a git
+- **Workspace packs — remote/team distribution** — embedded packs have landed
+  (see Up next, shipped); grow into sharing across a team: `orc pack push/pull/diff` against a git
   repo, `orc init --pack ./dir/` or a URL, a two-layer model with `overrides/`
   for local customization, and a trust/lint story (`orc doctor` validates a
   fetched pack's schema + engines). The embedded format is deliberately
