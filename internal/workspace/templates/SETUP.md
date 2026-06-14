@@ -87,6 +87,22 @@ always created inside this workspace under `worktrees/`.
 
 ---
 
+## Workers
+
+Workers live in `workers/` as markdown files with `engine:` and `model:`
+frontmatter. `orc.yaml` assigns a worker to each stage by `id`. The goal of this
+section is to make every `worker:` id in `orc.yaml` resolve to a real file set to
+the engine and model you want.
+
+**Check what exists:**
+- If you ran `orc init --with-sample-workers`, `workers/` already contains
+  `fred-documentor`, `bob-developer`, `zach-reviewer`, `brian-qa`, and others —
+  edit those rather than creating new ones.
+- If `workers/` only has `_template.md`, copy it to create one file per `worker:`
+  id referenced in `orc.yaml`.
+
+---
+
 ## Claude Section
 
 **Ask the user:**
@@ -95,7 +111,7 @@ always created inside this workspace under `worktrees/`.
 If no — mark `claude: complete` and skip this section.
 
 **Ask:**
-> Which Claude model should the intake agent use?
+> Which Claude model should Claude-run workers use?
 > (1) claude-opus-4-8  (2) claude-sonnet-4-6  (3) claude-haiku-4-5-20251001
 
 **Ask:**
@@ -104,21 +120,12 @@ If no — mark `claude: complete` and skip this section.
 > (These are already installed at the user level — we just need the names.)
 
 **Then:**
-- Create `workers/intake-agent-claude.md`:
-
-```markdown
----
-id: intake-agent-claude
-name: Intake Agent (Claude)
-engine: claude
-model: <chosen model>
----
-
-Fetches ticket context and populates the feature folder.
-Reads ROUTER.md for ticket system details, then stages/intake.md for steps.
-```
-
-- Update `TOOLS.md` — in the Claude section, list the MCP server names the user provided
+- For each worker you want Claude to run, set `engine: claude` and
+  `model: <chosen model>` in its frontmatter. A worker runs on exactly one
+  engine — assign each role to Claude or Codex, not both.
+- Update `TOOLS.md` — in the **MCP Servers** section, fill in the **Claude** line
+  with the server names the user provided.
+- Run `orc doctor` and confirm no `orc.yaml` stage reports a missing worker.
 
 ---
 
@@ -130,28 +137,19 @@ Reads ROUTER.md for ticket system details, then stages/intake.md for steps.
 If no — mark `codex: complete` and skip this section.
 
 **Ask:**
-> Which Codex model should the intake agent use? (press enter for default)
+> Which Codex model should Codex-run workers use? (press enter for default)
 
 **Ask:**
 > Do you have MCP servers or tools configured for Codex?
 > List the names of any you want agents in this workspace to use.
 
 **Then:**
-- Create `workers/intake-agent-codex.md`:
-
-```markdown
----
-id: intake-agent-codex
-name: Intake Agent (Codex)
-engine: codex
-model: <chosen model or omit for default>
----
-
-Fetches ticket context and populates the feature folder.
-Reads ROUTER.md for ticket system details, then stages/intake.md for steps.
-```
-
-- Update `TOOLS.md` — in the Codex section, list any tools or MCP servers the user provided
+- For each worker you want Codex to run, set `engine: codex` and
+  `model: <chosen model or omit for default>` in its frontmatter. A worker runs
+  on exactly one engine — assign each role to Claude or Codex, not both.
+- Update `TOOLS.md` — in the **MCP Servers** section, fill in the **Codex** line
+  with any tools or server names the user provided.
+- Run `orc doctor` and confirm no `orc.yaml` stage reports a missing worker.
 
 ---
 

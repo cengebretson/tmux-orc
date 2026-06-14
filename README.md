@@ -171,7 +171,7 @@ orc tui
 ```mermaid
 flowchart TD
     W(["orc work"])
-    W --> intake["intake<br/>intake-agent"]
+    W --> intake["intake<br/>fred-documentor"]
     intake -->|auto| develop["develop<br/>bob-the-developer"]
     develop -->|manual| CR["code-review<br/>zach-the-reviewer"]
     CR -->|auto| PO["pr-open<br/>bob-the-developer"]

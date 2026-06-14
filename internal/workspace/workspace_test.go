@@ -115,7 +115,7 @@ func TestInit_WithSampleWorkers(t *testing.T) {
 	samples := []string{
 		"workers/bob-the-developer.md",
 		"workers/fred-the-documentor.md",
-		"workers/intake-agent.md",
+		"workers/zach-the-reviewer.md",
 	}
 	for _, rel := range samples {
 		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {

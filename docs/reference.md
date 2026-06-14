@@ -30,8 +30,8 @@ my-workspace/
 
   workers/
     _template.md     worker definition template
-    intake-agent.md  fetches tickets, populates feature folder
-    # add more workers per stage
+    # `orc init --with-sample-workers` also adds persona workers:
+    # fred-the-documentor.md (intake), bob-the-developer.md, zach-the-reviewer.md, …
 
   stages/
     intake.md        load ticket context — runs first for every ticket

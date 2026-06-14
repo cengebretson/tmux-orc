@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/cengebretson/orc/internal/config"
@@ -123,9 +124,9 @@ func checkSetup(root string) Result {
 	}
 	content := string(data)
 
-	shared := strings.Contains(content, "shared: complete")
-	claude := strings.Contains(content, "claude: complete")
-	codex := strings.Contains(content, "codex:  complete")
+	shared := setupSectionComplete(content, "shared")
+	claude := setupSectionComplete(content, "claude")
+	codex := setupSectionComplete(content, "codex")
 
 	if shared && (claude || codex) {
 		var done []string
@@ -149,6 +150,16 @@ func checkSetup(root string) Result {
 		pending = append(pending, "codex")
 	}
 	return Result{Name: "SETUP.md", Status: Empty, Detail: "pending: " + strings.Join(pending, ", ") + " — run an agent on SETUP.md"}
+}
+
+// setupSectionComplete reports whether the SETUP.md Status block marks the given
+// section complete. The match is anchored to the start of a line and tolerant of
+// the whitespace after the colon, so it ignores the literal "<key>: complete"
+// strings that appear inside the instruction prose (which are not line-leading)
+// and does not depend on the template's cosmetic column alignment.
+func setupSectionComplete(content, key string) bool {
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(key) + `:[ \t]*complete\b`)
+	return re.MatchString(content)
 }
 
 func checkFile(root, name string) Result {

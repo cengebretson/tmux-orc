@@ -35,10 +35,21 @@ as opening PRs, reading CI status, or posting comments.
 
 ---
 
+## MCP Servers
+
+<!-- Filled in during setup. Record the MCP servers each engine should use. -->
+<!-- MCP servers are configured at the user level (~/.claude/mcp.json or the -->
+<!-- Codex equivalent), not per-workspace — list only their names here. -->
+
+- **Claude:** <!-- e.g. github, jira-mcp -->
+- **Codex:** <!-- e.g. github -->
+
+---
+
 ## CLI Tools
 
-Prefer these tools over naive alternatives. They are faster, safer, and produce
-output that is easier to parse and reason about.
+Prefer these tools over naive alternatives when they are installed — they are
+faster, safer, and produce output that is easier to parse and reason about.
 
 | Use this   | Instead of      | For                                                  |
 |------------|-----------------|------------------------------------------------------|
