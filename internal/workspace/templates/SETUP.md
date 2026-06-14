@@ -27,10 +27,11 @@ codex:  pending
 ## Instructions for the Agent
 
 1. Read the Status block above.
-2. If `shared: pending` — complete the Shared sections first, then mark `shared: complete`.
-3. If `shared: complete` — skip to your own agent section (Claude or Codex).
-4. Complete your agent section and mark it `complete` in the Status block.
-5. Print a summary of every file you created or updated.
+2. Skim `orc.yaml`, `ROUTER.md`, and `TOOLS.md` so you know what you are filling in.
+3. If `shared: pending` — complete the Shared sections first, then mark `shared: complete`.
+4. If `shared: complete` — skip to your own agent section (Claude or Codex).
+5. Complete your agent section and mark it `complete` in the Status block.
+6. Print a summary of every file you created or updated.
 
 Do not re-run sections already marked complete.
 
@@ -38,18 +39,25 @@ Do not re-run sections already marked complete.
 
 ## Shared Section 1: Ticket System
 
+The ticket system is described in two files, each owning a different concern.
+Fill each field in its designated file and do not duplicate values between them —
+`ROUTER.md` is the source of truth for *how to retrieve* a ticket.
+
 **Ask the user:**
 > What system do you use for tickets or stories?
 > (1) Jira  (2) GitHub Issues  (3) Linear  (4) Local markdown files  (5) None / manual
 
-**Update `ROUTER.md`:**
-- Fill in the Ticket System section with the chosen system, project/team key,
-  the exact command to retrieve a ticket by ID, and any auth requirements
+**Update `ROUTER.md` (retrieval — the source of truth):**
+- The exact command to retrieve a ticket by ID
+- Any authentication requirements (env var, API key location)
 
-**Also update `TOOLS.md`:**
-- In the Ticket System section, fill in the system name and any required fields
-- Note: MCP server config lives at the user level (~/.claude/mcp.json or equivalent)
-  Ask the user what name they gave the MCP server (if any) and record it here
+**Update `TOOLS.md` (identity and access):**
+- System name
+- Project / team keys
+- Ticket URL format
+- The MCP server name the user gave this system, if any (MCP config itself lives
+  at the user level — `~/.claude/mcp.json` or the Codex equivalent — record only
+  the name here). Ask the user for it.
 
 ---
 
@@ -59,10 +67,16 @@ Do not re-run sections already marked complete.
 > What source control system do you use?
 > (1) GitHub  (2) GitLab  (3) Bitbucket  (4) Other / none
 
-**Then update `TOOLS.md`:**
-- In the Source Control section, fill in the platform name
-- Ask the user what name they gave the source control MCP server (if any) and record it
-- Note: MCP servers should be configured at the user level, not per-workspace
+**Then ask, and record each in the Source Control section of `TOOLS.md`:**
+> 1. Org / repo (e.g. myorg/myrepo)
+> 2. Default branch (e.g. main)
+> 3. PR target branch (e.g. main, or a release branch)
+> 4. The MCP server name you gave source control, if any
+
+**Update `TOOLS.md`:**
+- Fill in the platform name and the four fields above
+- Note: MCP servers are configured at the user level, not per-workspace —
+  record only the name
 
 ---
 
@@ -87,19 +101,43 @@ always created inside this workspace under `worktrees/`.
 
 ---
 
-## Workers
+## Shared Section 4: Workflow and Workers
 
-Workers live in `workers/` as markdown files with `engine:` and `model:`
-frontmatter. `orc.yaml` assigns a worker to each stage by `id`. The goal of this
-section is to make every `worker:` id in `orc.yaml` resolve to a real file set to
-the engine and model you want.
+This section makes the workflow match the user's process and ensures every
+`worker:` id referenced in `orc.yaml` resolves to a real worker file.
 
-**Check what exists:**
+**Review the workflow with the user:**
+- Show them the `workflows:` block in `orc.yaml` (the default flow is
+  `intake → develop → pr-open → qa-automation`).
+- Ask whether these stages and their order match how they work. Add, remove, or
+  reorder stages as needed. Each stage references a worker by `id`.
+
+**Find the required worker ids:**
+- Run `orc doctor`. It reports any stage whose `worker:` id has no matching file —
+  that is your checklist of workers that must exist.
+
+**Make every worker id resolve** (engine and model are assigned later, in the
+Claude / Codex sections):
 - If you ran `orc init --with-sample-workers`, `workers/` already contains
   `fred-documentor`, `bob-developer`, `zach-reviewer`, `brian-qa`, and others —
   edit those rather than creating new ones.
-- If `workers/` only has `_template.md`, copy it to create one file per `worker:`
-  id referenced in `orc.yaml`.
+- If `workers/` only has `_template.md`, copy it once per `worker:` id in `orc.yaml`.
+
+---
+
+## Shared Section 5: Team Conventions and Approval Policy
+
+**Ask the user:**
+> Any team conventions agents should follow? (PR size, commit message style,
+> review norms, branch naming, anything else)
+
+**Update `AGENTS.md`:**
+- Record the answers under the `## Team Conventions` heading at the bottom
+
+**Review `RULES.md` with the user:**
+- `RULES.md` defines what requires human approval (opening PRs, triggering CI,
+  writing to the ticket system, posting external comments).
+- Confirm the defaults match the team's policy and adjust if needed.
 
 ---
 
@@ -108,7 +146,10 @@ the engine and model you want.
 **Ask the user:**
 > Do you want to use Claude in this workspace? (yes / no / already configured)
 
-If no — mark `claude: complete` and skip this section.
+- If **no** — mark `claude: complete` and skip this section.
+- If **already configured** — verify each Claude worker has `engine: claude` and a
+  valid `model:`, confirm the `TOOLS.md` Claude MCP line is filled in, then mark
+  `claude: complete`.
 
 **Ask:**
 > Which Claude model should Claude-run workers use?
@@ -134,7 +175,10 @@ If no — mark `claude: complete` and skip this section.
 **Ask the user:**
 > Do you want to use Codex in this workspace? (yes / no / already configured)
 
-If no — mark `codex: complete` and skip this section.
+- If **no** — mark `codex: complete` and skip this section.
+- If **already configured** — verify each Codex worker has `engine: codex` and a
+  valid `model:` (or a deliberate default), confirm the `TOOLS.md` Codex MCP line
+  is filled in, then mark `codex: complete`.
 
 **Ask:**
 > Which Codex model should Codex-run workers use? (press enter for default)
