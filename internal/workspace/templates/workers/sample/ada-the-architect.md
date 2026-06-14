@@ -3,7 +3,7 @@ id: ada-architect
 name: Ada the Architect
 engine: claude
 kind: agent
-model: claude-opus-4-7
+model: claude-opus-4-8
 args:
   effort: high
 default_tmux_window: claude
@@ -37,20 +37,3 @@ Ask before:
 - Recommending dependency changes
 - Proposing architectural changes that span repos
 - Any external writes
-
-## Launch Template
-
-```bash
-claude --add-dir {{workspace}} "{{prompt}}"
-```
-
-## Prompt Template
-
-Review {{ticket}} for architectural concerns:
-
-- Feature state: `features/{{slug}}/STATE.yaml`
-- Spec: `features/{{slug}}/SPEC.md`
-- Plan: `features/{{slug}}/PLAN.md`
-- Current stage: `{{stage}}`
-
-Focus on: cross-repo impact, edge cases, risk, and decisions that will be hard to undo.
