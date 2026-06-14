@@ -15,8 +15,8 @@ import (
 )
 
 // These golden tests pin the EXACT output of `orc init` — every file it writes
-// and the bytes of each — for both the base scaffold and the
-// --with-sample-workers scaffold. The existing presence checks only assert that
+// and the bytes of each — for the default-pack install and the base-only
+// (--pack none) install. The existing presence checks only assert that
 // expected files exist; they would stay green even if a migration silently
 // changed orc.yaml's assembled workflow, altered a worker body, or leaked the
 // sample workers into the base case. These tests turn "output stays
@@ -92,18 +92,26 @@ func checkGolden(t *testing.T, name, got string) {
 	}
 }
 
-func TestInit_GoldenBase(t *testing.T) {
+// TestInit_GoldenDefaultPack pins the default install (--pack omitted ==
+// --pack default). Its manifest must stay byte-identical to the pre-pack
+// --with-sample-workers scaffold: same files, same paths, same bytes including
+// the assembled orc.yaml. That equality is the proof the _base/ + packs/
+// reshuffle did not change what a user gets.
+func TestInit_GoldenDefaultPack(t *testing.T) {
 	dir := t.TempDir()
 	if err := workspace.Init(workspace.InitOptions{Root: dir}); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	checkGolden(t, "init_base.manifest", manifest(t, dir))
+	checkGolden(t, "init_default.manifest", manifest(t, dir))
 }
 
-func TestInit_GoldenWithSampleWorkers(t *testing.T) {
+// TestInit_GoldenNonePack pins the base-only install (--pack none): the
+// structural scaffold with an empty workflows: block and no pack workers or
+// stage files.
+func TestInit_GoldenNonePack(t *testing.T) {
 	dir := t.TempDir()
-	if err := workspace.Init(workspace.InitOptions{Root: dir, WithSampleWorkers: true}); err != nil {
+	if err := workspace.Init(workspace.InitOptions{Root: dir, Packs: []string{"none"}}); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	checkGolden(t, "init_sample.manifest", manifest(t, dir))
+	checkGolden(t, "init_none.manifest", manifest(t, dir))
 }

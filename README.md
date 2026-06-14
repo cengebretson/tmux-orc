@@ -104,10 +104,13 @@ orc init
 ```
 
 Run it and answer two questions: workspace path (default: current directory)
-and whether to include sample workers. Or skip the prompts with flags:
+and which pack to install. A pack is a bundle of a workflow plus the workers
+and stage files it uses; `default` is assumed, and `none` gives a base-only
+workspace you wire up yourself. Or skip the prompts with flags:
 
 ```bash
-orc init --workspace ~/my-workspace --with-sample-workers
+orc init --list-packs                              # see available packs
+orc init --workspace ~/my-workspace --pack default
 ```
 
 ### 2. Run setup
@@ -300,7 +303,8 @@ Or use the Claude Desktop settings UI. Requires a GitHub PAT with `repo` and `pu
 
 - `orc init` — scaffold a new workspace
   - `--workspace <path>` — scaffold at a specific path
-  - `--with-sample-workers` — include sample worker files
+  - `--pack <name>` — install a pack (workflow + workers + stages); repeatable. Omit for `default`, or `none` for a base-only workspace
+  - `--list-packs` — list available packs and exit
   - `--dry-run` — preview without writing
   - `--force` — overwrite existing files
 - `orc doctor` — check workspace health plus `orc.yaml`, local tools, worker engines, tmux, and state locks

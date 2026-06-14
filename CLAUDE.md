@@ -90,7 +90,8 @@ Quick reference for dev/test use:
 
 ```bash
 ./orc init --dry-run
-./orc init --workspace /tmp/test-ws --with-sample-workers
+./orc init --list-packs
+./orc init --workspace /tmp/test-ws --pack default
 ./orc doctor --workspace /tmp/test-ws
 ./orc work STORY-123 --workspace /tmp/test-ws
 ./orc next STORY-123 --dry --workspace /tmp/test-ws

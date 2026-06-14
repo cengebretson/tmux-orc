@@ -105,21 +105,40 @@ func TestInit_ForceOverwrites(t *testing.T) {
 	}
 }
 
-func TestInit_WithSampleWorkers(t *testing.T) {
+func TestInit_DefaultPackInstallsWorkers(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := workspace.Init(workspace.InitOptions{Root: dir, WithSampleWorkers: true}); err != nil {
+	if err := workspace.Init(workspace.InitOptions{Root: dir, Packs: []string{"default"}}); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 
-	samples := []string{
+	workers := []string{
 		"workers/bob-the-developer.md",
 		"workers/fred-the-documentor.md",
 		"workers/zach-the-reviewer.md",
 	}
-	for _, rel := range samples {
+	for _, rel := range workers {
 		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
-			t.Errorf("missing sample worker: %s", rel)
+			t.Errorf("missing pack worker: %s", rel)
+		}
+	}
+}
+
+func TestInit_NonePackIsBaseOnly(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := workspace.Init(workspace.InitOptions{Root: dir, Packs: []string{"none"}}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	// base files present
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
+		t.Errorf("base file AGENTS.md missing: %v", err)
+	}
+	// pack content absent
+	for _, rel := range []string{"workers/bob-the-developer.md", "stages/develop.md"} {
+		if _, err := os.Stat(filepath.Join(dir, rel)); err == nil {
+			t.Errorf("--pack none should not install %s", rel)
 		}
 	}
 }

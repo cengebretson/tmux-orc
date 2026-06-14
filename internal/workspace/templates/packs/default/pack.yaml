@@ -1,0 +1,13 @@
+# pack.yaml — metadata for the `default` pack.
+#
+# A pack bundles a workflow with the workers it routes to and the stage files
+# those stages read — the closed set needed to run the workflow. `orc init
+# --pack <name>` installs base + the selected pack(s).
+name: default
+description: General feature workflow — intake → develop → PR → QA
+schema: 1                     # worker/workflow frontmatter schema version
+engines: [claude, codex]      # engines this pack's workers are written for
+provides:
+  workflow: default           # primary workflow; becomes settings.default_workflow
+  workers: [bob-developer, fred-documentor, zach-reviewer, brian-qa, ada-architect]
+  stages:  [intake, develop, code-review, pr-open, pr-repair, qa-automation]

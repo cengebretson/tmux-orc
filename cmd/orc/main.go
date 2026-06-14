@@ -78,9 +78,10 @@ var initCmd = &cobra.Command{
 }
 
 var (
-	initWithSampleWorkers bool
-	initDryRun            bool
-	initForce             bool
+	initPacks     []string
+	initListPacks bool
+	initDryRun    bool
+	initForce     bool
 )
 
 var doctorCmd = &cobra.Command{
@@ -247,7 +248,8 @@ var helpAllCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&globalWorkspace, "workspace", ".", "Workspace root (default: current directory)")
 
-	initCmd.Flags().BoolVar(&initWithSampleWorkers, "with-sample-workers", false, "Include sample worker files (skips the interactive prompt)")
+	initCmd.Flags().StringSliceVar(&initPacks, "pack", nil, "Pack(s) to install: a named bundle of workflow + workers + stages. Repeatable. Omit for 'default'; use 'none' for a base-only workspace")
+	initCmd.Flags().BoolVar(&initListPacks, "list-packs", false, "List available packs and exit")
 	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Print what would be created without writing files")
 	initCmd.Flags().BoolVar(&initForce, "force", false, "Overwrite existing generated files")
 
@@ -354,6 +356,10 @@ func ticketCompleter(statuses []string, includeArchive bool) func(*cobra.Command
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	if initListPacks {
+		return printPacks()
+	}
+
 	fmt.Print(banner)
 
 	interactive := isTTY()
@@ -369,21 +375,39 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Sample workers — prompt if not explicitly set and running interactively.
-	if !cmd.Flags().Changed("with-sample-workers") && interactive {
-		ans := promptLine("Include sample workers? [y/N]: ")
-		ans = strings.ToLower(strings.TrimSpace(ans))
-		initWithSampleWorkers = ans == "y" || ans == "yes"
+	// Pack — prompt if not explicitly set and running interactively.
+	if !cmd.Flags().Changed("pack") && interactive {
+		ans := strings.TrimSpace(promptLine("Which pack? [default] (or 'none' for a base-only workspace): "))
+		if ans != "" {
+			initPacks = []string{ans}
+		}
 	}
 
 	opts := workspace.InitOptions{
-		Root:              globalWorkspace,
-		WithSampleWorkers: initWithSampleWorkers,
-		DryRun:            initDryRun,
-		Force:             initForce,
+		Root:   globalWorkspace,
+		Packs:  initPacks,
+		DryRun: initDryRun,
+		Force:  initForce,
 	}
 
 	return workspace.Init(opts)
+}
+
+// printPacks lists the available packs for `orc init --list-packs`.
+func printPacks() error {
+	packs, err := workspace.ListPacks()
+	if err != nil {
+		return err
+	}
+	fmt.Println("Available packs:")
+	fmt.Println()
+	for _, p := range packs {
+		fmt.Printf("  %-12s %s\n", p.Name, p.Description)
+		fmt.Printf("  %-12s engines: %s\n", "", strings.Join(p.Engines, ", "))
+	}
+	fmt.Println()
+	fmt.Println("Install with: orc init --pack <name>   (repeatable; omit for 'default', 'none' for base only)")
+	return nil
 }
 
 // isTTY returns true when stdin is an interactive terminal.

@@ -5,18 +5,39 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed all:templates
 var templateFS embed.FS
 
+const (
+	baseDir  = "templates/_base"
+	packsDir = "templates/packs"
+)
+
 type InitOptions struct {
-	Root              string
-	WithSampleWorkers bool
-	DryRun            bool
-	Force             bool
+	Root   string
+	Packs  []string // packs to install; empty = ["default"]; ["none"] = base only
+	DryRun bool
+	Force  bool
+}
+
+// PackInfo is the metadata declared in a pack's pack.yaml.
+type PackInfo struct {
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	Schema      int      `yaml:"schema"`
+	Engines     []string `yaml:"engines"`
+	Provides    struct {
+		Workflow string   `yaml:"workflow"`
+		Workers  []string `yaml:"workers"`
+		Stages   []string `yaml:"stages"`
+	} `yaml:"provides"`
 }
 
 type fileEntry struct {
@@ -42,45 +63,205 @@ func Init(opts InitOptions) error {
 	return writeEntries(root, entries, opts.Force)
 }
 
-func collectEntries(opts InitOptions) ([]fileEntry, error) {
-	var entries []fileEntry
+// resolvePacks applies the default and the "none" sentinel. An empty selection
+// means the default pack; ["none"] means base only (no pack), and cannot be
+// combined with real packs.
+func resolvePacks(requested []string) ([]string, error) {
+	if len(requested) == 0 {
+		return []string{"default"}, nil
+	}
+	for _, p := range requested {
+		if p == "none" {
+			if len(requested) > 1 {
+				return nil, fmt.Errorf("--pack none cannot be combined with other packs")
+			}
+			return nil, nil
+		}
+	}
+	return requested, nil
+}
 
-	err := fs.WalkDir(templateFS, "templates", func(path string, d fs.DirEntry, err error) error {
+// loadPack reads and parses a pack's pack.yaml.
+func loadPack(name string) (PackInfo, error) {
+	data, err := templateFS.ReadFile(path.Join(packsDir, name, "pack.yaml"))
+	if err != nil {
+		return PackInfo{}, fmt.Errorf("unknown pack %q (run `orc init --list-packs` to see available packs)", name)
+	}
+	var info PackInfo
+	if err := yaml.Unmarshal(data, &info); err != nil {
+		return PackInfo{}, fmt.Errorf("parsing pack.yaml for %q: %w", name, err)
+	}
+	return info, nil
+}
+
+// ListPacks returns the metadata for every embedded pack, sorted by name.
+func ListPacks() ([]PackInfo, error) {
+	dirs, err := templateFS.ReadDir(packsDir)
+	if err != nil {
+		return nil, fmt.Errorf("reading packs: %w", err)
+	}
+	var out []PackInfo
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		info, err := loadPack(d.Name())
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+func collectEntries(opts InitOptions) ([]fileEntry, error) {
+	packs, err := resolvePacks(opts.Packs)
+	if err != nil {
+		return nil, err
+	}
+
+	var entries []fileEntry
+	var baseOrcYAML string
+
+	// 1. Base scaffold — always installed. orc.yaml is held back and assembled
+	//    below so the selected packs' workflows can be spliced in.
+	err = fs.WalkDir(templateFS, baseDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-
-		// The embed uses all:templates (required to include _-prefixed dirs like
-		// _template), which also pulls in dotfiles such as .DS_Store. Never
-		// scaffold OS junk into a workspace.
+		// all:templates embeds dotfiles (.DS_Store etc.); never scaffold OS junk.
 		if d.Name() == ".DS_Store" {
 			return nil
 		}
-
-		isSample := strings.HasPrefix(path, "templates/workers/sample/")
-		if isSample && !opts.WithSampleWorkers {
+		content, err := templateFS.ReadFile(p)
+		if err != nil {
+			return fmt.Errorf("reading template %s: %w", p, err)
+		}
+		rel := strings.TrimPrefix(p, baseDir+"/")
+		if rel == "orc.yaml" {
+			baseOrcYAML = string(content)
 			return nil
 		}
-
-		content, err := templateFS.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("reading template %s: %w", path, err)
-		}
-
-		// strip "templates/" prefix; flatten sample workers into workers/
-		rel := strings.TrimPrefix(path, "templates/")
-		if isSample {
-			rel = "workers/" + strings.TrimPrefix(rel, "workers/sample/")
-		}
-
 		entries = append(entries, fileEntry{dest: rel, content: string(content)})
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return entries, err
+	// 2. Selected packs — only workers/ and stages/ are scaffolded; pack.yaml and
+	//    workflow.yaml are metadata consumed by the assembler.
+	var infos []PackInfo
+	seenWorker := map[string]string{} // workers/<file> -> pack that provided it
+	for _, name := range packs {
+		info, err := loadPack(name)
+		if err != nil {
+			return nil, err
+		}
+		infos = append(infos, info)
+
+		packRoot := path.Join(packsDir, name)
+		err = fs.WalkDir(templateFS, packRoot, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if d.Name() == ".DS_Store" {
+				return nil
+			}
+			rel := strings.TrimPrefix(p, packRoot+"/")
+			if rel == "pack.yaml" || rel == "workflow.yaml" {
+				return nil
+			}
+			content, err := templateFS.ReadFile(p)
+			if err != nil {
+				return fmt.Errorf("reading template %s: %w", p, err)
+			}
+			if strings.HasPrefix(rel, "workers/") {
+				if prev, ok := seenWorker[rel]; ok {
+					return fmt.Errorf("packs %q and %q both provide %s", prev, name, rel)
+				}
+				seenWorker[rel] = name
+			}
+			entries = append(entries, fileEntry{dest: rel, content: string(content)})
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// 3. Assemble orc.yaml from the base config plus each pack's workflow block.
+	orcYAML, err := assembleOrcYAML(baseOrcYAML, packs, infos)
+	if err != nil {
+		return nil, err
+	}
+	entries = append(entries, fileEntry{dest: "orc.yaml", content: orcYAML})
+
+	return entries, nil
+}
+
+// assembleOrcYAML splices each selected pack's workflow.yaml under a single
+// workflows: key in the base orc.yaml. It is text-based on purpose: a yaml
+// round-trip would drop the base file's comments and reformat it, so a
+// single-pack install would no longer reproduce the hand-written orc.yaml
+// byte-for-byte. The first pack's block carries the workflows: header verbatim;
+// subsequent packs contribute their indented body only.
+func assembleOrcYAML(base string, packNames []string, infos []PackInfo) (string, error) {
+	var b strings.Builder
+	b.WriteString(strings.TrimRight(base, "\n"))
+	b.WriteString("\n")
+
+	if len(packNames) == 0 {
+		return b.String(), nil // --pack none: base only, no workflows
+	}
+
+	b.WriteString("\nworkflows:\n")
+	providesDefault := false
+	for i, name := range packNames {
+		wf, err := templateFS.ReadFile(path.Join(packsDir, name, "workflow.yaml"))
+		if err != nil {
+			return "", fmt.Errorf("reading workflow.yaml for pack %q: %w", name, err)
+		}
+		b.WriteString(stripWorkflowsHeader(string(wf)))
+		if infos[i].Provides.Workflow == "default" {
+			providesDefault = true
+		}
+	}
+
+	out := b.String()
+	if !providesDefault {
+		out = setDefaultWorkflow(out, infos[0].Provides.Workflow)
+	}
+	return out, nil
+}
+
+// stripWorkflowsHeader drops the leading "workflows:" line from a pack's
+// workflow.yaml, leaving the indented workflow entries.
+func stripWorkflowsHeader(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
+// setDefaultWorkflow rewrites the settings.default_workflow value. Used only
+// when no selected pack provides a workflow named "default", so the default
+// install path never touches the line and stays byte-identical.
+func setDefaultWorkflow(s, wf string) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		if idx := strings.Index(ln, "default_workflow:"); idx >= 0 && strings.TrimSpace(ln[:idx]) == "" {
+			lines[i] = ln[:idx] + "default_workflow: " + wf
+			break
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func printDryRun(root string, entries []fileEntry) error {

@@ -30,7 +30,7 @@ my-workspace/
 
   workers/
     _template.md     worker definition template
-    # `orc init --with-sample-workers` also adds persona workers:
+    # the `default` pack also adds persona workers:
     # fred-the-documentor.md (intake), bob-the-developer.md, zach-the-reviewer.md, …
 
   stages/
