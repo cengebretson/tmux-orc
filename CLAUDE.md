@@ -40,6 +40,7 @@ orc/
     pre-commit                    tidy → fmt → lint → test (symlink to .git/hooks/pre-commit)
   docs/
     workflows.md                  workspace workflow configuration reference
+    reference.md                  deep reference — layout, files, orc.yaml, STATE.yaml, workers
   go.mod
   Makefile
   plan.md                         roadmap — up-next work, future ideas, cleanup, done record
@@ -63,6 +64,24 @@ ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
 ```
 
 The hook runs tidy → fmt → lint → test on every commit.
+
+## Releases
+
+Releases are **automated** — do not create them by hand. Pushing a `v*` tag
+triggers `.github/workflows/release.yml`, which runs `go test ./...` then
+goreleaser (`release --clean`), building the binaries and creating the GitHub
+Release with auto-generated notes. To cut a release, just tag and push:
+
+```bash
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
+```
+
+Never run `gh release create` or otherwise create the release manually — it
+collides with goreleaser. After pushing the tag, watch the Release workflow in
+the Actions tab; the release and its assets appear when goreleaser finishes.
+Version numbers follow 0.x semver (minor bump for features, patch for fixes).
+`make build` stamps the binary version from the latest git tag.
 
 ## Commands
 

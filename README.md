@@ -171,23 +171,22 @@ orc tui
 ```mermaid
 flowchart TD
     W(["orc work"])
-    W --> intake["intake\nintake-agent"]
-    intake -->|auto| develop["develop\nbob-the-developer"]
-    develop -->|manual| CR["code-review\nzach-the-reviewer"]
-    CR -->|auto| PO["pr-open\nbob-the-developer"]
-    PO -->|manual| QA["qa-automation\nbrian-qa"]
-    PO -.->|CI failures| PR["pr-repair\nbob-the-developer"]
+    W --> intake["intake<br/>intake-agent"]
+    intake -->|auto| develop["develop<br/>bob-the-developer"]
+    develop -->|manual| CR["code-review<br/>zach-the-reviewer"]
+    CR -->|auto| PO["pr-open<br/>bob-the-developer"]
+    PO -->|manual| QA["qa-automation<br/>brian-qa"]
+    PO -.->|CI failures| PR["pr-repair<br/>bob-the-developer"]
     PR -.-> PO
     QA -->|auto| A(["orc archive"])
 
-    style W fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style A fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style intake fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style develop fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style CR fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style PO fill:#313244,stroke:#cba6f7,color:#cdd6f4
-    style PR fill:#313244,stroke:#f38ba8,color:#cdd6f4
-    style QA fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    classDef edge fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    classDef stage fill:#313244,stroke:#cba6f7,color:#cdd6f4
+    classDef repair fill:#313244,stroke:#f38ba8,color:#cdd6f4
+
+    class W,A edge
+    class intake,develop,CR,PO,QA stage
+    class PR repair
 ```
 
 Workers are markdown files in `workers/`. Each stage in `orc.yaml` names a worker — mix models and agents freely. Use `--worker` to override for a single run.
@@ -201,21 +200,23 @@ Workers are markdown files in `workers/`. Each stage in `orc.yaml` names a worke
 
 ```mermaid
 flowchart TD
-    N([orc next]) -->|prints launch command| R[Agent runs]
+    N([orc next]) -->|prints launch command| R[Agent works]
 
-    R --> AD[orc mark next\nstage complete]
-    R --> WT[orc mark pause\nhuman needed]
-    R --> DN[orc mark done\nfinal stage]
+    R --> AD["orc mark next<br/>stage complete"]
+    R --> WT["orc mark pause<br/>human needed"]
+    R --> DN["orc mark done<br/>final stage"]
 
-    AD -->|status: pending| N
-    WT -->|human resolves\norc next| N
-    DN -->|status: done| END([done])
+    AD -->|"status: pending"| N
+    WT -->|"human resolves,<br/>orc next"| N
+    DN -->|"status: done"| E([done])
 
-    style N fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style R fill:#313244,stroke:#89b4fa,color:#cdd6f4
-    style AD fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style WT fill:#313244,stroke:#f9e2af,color:#cdd6f4
-    style DN fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    classDef step fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    classDef work fill:#313244,stroke:#89b4fa,color:#cdd6f4
+    classDef wait fill:#313244,stroke:#f9e2af,color:#cdd6f4
+
+    class N,AD,DN,E step
+    class R work
+    class WT wait
 ```
 
 State is always written to `STATE.yaml` before the session ends — the next agent
@@ -227,29 +228,19 @@ When a session is paused (`orc mark <ticket> pause`), the reason is recorded in 
 
 ### JIT tasks
 
-Sometimes you need to run a one-off agent task that doesn't belong in the pipeline — a spot check, a secondary review, an exploratory investigation. `orc jit` handles this without touching the pipeline stage or status.
+`orc jit` runs a one-off agent task that doesn't belong in the pipeline — a spot check, a secondary review, an exploratory investigation — without touching the stage or status.
 
 ```bash
 orc jit STORY-123 --worker zach-the-reviewer "make sure the auth middleware handles token expiry correctly"
 ```
 
-The agent is launched with the same orientation prompt used by `orc next` — it reads `STATE.yaml`, `TICKET.md`, and `SPEC.md` to understand the ticket, then does the requested task. Output goes to `features/<slug>/jit/<timestamp>/`. The pipeline stage and status are unchanged throughout.
-
-`runtime.jit` is written to `STATE.yaml` before launch so the task is visible in `orc status` and the TUI:
+The agent gets the same orientation prompt as `orc next` (reads `STATE.yaml`, `TICKET.md`, `SPEC.md`), then does the task; output lands in `features/<slug>/jit/<timestamp>/`. `runtime.jit` is written before launch so the task shows up in `orc status` and the TUI:
 
 ```
 STORY-123   active   default/develop + jit   bob-developer
 ```
 
-When the agent finishes, it runs:
-
-```bash
-orc mark STORY-123 jit "confirmed token expiry is handled — no issues found"
-```
-
-This appends a history entry and clears `runtime.jit`. A second `orc jit` call is blocked while one is already running — clear it first with `orc mark <ticket> jit`.
-
-Use `--dry` to preview the full prompt and launch command without executing, and `--tmux` to send the task to the ticket's existing tmux session.
+When done, the agent runs `orc mark STORY-123 jit "<summary>"`, which appends history and clears `runtime.jit`. Only one jit task runs at a time — clear it first to start another. Use `--dry` to preview and `--tmux` to send the task to the ticket's existing tmux session.
 
 ---
 
@@ -259,7 +250,7 @@ These tools work well alongside `orc` and are worth setting up before you start.
 
 #### context-mode
 
-[context-mode](https://github.com/mksglu/context-mode) is a Claude Code plugin that keeps large tool outputs out of your context window and captures session state for resumption. It matters here because orc sessions are long — agents read `STATE.yaml`, stage docs, history, and file trees. Without context-mode, that output accumulates and pushes earlier context out of the window. With it, only summaries land in context; raw output stays in a local knowledge base the model can search on demand.
+[context-mode](https://github.com/mksglu/context-mode) keeps large tool outputs out of the context window — only summaries land in context, while raw output stays in a searchable local knowledge base. It matters here because orc sessions are long: agents read `STATE.yaml`, stage docs, history, and file trees, and without it that output crowds out earlier context.
 
 Install once, then it runs automatically in every session:
 
@@ -283,7 +274,7 @@ Key commands: `/ctx-stats` to see how much context was saved, `/ctx-upgrade` to 
 
 #### GitHub MCP
 
-The [GitHub MCP server](https://github.com/github/github-mcp-server) gives agents native access to GitHub — PRs, issues, review comments, CI run status — without shelling out to `gh`. In an orc workflow this matters most during `pr-open`, `pr-repair`, and `code-review` stages: agents can read PR state, post review comments, and check CI results directly through the MCP tool rather than constructing shell commands and parsing their output.
+The [GitHub MCP server](https://github.com/github/github-mcp-server) gives agents native access to GitHub — PRs, issues, review comments, CI status — without shelling out to `gh`. It matters most during `pr-open`, `pr-repair`, and `code-review`, where agents read PR state, post review comments, and check CI directly.
 
 Install:
 
@@ -291,9 +282,7 @@ Install:
 claude mcp add github -s user -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
 ```
 
-Or via the Claude Desktop settings if you prefer the UI. Requires a GitHub personal access token with `repo` and `pull_requests` scopes.
-
-Once connected, agents in your workspace will automatically use `mcp__github__*` tools when they need PR or issue context — no changes to stage docs required.
+Or use the Claude Desktop settings UI. Requires a GitHub PAT with `repo` and `pull_requests` scopes. Once connected, agents use `mcp__github__*` tools automatically when they need PR or issue context — no stage-doc changes required.
 
 ---
 
@@ -335,13 +324,11 @@ Once connected, agents in your workspace will automatically use `mcp__github__*`
 - `orc jit <ticket> --worker <id> "<instruction>"` — run a one-off agent task outside the pipeline
   - `--dry` — preview the resolved worker and prompt without launching
   - `--tmux` — send to the ticket's existing tmux session instead of foreground
-- `orc attach <ticket>` — attach to the tmux session for a ticket
-  - A convenience over plain `tmux attach`: it reads the real session name from
-    `STATE.yaml` (the session is named after the slug, not always the ticket ID,
-    and it can be overridden), drops you on the *current stage's* window, and
-    picks `switch-client` vs `attach-session` so it works whether or not you're
-    already inside tmux — avoiding the "sessions should be nested" error and
-    `tmux ls` guesswork. The TUI's `t` key does the same from the dashboard.
+- `orc attach <ticket>` — attach to the ticket's tmux session
+  - A convenience over `tmux attach`: reads the real session name from `STATE.yaml`
+    (named after the slug, and overridable), drops you on the *current stage's*
+    window, and picks `switch-client` vs `attach-session` so it works whether or
+    not you're already inside tmux. The TUI's `t` key does the same.
 - `orc archive <ticket>` — archive a completed feature, remove worktrees
 - `orc delete <ticket>` — permanently delete a feature folder (only allowed when status is `done` or `archived`)
 - `orc tui` — open the interactive dashboard
@@ -362,263 +349,16 @@ These are called by agents at the end of each session. They are hidden from `orc
 
 `orc mark` validates transitions before writing `STATE.yaml`: pending tickets must be started before `next`, `done` is rejected from `pending`, stage and worker overrides must exist, and invalid workspace config blocks advancement.
 
-## Workspace layout
+## Reference
 
-```
-my-workspace/
-  AGENTS.md          shared context and routing rules (Claude + Codex)
-  CLAUDE.md          imports AGENTS.md (Claude entrypoint)
-  ROUTER.md          which repo owns each task, worktree paths
-  TOOLS.md           approved tools, MCP servers, external systems
-  RULES.md           approval, state update, and cost rules
-  SETUP.md           one-time setup — run with your agent after init
-  .gitignore         excludes worktrees/
+Deep reference lives in **[docs/reference.md](docs/reference.md)**:
 
-  features/
-    _template/       copied for each new ticket
-      STATE.yaml     durable state machine for the ticket
-      TICKET.md      ticket summary and acceptance criteria
-      SPEC.md        context, scope, and open questions
-      PLAN.md        approach and steps
-      DECISIONS.md   decisions and rationale
-      # stage subfolders such as develop/, code-review/, and pr-open/
-      # are created by agents when those stages write outputs
-    _archive/        completed features moved here by `orc archive`
-
-  workers/
-    _template.md     worker definition template
-    intake-agent.md  fetches tickets, populates feature folder
-    # add more workers per stage
-
-  stages/
-    intake.md        load ticket context — runs first for every ticket
-    develop.md       implementation
-    code-review.md   review implementation before opening PR
-    pr-open.md       preflight checks, open PR, handoff for review
-    pr-repair.md     fix CI failures, review feedback, conflicts
-    qa-automation.md implement and run automated tests
-    # plain markdown — no frontmatter; flow control lives in orc.yaml
-
-  orc.yaml           workspace config — repos, workflows, loop stages, settings
-  ORC.md             agent state contract — read at session start
-
-  worktrees/         git worktrees for ticket branches (gitignored)
-```
-
-## Workspace files
-
-The root files are the shared context every agent reads before starting work. Each has a distinct owner and purpose.
-
-| File | Owner | Purpose |
-|------|-------|---------|
-| `AGENTS.md` | shared | Entry point for all agents — routing, session protocol, repo commands. Add team conventions at the bottom. |
-| `CLAUDE.md` | orc | Imports `AGENTS.md`. Claude's entrypoint — do not edit. |
-| `ORC.md` | orc | State contract — status values, `orc mark` commands, STATE.yaml rules. Do not add team conventions here. |
-| `ROUTER.md` | user | Ticket system details, repo purposes, worktree layout. Fill in during setup. |
-| `TOOLS.md` | user | Approved tools, MCP servers, CLI commands, external systems. Fill in during setup. |
-| `RULES.md` | user | What requires human approval before agents act — PR gates, cost limits, destructive operations. |
-| `SETUP.md` | orc | One-time setup guide. Run with your agent after `orc init` to configure repos, workers, and tool policy. |
-| `orc.yaml` | user | Workflow config — repos, stage order, workers, loop stages, settings. |
-
-`AGENTS.md` is the entry point — it fans out to everything else. `ORC.md` and `CLAUDE.md` are orc-managed and should not be edited directly. Everything else is yours to configure and extend.
-
-## Feature folder
-
-Every ticket is a self-contained context pack under `features/<slug>/`. Stages read what the previous one wrote and write their own outputs to a named subfolder — so any agent can pick up mid-flight without asking anyone.
-
-```
-features/STORY-123/
-  STATE.yaml          orc-managed — status, stage, worker, history
-  TICKET.md           intake writes   →  all stages read
-  SPEC.md             intake writes   →  develop, code-review read
-  PLAN.md             intake writes   →  develop reads
-  DECISIONS.md        any stage writes → any stage reads
-
-  develop/
-    HANDOFF.md        develop writes  →  code-review, pr-open read
-  code-review/
-    REVIEW.md         code-review writes → develop, pr-open read
-  pr-open/
-    PR.md             pr-open writes  →  pr-repair, qa-automation, human read
-  qa-automation/
-    PLAN.md           qa-automation writes and reads across sessions
-    RUNS.md
-    RESULT.md
-```
-
-The stage subfolder names match the stage names in `orc.yaml` — provenance is always unambiguous. If you need to find what `develop` produced, look in `develop/`.
-
-| File | Written by | Read by |
-|------|-----------|---------|
-| `STATE.yaml` | orc | orc, all agents |
-| `TICKET.md` | intake | all stages |
-| `SPEC.md` | intake | develop, code-review |
-| `PLAN.md` | intake | develop |
-| `DECISIONS.md` | any stage | any stage |
-| `develop/HANDOFF.md` | develop | code-review, pr-open, qa-automation |
-| `code-review/REVIEW.md` | code-review | develop, pr-open |
-| `pr-open/PR.md` | pr-open | pr-repair, qa-automation, human |
-
-## orc.yaml
-
-`orc.yaml` is the workspace config. It declares repos, named workflows, loop
-stages, and optional settings. See [docs/workflows.md](docs/workflows.md) for
-the full configuration reference.
-
-```yaml
-settings:
-  default_workflow: default
-  auto_archive: false
-  auto_tmux: false       # wrap every orc next launch in a tmux session automatically
-  auto_next: false       # orc work immediately launches the first stage (same as --next)
-  tui_refresh: 60        # dashboard auto-refresh interval in seconds
-  theme: catppuccin-mocha
-
-repos:
-  - name: my-app
-    path: ../my-app
-    purpose: Application code, APIs, tests
-
-workflows:
-  default:
-    stages:
-      - name: intake
-        worker: fred-documentor
-        advance: auto
-      - name: develop
-        worker: bob-developer
-        advance: manual
-        loop:
-          via: code-review
-          worker: zach-reviewer
-          max: 3
-          on_max: pause
-      - name: pr-open
-        worker: bob-developer
-        advance: manual
-        loop:
-          via: pr-repair
-          worker: bob-developer
-          max: 3
-          on_max: pause
-      - name: qa-automation
-        worker: brian-qa
-        advance: auto
-```
-
-`default_workflow` is used by `orc work <ticket>` when `--workflow` is omitted.
-If it is not set, `orc work` returns an error. `advance: auto` tells agents to
-run `orc mark <ticket> next` when a stage is complete; `advance: manual` tells agents to
-run `orc mark <ticket> pause` so a human can review before continuing.
-
-## STATE.yaml
-
-Every ticket has one. Agents update it as work progresses. `orc` reads it to
-route work to the right agent.
-
-```yaml
-schema_version: 1
-ticket: STORY-123
-slug: STORY-123-add-login
-status: active
-workflow: default
-
-stage:
-  worker: bob-developer
-  name: develop
-
-next_action:
-  worker: bob-developer
-  prompt: Implement the login feature per SPEC.md and PLAN.md.
-  cwd: worktrees/my-app/STORY-123-add-login
-
-runtime:
-  tmux:                         # present when a tmux session is configured
-    session: STORY-123-add-login
-
-  jit:                          # present while a jit task is running, absent otherwise
-    worker: zach-the-reviewer
-    task: "check the auth middleware handles token expiry"
-    started_at: "2026-06-01T13:45:00-05:00"
-
-history:
-  - at: "2026-05-28 09:00"
-    stage: intake
-    worker: fred-documentor
-    result: ticket context loaded, SPEC.md and PLAN.md written
-  - at: "2026-05-29 14:22"
-    stage: develop
-    worker: bob-developer
-    result: paused — need product decision on refresh token TTL
-  - at: "2026-05-30 09:10"
-    stage: develop
-    worker: bob-developer
-    result: resumed after human clarified TTL should be 7 days
-```
-
-### Status values
-
-| Status | Meaning | Set by |
-|--------|---------|--------|
-| `pending` | Session not yet started for the current stage | `orc work`, `orc mark <ticket> next` |
-| `ready` | Human-set: cleared for the next session | human |
-| `active` | Agent is actively working | `orc mark <ticket> start`, `orc mark <ticket> resume` |
-| `paused` | Human needed — input, approval, or external blocker | `orc mark <ticket> pause` |
-| `done` | All stages complete, or explicitly closed | `orc mark <ticket> next` (final stage) or `orc mark <ticket> done` |
-| `archived` | Feature folder moved to `_archive/` | `orc archive` |
-
-`runtime.tmux.session` is the source of truth for tmux operations once present.
-Older tickets without that field fall back to the feature slug. `orc attach`,
-`orc status`, `orc tui`, and archive cleanup all use the recorded runtime session
-so custom or restored session names continue to work.
-
-`runtime.jit` is present only while a one-off JIT task is open. Finish the task
-with `orc mark <ticket> jit "<summary>"`; that records a history entry and clears
-the JIT runtime block.
-
-State writes use `STATE.yaml.lock` with atomic temp-file replacement. If an orc
-process dies mid-write, the next state write can recover dead-PID locks and old
-malformed locks automatically. `orc doctor` reports any lock files it finds so
-you can tell whether a live process is holding state or a stale lock will be
-recovered on the next write; `orc doctor --fix` removes the stale ones
-immediately without waiting for a write.
-
-## Workers
-
-Markdown files with YAML frontmatter. The frontmatter defines who the worker is
-and how to launch them. The body gives the agent behavioral guidance.
-
-```markdown
----
-id: bob-developer
-name: Bob the Developer
-engine: codex
-model: gpt-5.5
-args:
-  reasoning_effort: high
-  service_tier: medium
----
-
-Implements features, opens PRs, and repairs CI failures.
-```
-
-`orc.yaml` declares the default worker per stage via `worker: <id>` in each stage entry. `orc next` looks up that worker, builds the prompt, and launches it.
-
-**What goes into the prompt:**
-
-Every launch gets a preamble pointing the agent at `AGENTS.md` and `ORC.md`, followed by the task prompt from `STATE.yaml`'s `next_action` field (or a generated one pointing at `features/<slug>/STATE.yaml` and `stages/<stage>.md`), and a closing instruction with the exact `orc mark` command to run when done — including whether the next advance is `auto` or `manual`.
-
-When relaunching a paused or interrupted session, `orc next` builds a richer recovery prompt that also includes: recent history entries (what each prior stage did and who ran it), any partial output files already written to the current stage folder, and a checklist of key context files to read — `TICKET.md`, `SPEC.md`, `DECISIONS.md`, and the stage doc.
-
-This means no agent ever starts cold. The prompt is a complete handoff: what the ticket is, where things stand, what this stage needs to produce, and exactly what command ends the session. The agent reads the files, does the work, runs the command — and the next agent gets the same treatment.
-
-**Worker resolution order:**
-
-1. `--worker <id>` flag on `orc next` — one-off override
-2. `stage.worker` in `STATE.yaml` — set by a previous `orc mark <ticket> next --worker`
-3. `worker:` for the current stage in `orc.yaml`
-
-If no worker is found at any step, `orc next` exits with a clear error pointing to `orc.yaml`. Use `--dry` to preview the full launch command before running it.
+- **[Workspace layout](docs/reference.md#workspace-layout)** — the full file tree `orc init` scaffolds
+- **[Workspace files](docs/reference.md#workspace-files)** — owner and purpose of each root file (`AGENTS.md`, `ROUTER.md`, `RULES.md`, …)
+- **[Feature folder](docs/reference.md#feature-folder)** — the per-ticket context pack and who reads/writes each file
+- **[orc.yaml](docs/reference.md#orcyaml)** — repos, workflows, loop stages, and settings (configuration deep-dive in **[docs/workflows.md](docs/workflows.md)**)
+- **[STATE.yaml](docs/reference.md#stateyaml)** — the per-ticket state machine, status values, and runtime/lock semantics
+- **[Workers](docs/reference.md#workers)** — worker definition files, prompt construction, and resolution order
 
 ---
 
